@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { startOfMonth, endOfMonth, addMonths, subMonths } from 'date-fns'
 import { BarChart } from '@/components/charts/bar-chart'
 import { DonutChart } from '@/components/charts/donut-chart'
@@ -154,24 +155,24 @@ export default function DashboardPage() {
             <h1 className="text-3xl font-bold text-gray-900">Studycube 대시보드</h1>
 
             <div className="flex gap-3">
-              <a
+              <Link
                 href="/analytics/campaigns"
                 className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors shadow-md"
               >
                 📊 광고 성과 분석
-              </a>
-              <a
+              </Link>
+              <Link
                 href="/analytics/strategies"
                 className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors shadow-md"
               >
                 📈 지점 전략 분석
-              </a>
-              <a
+              </Link>
+              <Link
                 href="/analytics/combined"
                 className="px-4 py-2 bg-gradient-to-r from-purple-500 to-blue-500 text-white rounded-lg hover:from-purple-600 hover:to-blue-600 transition-colors shadow-md"
               >
                 🚀 통합 성과 분석
-              </a>
+              </Link>
             </div>
           </div>
 
