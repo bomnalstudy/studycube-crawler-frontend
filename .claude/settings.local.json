@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx create-next-app:*)",
+      "Read(//c/Users/ghpjj/OneDrive/Desktop/project/**)",
+      "Bash(pkill:*)",
+      "Bash(npm install)",
+      "Bash(npx prisma:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

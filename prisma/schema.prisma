@@ -1,0 +1,116 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// 일일 메트릭 데이터
+model DailyMetric {
+  id              Int      @id @default(autoincrement())
+  branchId        String   @map("branch_id")
+  date            DateTime
+  newUsers        Int      @map("new_users")
+  ticketUsage     Int      @map("ticket_usage")
+  revenue         Decimal  @db.Decimal(10, 2)
+  revenueDay      Decimal  @map("revenue_day") @db.Decimal(10, 2)
+  revenueHour     Decimal  @map("revenue_hour") @db.Decimal(10, 2)
+  revenuePeriod   Decimal  @map("revenue_period") @db.Decimal(10, 2)
+  revisitRate     Decimal  @map("revisit_rate") @db.Decimal(5, 2)
+  revenuePerSqm   Decimal? @map("revenue_per_sqm") @db.Decimal(10, 2)
+  revenuePerSeat  Decimal? @map("revenue_per_seat") @db.Decimal(10, 2)
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  branch Branch @relation(fields: [branchId], references: [id])
+
+  @@map("daily_metrics")
+  @@index([branchId, date])
+}
+
+// 재방문 고객 데이터
+model RevisitCustomer {
+  id         Int      @id @default(autoincrement())
+  branchId   String   @map("branch_id")
+  date       DateTime
+  visitCount Int      @map("visit_count") // 1회, 2회, 3회, 4회 이상
+  count      Int      // 해당 방문 횟수의 고객 수
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  branch Branch @relation(fields: [branchId], references: [id])
+
+  @@map("revisit_customers")
+  @@index([branchId, date])
+}
+
+// 고객 인구통계 데이터
+model CustomerDemographic {
+  id         Int      @id @default(autoincrement())
+  branchId   String   @map("branch_id")
+  date       DateTime
+  ageGroup   String   @map("age_group") // "10대", "20대", "30대", "40대", "50대", "60대 이상"
+  gender     String   // "남", "여"
+  count      Int      // 해당 그룹의 고객 수
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  branch Branch @relation(fields: [branchId], references: [id])
+
+  @@map("customer_demographics")
+  @@index([branchId, date])
+}
+
+// 지점 정보
+model Branch {
+  id          String   @id
+  name        String
+  area        Decimal? @db.Decimal(10, 2) // 평수
+  seats       Int?     // 좌석 수
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  dailyMetrics         DailyMetric[]
+  revisitCustomers     RevisitCustomer[]
+  customerDemographics CustomerDemographic[]
+  campaigns            Campaign[]
+  strategies           Strategy[]
+
+  @@map("branches")
+}
+
+// 광고 캠페인 데이터
+model Campaign {
+  id          Int      @id @default(autoincrement())
+  branchId    String   @map("branch_id")
+  name        String
+  startDate   DateTime @map("start_date")
+  endDate     DateTime @map("end_date")
+  impressions Int
+  clicks      Int
+  cost        Decimal  @db.Decimal(10, 2)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  branch Branch @relation(fields: [branchId], references: [id])
+
+  @@map("campaigns")
+  @@index([branchId])
+}
+
+// 지점 전략 데이터
+model Strategy {
+  id          Int      @id @default(autoincrement())
+  branchId    String   @map("branch_id")
+  name        String
+  type        String   // 'discount', 'review_event', 'new_content'
+  startDate   DateTime @map("start_date")
+  endDate     DateTime @map("end_date")
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  branch Branch @relation(fields: [branchId], references: [id])
+
+  @@map("strategies")
+  @@index([branchId])
+}
