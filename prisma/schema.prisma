@@ -23,6 +23,7 @@ model Branch {
   dailyVisitors DailyVisitor[]
   campaigns    Campaign[]
   strategies   Strategy[]
+  combinedAnalyses CombinedAnalysis[]
 
   @@map("branches")
 }
@@ -155,4 +156,38 @@ model Strategy {
   @@index([startDate, endDate])
   @@index([status])
   @@map("strategies")
+}
+
+// 통합 분석 (광고 + 전략)
+model CombinedAnalysis {
+  id          String   @id @default(cuid())
+  branchId    String
+  name        String   // 분석명
+  startDate   DateTime @db.Date
+  endDate     DateTime @db.Date
+
+  // 광고 지표
+  cost        Decimal? @db.Decimal(10, 2)  // 광고 비용
+  impressions Int?     // 노출수
+  clicks      Int?     // 클릭수
+
+  // 전략 정보
+  strategyType String?  // 전략 유형: PRICE_DISCOUNT, REVIEW_EVENT, NEW_CONTENT
+  reason       String?  @db.Text  // 전략 수립 이유
+  description  String?  @db.Text  // 전략 상세 내용
+
+  // 상태 관리
+  status      String   @default("ONGOING")  // ONGOING: 진행중, COMPLETED: 완료
+
+  // 메타 정보
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  branch      Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@index([branchId])
+  @@index([startDate, endDate])
+  @@index([status])
+  @@map("combined_analyses")
 }

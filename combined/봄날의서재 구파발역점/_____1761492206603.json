@@ -1,0 +1,53 @@
+{
+  "name": "ㅂㅈㄷㄱ",
+  "branchId": "cmh7jo5z800063vs0p1u8tpwy",
+  "startDate": "2025-10-24",
+  "endDate": "2025-10-29",
+  "cost": 12345,
+  "impressions": 1234,
+  "clicks": 123,
+  "strategyType": "PRICE_DISCOUNT",
+  "reason": "qwerq",
+  "description": "qwerqwr",
+  "analysis": {
+    "beforeMetrics": {
+      "revenue": 0,
+      "newUsers": 0,
+      "avgDailyUsers": 0,
+      "revisitRate": 0
+    },
+    "afterMetrics": {
+      "revenue": 598500,
+      "newUsers": 5,
+      "avgDailyUsers": 81,
+      "revisitRate": 0
+    },
+    "changes": {
+      "revenueGrowth": 0,
+      "newUsersGrowth": 0,
+      "avgDailyUsersGrowth": 0,
+      "revisitRateGrowth": 0
+    },
+    "roi": 4748.116646415553,
+    "roas": 4848.116646415553,
+    "ctr": 9.967585089141005,
+    "cpc": 100.36585365853658
+  },
+  "combined": {
+    "id": "cmh7uz8qz000144qb1sxvxw7x",
+    "branchId": "cmh7jo5z800063vs0p1u8tpwy",
+    "name": "ㅂㅈㄷㄱ",
+    "startDate": "2025-10-24T00:00:00.000Z",
+    "endDate": "2025-10-29T00:00:00.000Z",
+    "cost": "12345",
+    "impressions": 1234,
+    "clicks": 123,
+    "strategyType": "PRICE_DISCOUNT",
+    "reason": "qwerq",
+    "description": "qwerqwr",
+    "status": "ONGOING",
+    "createdAt": "2025-10-26T15:23:25.832Z",
+    "updatedAt": "2025-10-26T15:23:25.832Z"
+  },
+  "savedAt": "2025-10-26T15:23:26.603Z"
+}

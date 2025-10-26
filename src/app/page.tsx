@@ -150,7 +150,30 @@ export default function DashboardPage() {
       <div className="max-w-7xl mx-auto">
         {/* 헤더 */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-4">Studycube 대시보드</h1>
+          <div className="flex justify-between items-center mb-4">
+            <h1 className="text-3xl font-bold text-gray-900">Studycube 대시보드</h1>
+
+            <div className="flex gap-3">
+              <a
+                href="/analytics/campaigns"
+                className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors shadow-md"
+              >
+                📊 광고 성과 분석
+              </a>
+              <a
+                href="/analytics/strategies"
+                className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors shadow-md"
+              >
+                📈 지점 전략 분석
+              </a>
+              <a
+                href="/analytics/combined"
+                className="px-4 py-2 bg-gradient-to-r from-purple-500 to-blue-500 text-white rounded-lg hover:from-purple-600 hover:to-blue-600 transition-colors shadow-md"
+              >
+                🚀 통합 성과 분석
+              </a>
+            </div>
+          </div>
 
           {/* 필터 컨트롤 */}
           <div className="flex flex-col md:flex-row gap-4 bg-white p-4 rounded-lg shadow">
