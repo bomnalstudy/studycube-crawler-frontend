@@ -2,32 +2,32 @@
 
 import { useState, useEffect } from 'react'
 import { formatCurrency, formatNumber, formatPercent } from '@/lib/utils/formatters'
-import { SavedCampaignsList } from '@/components/analytics/saved-campaigns-list'
+import { SavedStrategiesList } from '@/components/analytics/saved-strategies-list'
 
 interface Branch {
   id: string
   name: string
 }
 
-interface CampaignForm {
+interface StrategyForm {
   name: string
   branchId: string
   startDate: string
   endDate: string
-  cost: number
-  impressions: number
-  clicks: number
+  type: string
+  reason: string
+  description: string
 }
 
-interface CampaignAnalysis {
-  // 광고 전 데이터
+interface StrategyAnalysis {
+  // 전략 전 데이터
   beforeMetrics: {
     revenue: number
     newUsers: number
     avgDailyUsers: number
     revisitRate: number
   }
-  // 광고 후 데이터
+  // 전략 후 데이터
   afterMetrics: {
     revenue: number
     newUsers: number
@@ -41,27 +41,24 @@ interface CampaignAnalysis {
     avgDailyUsersGrowth: number
     revisitRateGrowth: number
   }
-  // ROI/ROAS
+  // ROI (전략 실행 비용이 없으므로 제외 가능)
   roi: number
-  roas: number
-  ctr: number // Click Through Rate
-  cpc: number // Cost Per Click
 }
 
-export default function CampaignsAnalyticsPage() {
-  const [formData, setFormData] = useState<CampaignForm>({
+export default function StrategiesAnalyticsPage() {
+  const [branches, setBranches] = useState<Branch[]>([])
+  const [formData, setFormData] = useState<StrategyForm>({
     name: '',
     branchId: 'all',
     startDate: '',
     endDate: '',
-    cost: 0,
-    impressions: 0,
-    clicks: 0
+    type: 'PRICE_DISCOUNT',
+    reason: '',
+    description: ''
   })
-  const [analysis, setAnalysis] = useState<CampaignAnalysis | null>(null)
+  const [analysis, setAnalysis] = useState<StrategyAnalysis | null>(null)
   const [loading, setLoading] = useState(false)
-  const [savedCampaigns, setSavedCampaigns] = useState<any[]>([])
-  const [branches, setBranches] = useState<Branch[]>([])
+  const [refreshKey, setRefreshKey] = useState(0)
 
   // 지점 목록 불러오기
   useEffect(() => {
@@ -86,7 +83,7 @@ export default function CampaignsAnalyticsPage() {
     setLoading(true)
 
     try {
-      const response = await fetch('/api/analytics/campaigns/analyze', {
+      const response = await fetch('/api/analytics/strategies/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData)
@@ -108,7 +105,7 @@ export default function CampaignsAnalyticsPage() {
     if (!analysis) return
 
     try {
-      const response = await fetch('/api/campaigns', {
+      const response = await fetch('/api/strategies', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -120,148 +117,143 @@ export default function CampaignsAnalyticsPage() {
       const result = await response.json()
 
       if (result.success) {
-        alert('캠페인이 저장되었습니다!')
-        loadSavedCampaigns()
+        alert('전략이 저장되었습니다!')
+        setRefreshKey(prev => prev + 1)  // 저장된 전략 목록 새로고침
       }
     } catch (error) {
       console.error('저장 실패:', error)
+      alert('저장에 실패했습니다.')
     }
   }
 
-  const loadSavedCampaigns = async () => {
-    try {
-      const response = await fetch('/api/campaigns')
-      const result = await response.json()
-
-      if (result.success) {
-        setSavedCampaigns(result.data)
-      }
-    } catch (error) {
-      console.error('캠페인 로드 실패:', error)
-    }
-  }
-
-  const handleExport = () => {
-    if (!analysis) return
-    // Excel 내보내기 기능 (추후 구현)
-    window.location.href = `/api/campaigns/export?name=${encodeURIComponent(formData.name)}`
-  }
+  const strategyTypes = [
+    { value: 'PRICE_DISCOUNT', label: '가격 할인' },
+    { value: 'REVIEW_EVENT', label: '이벤트' },
+    { value: 'NEW_CONTENT', label: '신규 콘텐츠' }
+  ]
 
   return (
     <main className="min-h-screen p-8 bg-gray-50">
       <div className="max-w-7xl mx-auto">
-        <h1 className="text-3xl font-bold text-gray-900 mb-8">광고 성과 분석</h1>
+        <h1 className="text-3xl font-bold text-gray-900 mb-8">지점 전략 성과 분석</h1>
 
-        {/* 광고 입력 폼 */}
+        {/* 전략 입력 폼 */}
         <div className="bg-white rounded-lg shadow-md p-6 mb-8">
-          <h2 className="text-xl font-semibold mb-4">광고 캠페인 정보</h2>
+          <h2 className="text-xl font-semibold mb-4">전략 정보</h2>
 
-          <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  전략 이름
+                </label>
+                <input
+                  type="text"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  지점
+                </label>
+                <select
+                  value={formData.branchId}
+                  onChange={(e) => setFormData({ ...formData, branchId: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="all">전체 지점</option>
+                  {branches.map((branch) => (
+                    <option key={branch.id} value={branch.id}>
+                      {branch.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  시작일
+                </label>
+                <input
+                  type="date"
+                  value={formData.startDate}
+                  onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  종료일
+                </label>
+                <input
+                  type="date"
+                  value={formData.endDate}
+                  onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  전략 유형
+                </label>
+                <select
+                  value={formData.type}
+                  onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                >
+                  {strategyTypes.map((type) => (
+                    <option key={type.value} value={type.value}>
+                      {type.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                캠페인 이름
+                전략 수립 이유
               </label>
-              <input
-                type="text"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              <textarea
+                value={formData.reason}
+                onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                rows={3}
+                placeholder="예: 최근 경쟁 업체의 가격 인하로 인한 고객 이탈 방지"
                 required
               />
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                지점
+                전략 상세 내용
               </label>
-              <select
-                value={formData.branchId}
-                onChange={(e) => setFormData({ ...formData, branchId: e.target.value })}
+              <textarea
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="all">전체 지점</option>
-                {branches.map((branch) => (
-                  <option key={branch.id} value={branch.id}>
-                    {branch.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                시작일
-              </label>
-              <input
-                type="date"
-                value={formData.startDate}
-                onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                rows={4}
+                placeholder="예: 주중 시간권 20% 할인, 신규 가입자 대상 첫 달 기간권 30% 할인"
                 required
               />
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                종료일
-              </label>
-              <input
-                type="date"
-                value={formData.endDate}
-                onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                광고 비용 (원)
-              </label>
-              <input
-                type="number"
-                value={formData.cost}
-                onChange={(e) => setFormData({ ...formData, cost: Number(e.target.value) })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                노출수
-              </label>
-              <input
-                type="number"
-                value={formData.impressions}
-                onChange={(e) => setFormData({ ...formData, impressions: Number(e.target.value) })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                클릭수
-              </label>
-              <input
-                type="number"
-                value={formData.clicks}
-                onChange={(e) => setFormData({ ...formData, clicks: Number(e.target.value) })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                required
-              />
-            </div>
-
-            <div className="md:col-span-2">
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 transition-colors font-medium"
-              >
-                {loading ? '분석 중...' : '성과 분석'}
-              </button>
-            </div>
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 transition-colors font-medium"
+            >
+              {loading ? '분석 중...' : '성과 분석'}
+            </button>
           </form>
         </div>
 
@@ -269,22 +261,24 @@ export default function CampaignsAnalyticsPage() {
         {analysis && (
           <div className="space-y-6">
             {/* 주요 지표 */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="bg-white p-6 rounded-lg shadow-md">
-                <h3 className="text-sm font-medium text-gray-600 mb-2">ROI</h3>
-                <p className="text-3xl font-bold text-blue-600">{formatPercent(analysis.roi)}</p>
+                <h3 className="text-sm font-medium text-gray-600 mb-2">매출 변화</h3>
+                <p className={`text-3xl font-bold ${analysis.changes.revenueGrowth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  {analysis.changes.revenueGrowth >= 0 ? '+' : ''}{formatPercent(analysis.changes.revenueGrowth)}
+                </p>
               </div>
               <div className="bg-white p-6 rounded-lg shadow-md">
-                <h3 className="text-sm font-medium text-gray-600 mb-2">ROAS</h3>
-                <p className="text-3xl font-bold text-green-600">{formatPercent(analysis.roas)}</p>
+                <h3 className="text-sm font-medium text-gray-600 mb-2">신규 이용자 변화</h3>
+                <p className={`text-3xl font-bold ${analysis.changes.newUsersGrowth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  {analysis.changes.newUsersGrowth >= 0 ? '+' : ''}{formatPercent(analysis.changes.newUsersGrowth)}
+                </p>
               </div>
               <div className="bg-white p-6 rounded-lg shadow-md">
-                <h3 className="text-sm font-medium text-gray-600 mb-2">CTR</h3>
-                <p className="text-3xl font-bold text-purple-600">{formatPercent(analysis.ctr)}</p>
-              </div>
-              <div className="bg-white p-6 rounded-lg shadow-md">
-                <h3 className="text-sm font-medium text-gray-600 mb-2">CPC</h3>
-                <p className="text-3xl font-bold text-orange-600">{formatCurrency(analysis.cpc)}</p>
+                <h3 className="text-sm font-medium text-gray-600 mb-2">일평균 이용자 변화</h3>
+                <p className={`text-3xl font-bold ${analysis.changes.avgDailyUsersGrowth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  {analysis.changes.avgDailyUsersGrowth >= 0 ? '+' : ''}{formatPercent(analysis.changes.avgDailyUsersGrowth)}
+                </p>
               </div>
             </div>
 
@@ -297,8 +291,8 @@ export default function CampaignsAnalyticsPage() {
                   <thead>
                     <tr className="border-b">
                       <th className="text-left py-3 px-4">지표</th>
-                      <th className="text-right py-3 px-4">광고 전</th>
-                      <th className="text-right py-3 px-4">광고 후</th>
+                      <th className="text-right py-3 px-4">전략 전</th>
+                      <th className="text-right py-3 px-4">전략 후</th>
                       <th className="text-right py-3 px-4">변화량</th>
                     </tr>
                   </thead>
@@ -354,21 +348,15 @@ export default function CampaignsAnalyticsPage() {
                 onClick={handleSave}
                 className="flex-1 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
               >
-                캠페인 저장
-              </button>
-              <button
-                onClick={handleExport}
-                className="flex-1 px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors font-medium"
-              >
-                Excel로 내보내기
+                전략 저장
               </button>
             </div>
           </div>
         )}
 
-        {/* 저장된 캠페인 목록 */}
+        {/* 저장된 전략 목록 */}
         <div className="mt-8">
-          <SavedCampaignsList />
+          <SavedStrategiesList key={refreshKey} />
         </div>
       </div>
     </main>

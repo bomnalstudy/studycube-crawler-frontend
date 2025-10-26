@@ -3,13 +3,13 @@ import { prisma } from '@/lib/prisma'
 import { mkdir, writeFile } from 'fs/promises'
 import { join } from 'path'
 
-// 캠페인 목록 조회
+// 전략 목록 조회
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams
     const branchId = searchParams.get('branchId')
 
-    const campaigns = await prisma.campaign.findMany({
+    const strategies = await prisma.strategy.findMany({
       where: branchId && branchId !== 'all' ? { branchId } : {},
       include: {
         branch: true // 지점 정보 포함
@@ -19,31 +19,31 @@ export async function GET(request: NextRequest) {
       }
     })
 
-    // 각 캠페인의 분석 결과 계산
-    const campaignsWithAnalysis = await Promise.all(
-      campaigns.map(async (campaign) => {
+    // 각 전략의 분석 결과 계산
+    const strategiesWithAnalysis = await Promise.all(
+      strategies.map(async (strategy) => {
         try {
-          // 캠페인 기간의 메트릭 조회
+          // 전략 기간의 메트릭 조회
           const afterMetrics = await prisma.dailyMetric.findMany({
             where: {
-              branchId: campaign.branchId === 'all' ? undefined : campaign.branchId,
+              branchId: strategy.branchId === 'all' ? undefined : strategy.branchId,
               date: {
-                gte: campaign.startDate,
-                lte: campaign.endDate
+                gte: strategy.startDate,
+                lte: strategy.endDate
               }
             }
           })
 
           // 이전 기간 (같은 길이)
-          const days = Math.ceil((campaign.endDate.getTime() - campaign.startDate.getTime()) / (1000 * 60 * 60 * 24))
-          const beforeStartDate = new Date(campaign.startDate)
+          const days = Math.ceil((strategy.endDate.getTime() - strategy.startDate.getTime()) / (1000 * 60 * 60 * 24))
+          const beforeStartDate = new Date(strategy.startDate)
           beforeStartDate.setDate(beforeStartDate.getDate() - days)
-          const beforeEndDate = new Date(campaign.startDate)
+          const beforeEndDate = new Date(strategy.startDate)
           beforeEndDate.setDate(beforeEndDate.getDate() - 1)
 
           const beforeMetrics = await prisma.dailyMetric.findMany({
             where: {
-              branchId: campaign.branchId === 'all' ? undefined : campaign.branchId,
+              branchId: strategy.branchId === 'all' ? undefined : strategy.branchId,
               date: {
                 gte: beforeStartDate,
                 lte: beforeEndDate
@@ -69,48 +69,48 @@ export async function GET(request: NextRequest) {
           }
 
           return {
-            ...campaign,
+            ...strategy,
             analysis
           }
         } catch (analysisError) {
-          console.error('Failed to calculate analysis for campaign:', campaign.id, analysisError)
-          return campaign
+          console.error('Failed to calculate analysis for strategy:', strategy.id, analysisError)
+          return strategy
         }
       })
     )
 
     return NextResponse.json({
       success: true,
-      data: campaignsWithAnalysis
+      data: strategiesWithAnalysis
     })
   } catch (error) {
-    console.error('Failed to fetch campaigns:', error)
+    console.error('Failed to fetch strategies:', error)
     return NextResponse.json(
       {
         success: false,
-        error: 'Failed to fetch campaigns'
+        error: 'Failed to fetch strategies'
       },
       { status: 500 }
     )
   }
 }
 
-// 캠페인 저장
+// 전략 저장
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { name, branchId, startDate, endDate, cost, impressions, clicks, analysis } = body
+    const { name, branchId, startDate, endDate, type, reason, description, analysis } = body
 
     // 데이터베이스에 저장
-    const campaign = await prisma.campaign.create({
+    const strategy = await prisma.strategy.create({
       data: {
         branchId: branchId || 'all',
         name,
         startDate: new Date(startDate),
         endDate: new Date(endDate),
-        cost,
-        impressions,
-        clicks
+        type,
+        reason,
+        description
       }
     })
 
@@ -127,38 +127,38 @@ export async function POST(request: NextRequest) {
 
     // 파일 시스템에 지점별 폴더 생성 및 JSON 파일 저장
     try {
-      const campaignsDir = join(process.cwd(), 'campaigns')
-      const branchDir = join(campaignsDir, branchName)
+      const strategiesDir = join(process.cwd(), 'strategies')
+      const branchDir = join(strategiesDir, branchName)
 
       // 폴더 생성 (이미 존재하면 무시)
       await mkdir(branchDir, { recursive: true })
 
-      // 캠페인 데이터 JSON 파일로 저장
+      // 전략 데이터 JSON 파일로 저장
       const fileName = `${name.replace(/[^a-zA-Z0-9가-힣]/g, '_')}_${Date.now()}.json`
       const filePath = join(branchDir, fileName)
 
-      const campaignData = {
+      const strategyData = {
         ...body,
-        campaign,
+        strategy,
         savedAt: new Date().toISOString()
       }
 
-      await writeFile(filePath, JSON.stringify(campaignData, null, 2), 'utf-8')
+      await writeFile(filePath, JSON.stringify(strategyData, null, 2), 'utf-8')
     } catch (fsError) {
-      console.error('Failed to save campaign file:', fsError)
+      console.error('Failed to save strategy file:', fsError)
       // 파일 저장 실패해도 DB 저장은 성공했으므로 경고만 출력
     }
 
     return NextResponse.json({
       success: true,
-      data: campaign
+      data: strategy
     })
   } catch (error) {
-    console.error('Failed to save campaign:', error)
+    console.error('Failed to save strategy:', error)
     return NextResponse.json(
       {
         success: false,
-        error: 'Failed to save campaign'
+        error: 'Failed to save strategy'
       },
       { status: 500 }
     )

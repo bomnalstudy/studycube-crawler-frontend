@@ -110,6 +110,9 @@ model Campaign {
   clicks      Int?     // 클릭수
   cost        Decimal? @db.Decimal(10, 2)  // 비용
 
+  // 상태 관리
+  status      String   @default("ONGOING")  // ONGOING: 진행중, COMPLETED: 완료
+
   // 메타 정보
   description String?  @db.Text
   createdAt   DateTime @default(now())
@@ -120,6 +123,7 @@ model Campaign {
 
   @@index([branchId])
   @@index([startDate, endDate])
+  @@index([status])
   @@map("campaigns")
 }
 
@@ -132,8 +136,14 @@ model Strategy {
   startDate   DateTime @db.Date
   endDate     DateTime @db.Date
 
+  // 전략 상세
+  reason      String?  @db.Text  // 전략 수립 이유
+  description String?  @db.Text  // 전략 상세 내용
+
+  // 상태 관리
+  status      String   @default("ONGOING")  // ONGOING: 진행중, COMPLETED: 완료
+
   // 메타 정보
-  description String?  @db.Text
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -143,5 +153,6 @@ model Strategy {
   @@index([branchId])
   @@index([type])
   @@index([startDate, endDate])
+  @@index([status])
   @@map("strategies")
 }
