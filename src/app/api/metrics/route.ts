@@ -46,17 +46,6 @@ export async function GET(request: NextRequest) {
       }
     })
 
-    // 현재 기간 방문자 데이터 (재방문 횟수 계산용)
-    const currentVisitors = await prisma.dailyVisitor.findMany({
-      where: {
-        ...branchFilter,
-        visitDate: {
-          gte: startDate,
-          lte: endDate
-        }
-      }
-    })
-
     // 메트릭 계산
     const totalNewUsers = currentMetrics.reduce((sum, m) => sum + (m.newUsers || 0), 0)
     const totalSeatUsage = currentMetrics.reduce((sum, m) => sum + (m.seatUsage || 0), 0)
@@ -99,17 +88,58 @@ export async function GET(request: NextRequest) {
       period: totalRevenue > 0 ? (totalTermTicketRevenue / totalRevenue) * 100 : 0
     }
 
-    // 재방문자 수 계산 (phoneHash 기준)
-    const phoneVisitCount = new Map<string, number>()
-    currentVisitors.forEach(visitor => {
-      const count = phoneVisitCount.get(visitor.phoneHash) || 0
-      phoneVisitCount.set(visitor.phoneHash, count + 1)
+    // DailyMetric에서 성별 데이터 집계
+    const totalMale = currentMetrics.reduce((sum, m) => sum + (m.newUsersMale || 0), 0)
+    const totalFemale = currentMetrics.reduce((sum, m) => sum + (m.newUsersFemale || 0), 0)
+
+    // DailyMetric에서 연령대 데이터 집계
+    const total10s = currentMetrics.reduce((sum, m) => sum + (m.newUsers10s || 0), 0)
+    const total20s = currentMetrics.reduce((sum, m) => sum + (m.newUsers20s || 0), 0)
+    const total30s = currentMetrics.reduce((sum, m) => sum + (m.newUsers30s || 0), 0)
+    const total40s = currentMetrics.reduce((sum, m) => sum + (m.newUsers40s || 0), 0)
+    const total50s = currentMetrics.reduce((sum, m) => sum + (m.newUsers50s || 0), 0)
+    const total60plus = currentMetrics.reduce((sum, m) => sum + (m.newUsers60plus || 0), 0)
+
+    // 고객 인구통계 데이터 생성 (성별과 연령대를 별도로)
+    const customerDemographics = [
+      // 성별 데이터
+      { ageGroup: '전체', gender: '남자', count: totalMale },
+      { ageGroup: '전체', gender: '여자', count: totalFemale },
+      // 연령대 데이터 (성별 구분 없이)
+      { ageGroup: '10대', gender: '전체', count: total10s },
+      { ageGroup: '20대', gender: '전체', count: total20s },
+      { ageGroup: '30대', gender: '전체', count: total30s },
+      { ageGroup: '40대', gender: '전체', count: total40s },
+      { ageGroup: '50대', gender: '전체', count: total50s },
+      { ageGroup: '60대+', gender: '전체', count: total60plus }
+    ].filter(item => item.count > 0) // count가 0인 항목 제거
+
+    // 재방문자 데이터 계산 (DailyVisitor에서)
+    const currentVisitors = await prisma.dailyVisitor.findMany({
+      where: {
+        ...branchFilter,
+        visitDate: {
+          gte: startDate,
+          lte: endDate
+        }
+      }
     })
 
-    // 방문 횟수별 집계
+    // phoneHash별로 서로 다른 방문 날짜를 Set으로 관리
+    const phoneVisitDates = new Map<string, Set<string>>()
+    currentVisitors.forEach(visitor => {
+      const dateStr = visitor.visitDate.toISOString().split('T')[0] // YYYY-MM-DD
+      if (!phoneVisitDates.has(visitor.phoneHash)) {
+        phoneVisitDates.set(visitor.phoneHash, new Set())
+      }
+      phoneVisitDates.get(visitor.phoneHash)!.add(dateStr)
+    })
+
+    // 방문 횟수별 집계 (서로 다른 날짜 기준)
     const visitCountMap = new Map<number, number>()
-    phoneVisitCount.forEach(count => {
-      const displayCount = count >= 4 ? 4 : count // 4회 이상은 4로 통합
+    phoneVisitDates.forEach((dates) => {
+      const visitCount = dates.size // 서로 다른 날짜의 수
+      const displayCount = visitCount >= 4 ? 4 : visitCount // 4회 이상은 4로 통합
       const current = visitCountMap.get(displayCount) || 0
       visitCountMap.set(displayCount, current + 1)
     })
@@ -120,21 +150,6 @@ export async function GET(request: NextRequest) {
         count
       }))
       .sort((a, b) => a.visitCount - b.visitCount)
-
-    // 고객 인구통계 데이터 집계
-    const demographicsMap = new Map<string, number>()
-    currentVisitors.forEach(visitor => {
-      if (visitor.ageGroup && visitor.gender) {
-        const key = `${visitor.ageGroup}-${visitor.gender}`
-        const current = demographicsMap.get(key) || 0
-        demographicsMap.set(key, current + 1)
-      }
-    })
-
-    const customerDemographics = Array.from(demographicsMap.entries()).map(([key, count]) => {
-      const [ageGroup, gender] = key.split('-')
-      return { ageGroup, gender, count }
-    })
 
     const metrics: DashboardMetrics = {
       newUsersThisMonth: totalNewUsers,

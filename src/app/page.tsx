@@ -129,29 +129,21 @@ export default function DashboardPage() {
     { name: '기간권', value: metrics.revenueByTicketType.period }
   ]
 
-  // 나이대별 고객 수 집계
-  const ageGroupMap = new Map<string, number>()
-  metrics.customerDemographics.forEach(item => {
-    const current = ageGroupMap.get(item.ageGroup) || 0
-    ageGroupMap.set(item.ageGroup, current + item.count)
-  })
+  // 나이대별 고객 수 집계 (gender가 '전체'인 것만)
+  const ageGroupData: DonutChartData[] = metrics.customerDemographics
+    .filter(item => item.gender === '전체')
+    .map(item => ({
+      name: item.ageGroup,
+      value: item.count
+    }))
 
-  const ageGroupData: DonutChartData[] = Array.from(ageGroupMap.entries()).map(([ageGroup, count]) => ({
-    name: ageGroup,
-    value: count
-  }))
-
-  // 성별 고객 수 집계
-  const genderMap = new Map<string, number>()
-  metrics.customerDemographics.forEach(item => {
-    const current = genderMap.get(item.gender) || 0
-    genderMap.set(item.gender, current + item.count)
-  })
-
-  const genderData: DonutChartData[] = Array.from(genderMap.entries()).map(([gender, count]) => ({
-    name: gender,
-    value: count
-  }))
+  // 성별 고객 수 집계 (ageGroup이 '전체'인 것만)
+  const genderData: DonutChartData[] = metrics.customerDemographics
+    .filter(item => item.ageGroup === '전체')
+    .map(item => ({
+      name: item.gender,
+      value: item.count
+    }))
 
   return (
     <main className="min-h-screen p-8 bg-gray-50">
