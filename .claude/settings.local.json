@@ -5,7 +5,9 @@
       "Read(//c/Users/ghpjj/OneDrive/Desktop/project/**)",
       "Bash(pkill:*)",
       "Bash(npm install)",
-      "Bash(npx prisma:*)"
+      "Bash(npx prisma:*)",
+      "Bash(cat:*)",
+      "Bash(npm run dev:*)"
     ],
     "deny": [],
     "ask": []

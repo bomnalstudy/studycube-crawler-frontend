@@ -1,22 +1,63 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { startOfMonth, endOfMonth, addMonths, subMonths } from 'date-fns'
 import { BarChart } from '@/components/charts/bar-chart'
 import { DonutChart } from '@/components/charts/donut-chart'
 import { MetricsCard } from '@/components/dashboard/metrics-card'
 import { LoadingSkeleton } from '@/components/dashboard/loading-skeleton'
+import { BranchSelector } from '@/components/dashboard/branch-selector'
+import { DateRangePicker } from '@/components/dashboard/date-range-picker'
 import { DashboardMetrics, BarChartData, DonutChartData } from '@/types/dashboard'
-import { formatCurrency, formatNumber, formatPercent } from '@/lib/utils/formatters'
+import { formatCurrency, formatNumber } from '@/lib/utils/formatters'
+import { formatDate } from '@/lib/utils/date-helpers'
+
+interface Branch {
+  id: string
+  name: string
+}
 
 export default function DashboardPage() {
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null)
+  const [branches, setBranches] = useState<Branch[]>([])
+  const [selectedBranchId, setSelectedBranchId] = useState<string>('all')
+  const [startDate, setStartDate] = useState<Date>(startOfMonth(new Date()))
+  const [endDate, setEndDate] = useState<Date>(endOfMonth(new Date()))
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  // 지점 목록 가져오기
+  useEffect(() => {
+    async function fetchBranches() {
+      try {
+        const response = await fetch('/api/branches')
+        const result = await response.json()
+
+        if (result.success) {
+          setBranches(result.data)
+        }
+      } catch (err) {
+        console.error('Failed to fetch branches:', err)
+      }
+    }
+
+    fetchBranches()
+  }, [])
+
+  // 메트릭 데이터 가져오기
   useEffect(() => {
     async function fetchMetrics() {
+      setLoading(true)
+      setError(null)
+
       try {
-        const response = await fetch('/api/metrics')
+        const params = new URLSearchParams({
+          branchId: selectedBranchId,
+          startDate: formatDate(startDate),
+          endDate: formatDate(endDate)
+        })
+
+        const response = await fetch(`/api/metrics?${params}`)
         const result = await response.json()
 
         if (result.success) {
@@ -33,7 +74,21 @@ export default function DashboardPage() {
     }
 
     fetchMetrics()
-  }, [])
+  }, [selectedBranchId, startDate, endDate])
+
+  // 이전 달로 이동
+  const handlePreviousMonth = () => {
+    const newDate = subMonths(startDate, 1)
+    setStartDate(startOfMonth(newDate))
+    setEndDate(endOfMonth(newDate))
+  }
+
+  // 다음 달로 이동
+  const handleNextMonth = () => {
+    const newDate = addMonths(startDate, 1)
+    setStartDate(startOfMonth(newDate))
+    setEndDate(endOfMonth(newDate))
+  }
 
   if (loading) {
     return (
@@ -101,15 +156,40 @@ export default function DashboardPage() {
   return (
     <main className="min-h-screen p-8 bg-gray-50">
       <div className="max-w-7xl mx-auto">
+        {/* 헤더 */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Studycube 대시보드</h1>
-          <p className="text-gray-600 mt-2">이번 달 매출 및 고객 데이터 현황</p>
+          <h1 className="text-3xl font-bold text-gray-900 mb-4">Studycube 대시보드</h1>
+
+          {/* 필터 컨트롤 */}
+          <div className="flex flex-col md:flex-row gap-4 bg-white p-4 rounded-lg shadow">
+            <BranchSelector
+              branches={branches}
+              selectedBranchId={selectedBranchId}
+              onBranchChange={setSelectedBranchId}
+            />
+            <DateRangePicker
+              startDate={startDate}
+              endDate={endDate}
+              onStartDateChange={setStartDate}
+              onEndDateChange={setEndDate}
+              onPreviousMonth={handlePreviousMonth}
+              onNextMonth={handleNextMonth}
+            />
+          </div>
+
+          {/* 선택된 지점 표시 */}
+          <p className="text-gray-600 mt-4">
+            {selectedBranchId === 'all'
+              ? '전체 지점 합산 데이터'
+              : `${branches.find(b => b.id === selectedBranchId)?.name || '지점'} 데이터`}
+            {' '}({formatDate(startDate)} ~ {formatDate(endDate)})
+          </p>
         </div>
 
         {/* 주요 지표 카드 */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <MetricsCard
-            title="이번달 신규 이용자"
+            title="신규 이용자"
             value={formatNumber(metrics.newUsersThisMonth)}
             subtitle="명"
           />
@@ -119,7 +199,7 @@ export default function DashboardPage() {
             subtitle="건"
           />
           <MetricsCard
-            title="이번달 총 매출"
+            title="총 매출"
             value={formatCurrency(metrics.monthlyRevenue)}
             trend={{
               value: Math.abs(metrics.revenueGrowthRate),
@@ -134,7 +214,7 @@ export default function DashboardPage() {
 
         {/* 차트 그리드 */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-          {/* 이전 달 대비 매출 상승률 */}
+          {/* 이전 기간 대비 매출 상승률 */}
           <BarChart
             data={[
               {
@@ -142,19 +222,19 @@ export default function DashboardPage() {
                 value: metrics.revenueGrowthRate
               }
             ]}
-            title="이전 달 대비 매출 상승률 (%)"
+            title="이전 기간 대비 매출 변화율 (%)"
             color={metrics.revenueGrowthRate >= 0 ? '#10b981' : '#ef4444'}
           />
 
-          {/* 월별 매장 매출 */}
+          {/* 총 매출 */}
           <BarChart
             data={[
               {
-                label: '이번 달',
+                label: '기간 총 매출',
                 value: metrics.monthlyRevenue
               }
             ]}
-            title="월별 매장 매출 합계"
+            title="기간 총 매출"
             color="#3b82f6"
           />
 
@@ -168,7 +248,7 @@ export default function DashboardPage() {
           {/* 재방문자 수 */}
           <BarChart
             data={revisitChartData}
-            title="일주일 고객 재방문자 수"
+            title="재방문자 수"
             color="#8b5cf6"
           />
 
