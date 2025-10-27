@@ -11,7 +11,7 @@ interface Branch {
 
 interface StrategyForm {
   name: string
-  branchId: string
+  branchIds: string[]
   startDate: string
   endDate: string
   type: string
@@ -49,7 +49,7 @@ export default function StrategiesAnalyticsPage() {
   const [branches, setBranches] = useState<Branch[]>([])
   const [formData, setFormData] = useState<StrategyForm>({
     name: '',
-    branchId: 'all',
+    branchIds: [],
     startDate: '',
     endDate: '',
     type: 'PRICE_DISCOUNT',
@@ -156,22 +156,41 @@ export default function StrategiesAnalyticsPage() {
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  지점
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  지점 선택 (여러 개 선택 가능)
                 </label>
-                <select
-                  value={formData.branchId}
-                  onChange={(e) => setFormData({ ...formData, branchId: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="all">전체 지점</option>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   {branches.map((branch) => (
-                    <option key={branch.id} value={branch.id}>
-                      {branch.name}
-                    </option>
+                    <label
+                      key={branch.id}
+                      className="flex items-center space-x-2 p-3 border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={formData.branchIds.includes(branch.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setFormData({
+                              ...formData,
+                              branchIds: [...formData.branchIds, branch.id]
+                            })
+                          } else {
+                            setFormData({
+                              ...formData,
+                              branchIds: formData.branchIds.filter(id => id !== branch.id)
+                            })
+                          }
+                        }}
+                        className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                      />
+                      <span className="text-sm text-gray-700">{branch.name}</span>
+                    </label>
                   ))}
-                </select>
+                </div>
+                {formData.branchIds.length === 0 && (
+                  <p className="mt-2 text-sm text-red-600">* 최소 1개 이상의 지점을 선택해주세요</p>
+                )}
               </div>
 
               <div>
@@ -249,7 +268,7 @@ export default function StrategiesAnalyticsPage() {
 
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || formData.branchIds.length === 0}
               className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 transition-colors font-medium"
             >
               {loading ? '분석 중...' : '성과 분석'}

@@ -20,29 +20,43 @@ export async function PATCH(request: NextRequest) {
     const strategy = await prisma.strategy.update({
       where: { id: strategyId },
       data: { name: newName },
-      include: { branch: true }
+      include: {
+        branches: {
+          include: {
+            branch: true
+          }
+        }
+      }
     })
 
-    // 파일 시스템에서 파일 이름 변경
+    // 파일 시스템에서 파일 이름 변경 (모든 지점 폴더에서)
     try {
-      const branchName = strategy.branchId === 'all' ? '전체지점' : (strategy.branch?.name || '알 수 없는 지점')
       const strategiesDir = join(process.cwd(), 'strategies')
-      const branchDir = join(strategiesDir, branchName)
 
-      // 해당 지점 폴더에서 전략 ID를 포함한 파일 찾기
-      const files = await readdir(branchDir)
-      const oldFile = files.find(f => f.includes(strategyId) || f.endsWith('.json'))
+      // 각 지점 폴더에서 파일 이름 변경
+      for (const sb of strategy.branches) {
+        const branchName = sb.branch.name
+        const branchDir = join(strategiesDir, branchName)
 
-      if (oldFile) {
-        const timestamp = Date.now()
-        const newFileName = `${newName.replace(/[^a-zA-Z0-9가-힣]/g, '_')}_${timestamp}.json`
-        const oldPath = join(branchDir, oldFile)
-        const newPath = join(branchDir, newFileName)
+        try {
+          // 해당 지점 폴더에서 전략 ID를 포함한 파일 찾기
+          const files = await readdir(branchDir)
+          const oldFile = files.find(f => f.includes(strategyId) || f.endsWith('.json'))
 
-        await rename(oldPath, newPath)
+          if (oldFile) {
+            const timestamp = Date.now()
+            const newFileName = `${newName.replace(/[^a-zA-Z0-9가-힣]/g, '_')}_${timestamp}.json`
+            const oldPath = join(branchDir, oldFile)
+            const newPath = join(branchDir, newFileName)
+
+            await rename(oldPath, newPath)
+          }
+        } catch (branchError) {
+          console.error(`Failed to rename file in ${branchName}:`, branchError)
+        }
       }
     } catch (fsError) {
-      console.error('Failed to rename strategy file:', fsError)
+      console.error('Failed to rename strategy files:', fsError)
       // 파일 이름 변경 실패해도 DB 업데이트는 성공
     }
 

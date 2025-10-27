@@ -264,7 +264,7 @@ export default function DashboardPage() {
           {/* 재방문자 수 */}
           <BarChart
             data={revisitChartData}
-            title="재방문자 수"
+            title="최근 일주일 재방문자 수"
             color="#8b5cf6"
           />
 

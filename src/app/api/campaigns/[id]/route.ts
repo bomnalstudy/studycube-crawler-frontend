@@ -10,7 +10,11 @@ export async function GET(
     const campaign = await prisma.campaign.findUnique({
       where: { id },
       include: {
-        branch: true
+        branches: {
+          include: {
+            branch: true
+          }
+        }
       }
     })
 

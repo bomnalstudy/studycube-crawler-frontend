@@ -19,7 +19,11 @@ export async function GET(request: NextRequest) {
     const campaign = await prisma.campaign.findUnique({
       where: { id: campaignId },
       include: {
-        branch: true
+        branches: {
+          include: {
+            branch: true
+          }
+        }
       }
     })
 
@@ -30,10 +34,13 @@ export async function GET(request: NextRequest) {
       )
     }
 
+    // 캠페인에 연결된 지점 ID 목록
+    const campaignBranchIds = campaign.branches.map(cb => cb.branchId)
+
     // 캠페인 분석 실행
     const afterMetrics = await prisma.dailyMetric.findMany({
       where: {
-        branchId: campaign.branchId === 'all' ? undefined : campaign.branchId,
+        branchId: campaignBranchIds.length > 0 ? { in: campaignBranchIds } : undefined,
         date: {
           gte: campaign.startDate,
           lte: campaign.endDate
@@ -50,7 +57,7 @@ export async function GET(request: NextRequest) {
 
     const beforeMetrics = await prisma.dailyMetric.findMany({
       where: {
-        branchId: campaign.branchId === 'all' ? undefined : campaign.branchId,
+        branchId: campaignBranchIds.length > 0 ? { in: campaignBranchIds } : undefined,
         date: {
           gte: beforeStartDate,
           lte: beforeEndDate
@@ -103,7 +110,7 @@ export async function GET(request: NextRequest) {
 
     // 캠페인 기본 정보
     worksheet.addRow(['캠페인 기본 정보']).font = { bold: true }
-    worksheet.addRow(['지점', campaign.branch?.name || '전체지점'])
+    worksheet.addRow(['적용 지점', campaign.branches.map(cb => cb.branch.name).join(', ')])
     worksheet.addRow(['기간', `${campaign.startDate.toISOString().split('T')[0]} ~ ${campaign.endDate.toISOString().split('T')[0]}`])
     worksheet.addRow(['광고 비용', `${Number(campaign.cost || 0).toLocaleString()}원`])
     worksheet.addRow(['노출수', (campaign.impressions || 0).toLocaleString()])

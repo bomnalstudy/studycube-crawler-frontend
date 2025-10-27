@@ -114,42 +114,59 @@ export async function GET(request: NextRequest) {
       { ageGroup: '60대+', gender: '전체', count: total60plus }
     ].filter(item => item.count > 0) // count가 0인 항목 제거
 
-    // 재방문자 데이터 계산 (DailyVisitor에서)
-    const currentVisitors = await prisma.dailyVisitor.findMany({
-      where: {
-        ...branchFilter,
-        visitDate: {
-          gte: startDate,
-          lte: endDate
+    // 재방문자 데이터 계산 (최근 일주일 - 마지막 데이터 날짜 기준)
+    // 마지막 데이터 날짜 찾기
+    const latestMetric = await prisma.dailyMetric.findFirst({
+      where: branchFilter,
+      orderBy: {
+        date: 'desc'
+      }
+    })
+
+    let weeklyRevisitData: Array<{ visitCount: number; count: number }> = []
+
+    if (latestMetric) {
+      const lastDataDate = new Date(latestMetric.date)
+      const weekAgoDate = new Date(lastDataDate)
+      weekAgoDate.setDate(weekAgoDate.getDate() - 6) // 7일간 (오늘 포함)
+
+      // 최근 일주일 방문자 데이터 조회
+      const recentVisitors = await prisma.dailyVisitor.findMany({
+        where: {
+          ...branchFilter,
+          visitDate: {
+            gte: weekAgoDate,
+            lte: lastDataDate
+          }
         }
-      }
-    })
+      })
 
-    // phoneHash별로 서로 다른 방문 날짜를 Set으로 관리
-    const phoneVisitDates = new Map<string, Set<string>>()
-    currentVisitors.forEach(visitor => {
-      const dateStr = visitor.visitDate.toISOString().split('T')[0] // YYYY-MM-DD
-      if (!phoneVisitDates.has(visitor.phoneHash)) {
-        phoneVisitDates.set(visitor.phoneHash, new Set())
-      }
-      phoneVisitDates.get(visitor.phoneHash)!.add(dateStr)
-    })
+      // phoneHash별로 서로 다른 방문 날짜를 Set으로 관리
+      const phoneVisitDates = new Map<string, Set<string>>()
+      recentVisitors.forEach(visitor => {
+        const dateStr = visitor.visitDate.toISOString().split('T')[0] // YYYY-MM-DD
+        if (!phoneVisitDates.has(visitor.phoneHash)) {
+          phoneVisitDates.set(visitor.phoneHash, new Set())
+        }
+        phoneVisitDates.get(visitor.phoneHash)!.add(dateStr)
+      })
 
-    // 방문 횟수별 집계 (서로 다른 날짜 기준)
-    const visitCountMap = new Map<number, number>()
-    phoneVisitDates.forEach((dates) => {
-      const visitCount = dates.size // 서로 다른 날짜의 수
-      const displayCount = visitCount >= 4 ? 4 : visitCount // 4회 이상은 4로 통합
-      const current = visitCountMap.get(displayCount) || 0
-      visitCountMap.set(displayCount, current + 1)
-    })
+      // 방문 횟수별 집계 (서로 다른 날짜 기준)
+      const visitCountMap = new Map<number, number>()
+      phoneVisitDates.forEach((dates) => {
+        const visitCount = dates.size // 서로 다른 날짜의 수
+        const displayCount = visitCount >= 4 ? 4 : visitCount // 4회 이상은 4로 통합
+        const current = visitCountMap.get(displayCount) || 0
+        visitCountMap.set(displayCount, current + 1)
+      })
 
-    const weeklyRevisitData = Array.from(visitCountMap.entries())
-      .map(([visitCount, count]) => ({
-        visitCount,
-        count
-      }))
-      .sort((a, b) => a.visitCount - b.visitCount)
+      weeklyRevisitData = Array.from(visitCountMap.entries())
+        .map(([visitCount, count]) => ({
+          visitCount,
+          count
+        }))
+        .sort((a, b) => a.visitCount - b.visitCount)
+    }
 
     const metrics: DashboardMetrics = {
       newUsersThisMonth: totalNewUsers,

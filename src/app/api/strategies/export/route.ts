@@ -19,7 +19,11 @@ export async function GET(request: NextRequest) {
     const strategy = await prisma.strategy.findUnique({
       where: { id: strategyId },
       include: {
-        branch: true
+        branches: {
+          include: {
+            branch: true
+          }
+        }
       }
     })
 
@@ -30,10 +34,13 @@ export async function GET(request: NextRequest) {
       )
     }
 
+    // 전략에 연결된 지점 ID 목록
+    const strategyBranchIds = strategy.branches.map(sb => sb.branchId)
+
     // 전략 분석 실행
     const afterMetrics = await prisma.dailyMetric.findMany({
       where: {
-        branchId: strategy.branchId === 'all' ? undefined : strategy.branchId,
+        branchId: strategyBranchIds.length > 0 ? { in: strategyBranchIds } : undefined,
         date: {
           gte: strategy.startDate,
           lte: strategy.endDate
@@ -50,7 +57,7 @@ export async function GET(request: NextRequest) {
 
     const beforeMetrics = await prisma.dailyMetric.findMany({
       where: {
-        branchId: strategy.branchId === 'all' ? undefined : strategy.branchId,
+        branchId: strategyBranchIds.length > 0 ? { in: strategyBranchIds } : undefined,
         date: {
           gte: beforeStartDate,
           lte: beforeEndDate
@@ -69,7 +76,7 @@ export async function GET(request: NextRequest) {
     // 재방문률 계산
     const afterVisitors = await prisma.dailyVisitor.findMany({
       where: {
-        branchId: strategy.branchId === 'all' ? undefined : strategy.branchId,
+        branchId: strategyBranchIds.length > 0 ? { in: strategyBranchIds } : undefined,
         visitDate: {
           gte: strategy.startDate,
           lte: strategy.endDate
@@ -79,7 +86,7 @@ export async function GET(request: NextRequest) {
 
     const beforeVisitors = await prisma.dailyVisitor.findMany({
       where: {
-        branchId: strategy.branchId === 'all' ? undefined : strategy.branchId,
+        branchId: strategyBranchIds.length > 0 ? { in: strategyBranchIds } : undefined,
         visitDate: {
           gte: beforeStartDate,
           lte: beforeEndDate
@@ -139,7 +146,7 @@ export async function GET(request: NextRequest) {
 
     // 전략 기본 정보
     worksheet.addRow(['전략 기본 정보']).font = { bold: true }
-    worksheet.addRow(['지점', strategy.branch?.name || '전체지점'])
+    worksheet.addRow(['적용 지점', strategy.branches.map(sb => sb.branch.name).join(', ')])
     worksheet.addRow(['전략 유형', strategyTypeLabels[strategy.type] || strategy.type])
     worksheet.addRow(['기간', `${strategy.startDate.toISOString().split('T')[0]} ~ ${strategy.endDate.toISOString().split('T')[0]}`])
 

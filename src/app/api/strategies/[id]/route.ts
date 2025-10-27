@@ -11,7 +11,11 @@ export async function GET(
     const strategy = await prisma.strategy.findUnique({
       where: { id },
       include: {
-        branch: true
+        branches: {
+          include: {
+            branch: true
+          }
+        }
       }
     })
 
@@ -22,10 +26,13 @@ export async function GET(
       )
     }
 
+    // 전략에 연결된 지점 ID 목록
+    const strategyBranchIds = strategy.branches.map(sb => sb.branchId)
+
     // 전략 기간의 메트릭 조회
     const afterMetrics = await prisma.dailyMetric.findMany({
       where: {
-        branchId: strategy.branchId === 'all' ? undefined : strategy.branchId,
+        branchId: strategyBranchIds.length > 0 ? { in: strategyBranchIds } : undefined,
         date: {
           gte: strategy.startDate,
           lte: strategy.endDate
@@ -42,7 +49,7 @@ export async function GET(
 
     const beforeMetrics = await prisma.dailyMetric.findMany({
       where: {
-        branchId: strategy.branchId === 'all' ? undefined : strategy.branchId,
+        branchId: strategyBranchIds.length > 0 ? { in: strategyBranchIds } : undefined,
         date: {
           gte: beforeStartDate,
           lte: beforeEndDate
@@ -67,7 +74,7 @@ export async function GET(
     // 재방문률 계산
     const afterVisitors = await prisma.dailyVisitor.findMany({
       where: {
-        branchId: strategy.branchId === 'all' ? undefined : strategy.branchId,
+        branchId: strategyBranchIds.length > 0 ? { in: strategyBranchIds } : undefined,
         visitDate: {
           gte: strategy.startDate,
           lte: strategy.endDate
@@ -77,7 +84,7 @@ export async function GET(
 
     const beforeVisitors = await prisma.dailyVisitor.findMany({
       where: {
-        branchId: strategy.branchId === 'all' ? undefined : strategy.branchId,
+        branchId: strategyBranchIds.length > 0 ? { in: strategyBranchIds } : undefined,
         visitDate: {
           gte: beforeStartDate,
           lte: beforeEndDate

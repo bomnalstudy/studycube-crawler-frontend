@@ -10,9 +10,19 @@ export async function GET(request: NextRequest) {
     const branchId = searchParams.get('branchId')
 
     const strategies = await prisma.strategy.findMany({
-      where: branchId && branchId !== 'all' ? { branchId } : {},
+      where: branchId && branchId !== 'all'
+        ? {
+            branches: {
+              some: { branchId }
+            }
+          }
+        : {},
       include: {
-        branch: true // 지점 정보 포함
+        branches: {
+          include: {
+            branch: true
+          }
+        }
       },
       orderBy: {
         createdAt: 'desc'
@@ -23,10 +33,13 @@ export async function GET(request: NextRequest) {
     const strategiesWithAnalysis = await Promise.all(
       strategies.map(async (strategy) => {
         try {
+          // 전략에 연결된 지점 ID 목록
+          const strategyBranchIds = strategy.branches.map(sb => sb.branchId)
+
           // 전략 기간의 메트릭 조회
           const afterMetrics = await prisma.dailyMetric.findMany({
             where: {
-              branchId: strategy.branchId === 'all' ? undefined : strategy.branchId,
+              branchId: strategyBranchIds.length > 0 ? { in: strategyBranchIds } : undefined,
               date: {
                 gte: strategy.startDate,
                 lte: strategy.endDate
@@ -43,7 +56,7 @@ export async function GET(request: NextRequest) {
 
           const beforeMetrics = await prisma.dailyMetric.findMany({
             where: {
-              branchId: strategy.branchId === 'all' ? undefined : strategy.branchId,
+              branchId: strategyBranchIds.length > 0 ? { in: strategyBranchIds } : undefined,
               date: {
                 gte: beforeStartDate,
                 lte: beforeEndDate
@@ -99,51 +112,56 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { name, branchId, startDate, endDate, type, reason, description, analysis } = body
+    const { name, branchIds, startDate, endDate, type, reason, description, analysis } = body
 
-    // 데이터베이스에 저장
+    // 데이터베이스에 저장 (트랜잭션)
     const strategy = await prisma.strategy.create({
       data: {
-        branchId: branchId || 'all',
         name,
         startDate: new Date(startDate),
         endDate: new Date(endDate),
         type,
         reason,
-        description
+        description,
+        branches: {
+          create: branchIds.map((branchId: string) => ({
+            branchId
+          }))
+        }
+      },
+      include: {
+        branches: {
+          include: {
+            branch: true
+          }
+        }
       }
     })
-
-    // 지점 정보 조회 (폴더명 생성용)
-    let branchName = '전체지점'
-    if (branchId && branchId !== 'all') {
-      const branch = await prisma.branch.findUnique({
-        where: { id: branchId }
-      })
-      if (branch) {
-        branchName = branch.name
-      }
-    }
 
     // 파일 시스템에 지점별 폴더 생성 및 JSON 파일 저장
     try {
       const strategiesDir = join(process.cwd(), 'strategies')
-      const branchDir = join(strategiesDir, branchName)
 
-      // 폴더 생성 (이미 존재하면 무시)
-      await mkdir(branchDir, { recursive: true })
+      // 각 지점별 폴더에 저장
+      for (const strategyBranch of strategy.branches) {
+        const branchName = strategyBranch.branch.name
+        const branchDir = join(strategiesDir, branchName)
 
-      // 전략 데이터 JSON 파일로 저장
-      const fileName = `${name.replace(/[^a-zA-Z0-9가-힣]/g, '_')}_${Date.now()}.json`
-      const filePath = join(branchDir, fileName)
+        // 폴더 생성 (이미 존재하면 무시)
+        await mkdir(branchDir, { recursive: true })
 
-      const strategyData = {
-        ...body,
-        strategy,
-        savedAt: new Date().toISOString()
+        // 전략 데이터 JSON 파일로 저장
+        const fileName = `${name.replace(/[^a-zA-Z0-9가-힣]/g, '_')}_${Date.now()}.json`
+        const filePath = join(branchDir, fileName)
+
+        const strategyData = {
+          ...body,
+          strategy,
+          savedAt: new Date().toISOString()
+        }
+
+        await writeFile(filePath, JSON.stringify(strategyData, null, 2), 'utf-8')
       }
-
-      await writeFile(filePath, JSON.stringify(strategyData, null, 2), 'utf-8')
     } catch (fsError) {
       console.error('Failed to save strategy file:', fsError)
       // 파일 저장 실패해도 DB 저장은 성공했으므로 경고만 출력
@@ -159,6 +177,88 @@ export async function POST(request: NextRequest) {
       {
         success: false,
         error: 'Failed to save strategy'
+      },
+      { status: 500 }
+    )
+  }
+}
+
+// 전략 수정
+export async function PATCH(request: NextRequest) {
+  try {
+    const body = await request.json()
+    const { id, name, branchIds, startDate, endDate, type, reason, description } = body
+
+    // 기존 지점 연결 삭제 후 새로 생성
+    const strategy = await prisma.strategy.update({
+      where: { id },
+      data: {
+        name,
+        startDate: new Date(startDate),
+        endDate: new Date(endDate),
+        type,
+        reason,
+        description,
+        branches: {
+          deleteMany: {},
+          create: branchIds.map((branchId: string) => ({
+            branchId
+          }))
+        }
+      },
+      include: {
+        branches: {
+          include: {
+            branch: true
+          }
+        }
+      }
+    })
+
+    return NextResponse.json({
+      success: true,
+      data: strategy
+    })
+  } catch (error) {
+    console.error('Failed to update strategy:', error)
+    return NextResponse.json(
+      {
+        success: false,
+        error: 'Failed to update strategy'
+      },
+      { status: 500 }
+    )
+  }
+}
+
+// 전략 삭제
+export async function DELETE(request: NextRequest) {
+  try {
+    const searchParams = request.nextUrl.searchParams
+    const id = searchParams.get('id')
+
+    if (!id) {
+      return NextResponse.json(
+        { success: false, error: 'Strategy ID is required' },
+        { status: 400 }
+      )
+    }
+
+    // 전략 삭제 (CASCADE로 StrategyBranch도 자동 삭제됨)
+    await prisma.strategy.delete({
+      where: { id }
+    })
+
+    return NextResponse.json({
+      success: true,
+      message: 'Strategy deleted successfully'
+    })
+  } catch (error) {
+    console.error('Failed to delete strategy:', error)
+    return NextResponse.json(
+      {
+        success: false,
+        error: 'Failed to delete strategy'
       },
       { status: 500 }
     )

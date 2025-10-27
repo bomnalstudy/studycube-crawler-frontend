@@ -19,10 +19,10 @@ model Branch {
   updatedAt DateTime @updatedAt
 
   // Relations
-  dailyMetrics DailyMetric[]
-  dailyVisitors DailyVisitor[]
-  campaigns    Campaign[]
-  strategies   Strategy[]
+  dailyMetrics     DailyMetric[]
+  dailyVisitors    DailyVisitor[]
+  campaignBranches CampaignBranch[]
+  strategyBranches StrategyBranch[]
   combinedAnalyses CombinedAnalysis[]
 
   @@map("branches")
@@ -101,7 +101,6 @@ model DailyVisitor {
 // 광고 캠페인
 model Campaign {
   id          String   @id @default(cuid())
-  branchId    String
   name        String   // 캠페인명
   startDate   DateTime @db.Date
   endDate     DateTime @db.Date
@@ -119,19 +118,33 @@ model Campaign {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  // Relations
-  branch      Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  // Relations - Many-to-Many
+  branches    CampaignBranch[]
 
-  @@index([branchId])
   @@index([startDate, endDate])
   @@index([status])
   @@map("campaigns")
 }
 
+// 캠페인-지점 연결 테이블
+model CampaignBranch {
+  id         String   @id @default(cuid())
+  campaignId String
+  branchId   String
+  createdAt  DateTime @default(now())
+
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  branch     Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, branchId])
+  @@index([campaignId])
+  @@index([branchId])
+  @@map("campaign_branches")
+}
+
 // 지점 전략
 model Strategy {
   id          String   @id @default(cuid())
-  branchId    String
   name        String   // 전략명
   type        String   // 전략 유형: PRICE_DISCOUNT, REVIEW_EVENT, NEW_CONTENT, etc.
   startDate   DateTime @db.Date
@@ -148,14 +161,29 @@ model Strategy {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  // Relations
-  branch      Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  // Relations - Many-to-Many
+  branches    StrategyBranch[]
 
-  @@index([branchId])
   @@index([type])
   @@index([startDate, endDate])
   @@index([status])
   @@map("strategies")
+}
+
+// 전략-지점 연결 테이블
+model StrategyBranch {
+  id         String   @id @default(cuid())
+  strategyId String
+  branchId   String
+  createdAt  DateTime @default(now())
+
+  strategy   Strategy @relation(fields: [strategyId], references: [id], onDelete: Cascade)
+  branch     Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@unique([strategyId, branchId])
+  @@index([strategyId])
+  @@index([branchId])
+  @@map("strategy_branches")
 }
 
 // 통합 분석 (광고 + 전략)

@@ -10,9 +10,19 @@ export async function GET(request: NextRequest) {
     const branchId = searchParams.get('branchId')
 
     const campaigns = await prisma.campaign.findMany({
-      where: branchId && branchId !== 'all' ? { branchId } : {},
+      where: branchId && branchId !== 'all'
+        ? {
+            branches: {
+              some: { branchId }
+            }
+          }
+        : {},
       include: {
-        branch: true // 지점 정보 포함
+        branches: {
+          include: {
+            branch: true
+          }
+        }
       },
       orderBy: {
         createdAt: 'desc'
@@ -23,10 +33,13 @@ export async function GET(request: NextRequest) {
     const campaignsWithAnalysis = await Promise.all(
       campaigns.map(async (campaign) => {
         try {
+          // 캠페인에 연결된 지점 ID 목록
+          const campaignBranchIds = campaign.branches.map(cb => cb.branchId)
+
           // 캠페인 기간의 메트릭 조회
           const afterMetrics = await prisma.dailyMetric.findMany({
             where: {
-              branchId: campaign.branchId === 'all' ? undefined : campaign.branchId,
+              branchId: campaignBranchIds.length > 0 ? { in: campaignBranchIds } : undefined,
               date: {
                 gte: campaign.startDate,
                 lte: campaign.endDate
@@ -43,7 +56,7 @@ export async function GET(request: NextRequest) {
 
           const beforeMetrics = await prisma.dailyMetric.findMany({
             where: {
-              branchId: campaign.branchId === 'all' ? undefined : campaign.branchId,
+              branchId: campaignBranchIds.length > 0 ? { in: campaignBranchIds } : undefined,
               date: {
                 gte: beforeStartDate,
                 lte: beforeEndDate
@@ -99,51 +112,56 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { name, branchId, startDate, endDate, cost, impressions, clicks, analysis } = body
+    const { name, branchIds, startDate, endDate, cost, impressions, clicks, analysis } = body
 
-    // 데이터베이스에 저장
+    // 데이터베이스에 저장 (트랜잭션)
     const campaign = await prisma.campaign.create({
       data: {
-        branchId: branchId || 'all',
         name,
         startDate: new Date(startDate),
         endDate: new Date(endDate),
         cost,
         impressions,
-        clicks
+        clicks,
+        branches: {
+          create: branchIds.map((branchId: string) => ({
+            branchId
+          }))
+        }
+      },
+      include: {
+        branches: {
+          include: {
+            branch: true
+          }
+        }
       }
     })
-
-    // 지점 정보 조회 (폴더명 생성용)
-    let branchName = '전체지점'
-    if (branchId && branchId !== 'all') {
-      const branch = await prisma.branch.findUnique({
-        where: { id: branchId }
-      })
-      if (branch) {
-        branchName = branch.name
-      }
-    }
 
     // 파일 시스템에 지점별 폴더 생성 및 JSON 파일 저장
     try {
       const campaignsDir = join(process.cwd(), 'campaigns')
-      const branchDir = join(campaignsDir, branchName)
 
-      // 폴더 생성 (이미 존재하면 무시)
-      await mkdir(branchDir, { recursive: true })
+      // 각 지점별 폴더에 저장
+      for (const campaignBranch of campaign.branches) {
+        const branchName = campaignBranch.branch.name
+        const branchDir = join(campaignsDir, branchName)
 
-      // 캠페인 데이터 JSON 파일로 저장
-      const fileName = `${name.replace(/[^a-zA-Z0-9가-힣]/g, '_')}_${Date.now()}.json`
-      const filePath = join(branchDir, fileName)
+        // 폴더 생성 (이미 존재하면 무시)
+        await mkdir(branchDir, { recursive: true })
 
-      const campaignData = {
-        ...body,
-        campaign,
-        savedAt: new Date().toISOString()
+        // 캠페인 데이터 JSON 파일로 저장
+        const fileName = `${name.replace(/[^a-zA-Z0-9가-힣]/g, '_')}_${Date.now()}.json`
+        const filePath = join(branchDir, fileName)
+
+        const campaignData = {
+          ...body,
+          campaign,
+          savedAt: new Date().toISOString()
+        }
+
+        await writeFile(filePath, JSON.stringify(campaignData, null, 2), 'utf-8')
       }
-
-      await writeFile(filePath, JSON.stringify(campaignData, null, 2), 'utf-8')
     } catch (fsError) {
       console.error('Failed to save campaign file:', fsError)
       // 파일 저장 실패해도 DB 저장은 성공했으므로 경고만 출력
@@ -159,6 +177,89 @@ export async function POST(request: NextRequest) {
       {
         success: false,
         error: 'Failed to save campaign'
+      },
+      { status: 500 }
+    )
+  }
+}
+
+// 캠페인 수정
+export async function PATCH(request: NextRequest) {
+  try {
+    const body = await request.json()
+    const { id, name, branchIds, startDate, endDate, cost, impressions, clicks, description } = body
+
+    // 기존 지점 연결 삭제 후 새로 생성
+    const campaign = await prisma.campaign.update({
+      where: { id },
+      data: {
+        name,
+        startDate: new Date(startDate),
+        endDate: new Date(endDate),
+        cost,
+        impressions,
+        clicks,
+        description,
+        branches: {
+          deleteMany: {},
+          create: branchIds.map((branchId: string) => ({
+            branchId
+          }))
+        }
+      },
+      include: {
+        branches: {
+          include: {
+            branch: true
+          }
+        }
+      }
+    })
+
+    return NextResponse.json({
+      success: true,
+      data: campaign
+    })
+  } catch (error) {
+    console.error('Failed to update campaign:', error)
+    return NextResponse.json(
+      {
+        success: false,
+        error: 'Failed to update campaign'
+      },
+      { status: 500 }
+    )
+  }
+}
+
+// 캠페인 삭제
+export async function DELETE(request: NextRequest) {
+  try {
+    const searchParams = request.nextUrl.searchParams
+    const id = searchParams.get('id')
+
+    if (!id) {
+      return NextResponse.json(
+        { success: false, error: 'Campaign ID is required' },
+        { status: 400 }
+      )
+    }
+
+    // 캠페인 삭제 (CASCADE로 CampaignBranch도 자동 삭제됨)
+    await prisma.campaign.delete({
+      where: { id }
+    })
+
+    return NextResponse.json({
+      success: true,
+      message: 'Campaign deleted successfully'
+    })
+  } catch (error) {
+    console.error('Failed to delete campaign:', error)
+    return NextResponse.json(
+      {
+        success: false,
+        error: 'Failed to delete campaign'
       },
       { status: 500 }
     )

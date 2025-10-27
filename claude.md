@@ -13,7 +13,7 @@ Studycube 매장의 매출 데이터를 시각화하고 분석하는 대시보�
   - 배포: GitHub Actions 자동 실행
 
 - **대시보드 앱** (현재 프로젝트)
-  - 저장소: `https://github.com/bomnalstudy/studycube-crawler.git`
+  - 저장소: `https://github.com/bomnalstudy/studycube-crawler-frontend.git`
   - 목적: 데이터 시각화 및 분석
   - 배포: Vercel
 

@@ -20,29 +20,43 @@ export async function PATCH(request: NextRequest) {
     const campaign = await prisma.campaign.update({
       where: { id: campaignId },
       data: { name: newName },
-      include: { branch: true }
+      include: {
+        branches: {
+          include: {
+            branch: true
+          }
+        }
+      }
     })
 
-    // 파일 시스템에서 파일 이름 변경
+    // 파일 시스템에서 파일 이름 변경 (모든 지점 폴더에서)
     try {
-      const branchName = campaign.branchId === 'all' ? '전체지점' : (campaign.branch?.name || '알 수 없는 지점')
       const campaignsDir = join(process.cwd(), 'campaigns')
-      const branchDir = join(campaignsDir, branchName)
 
-      // 해당 지점 폴더에서 캠페인 ID를 포함한 파일 찾기
-      const files = await readdir(branchDir)
-      const oldFile = files.find(f => f.includes(campaignId) || f.endsWith('.json'))
+      // 각 지점 폴더에서 파일 이름 변경
+      for (const cb of campaign.branches) {
+        const branchName = cb.branch.name
+        const branchDir = join(campaignsDir, branchName)
 
-      if (oldFile) {
-        const timestamp = Date.now()
-        const newFileName = `${newName.replace(/[^a-zA-Z0-9가-힣]/g, '_')}_${timestamp}.json`
-        const oldPath = join(branchDir, oldFile)
-        const newPath = join(branchDir, newFileName)
+        try {
+          // 해당 지점 폴더에서 캠페인 ID를 포함한 파일 찾기
+          const files = await readdir(branchDir)
+          const oldFile = files.find(f => f.includes(campaignId) || f.endsWith('.json'))
 
-        await rename(oldPath, newPath)
+          if (oldFile) {
+            const timestamp = Date.now()
+            const newFileName = `${newName.replace(/[^a-zA-Z0-9가-힣]/g, '_')}_${timestamp}.json`
+            const oldPath = join(branchDir, oldFile)
+            const newPath = join(branchDir, newFileName)
+
+            await rename(oldPath, newPath)
+          }
+        } catch (branchError) {
+          console.error(`Failed to rename file in ${branchName}:`, branchError)
+        }
       }
     } catch (fsError) {
-      console.error('Failed to rename campaign file:', fsError)
+      console.error('Failed to rename campaign files:', fsError)
       // 파일 이름 변경 실패해도 DB 업데이트는 성공
     }
 
