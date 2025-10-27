@@ -19,7 +19,11 @@ export async function GET(request: NextRequest) {
     const combined = await prisma.combinedAnalysis.findUnique({
       where: { id: combinedId },
       include: {
-        branch: true
+        branches: {
+          include: {
+            branch: true
+          }
+        }
       }
     })
 
@@ -30,10 +34,13 @@ export async function GET(request: NextRequest) {
       )
     }
 
+    // 통합분석에 연결된 지점 ID 목록
+    const combinedBranchIds = combined.branches.map(cb => cb.branchId)
+
     // 분석 실행
     const afterMetrics = await prisma.dailyMetric.findMany({
       where: {
-        branchId: combined.branchId === 'all' ? undefined : combined.branchId,
+        branchId: combinedBranchIds.length > 0 ? { in: combinedBranchIds } : undefined,
         date: {
           gte: combined.startDate,
           lte: combined.endDate
@@ -50,7 +57,7 @@ export async function GET(request: NextRequest) {
 
     const beforeMetrics = await prisma.dailyMetric.findMany({
       where: {
-        branchId: combined.branchId === 'all' ? undefined : combined.branchId,
+        branchId: combinedBranchIds.length > 0 ? { in: combinedBranchIds } : undefined,
         date: {
           gte: beforeStartDate,
           lte: beforeEndDate
@@ -69,7 +76,7 @@ export async function GET(request: NextRequest) {
     // 재방문률 계산
     const afterVisitors = await prisma.dailyVisitor.findMany({
       where: {
-        branchId: combined.branchId === 'all' ? undefined : combined.branchId,
+        branchId: combinedBranchIds.length > 0 ? { in: combinedBranchIds } : undefined,
         visitDate: {
           gte: combined.startDate,
           lte: combined.endDate
@@ -79,7 +86,7 @@ export async function GET(request: NextRequest) {
 
     const beforeVisitors = await prisma.dailyVisitor.findMany({
       where: {
-        branchId: combined.branchId === 'all' ? undefined : combined.branchId,
+        branchId: combinedBranchIds.length > 0 ? { in: combinedBranchIds } : undefined,
         visitDate: {
           gte: beforeStartDate,
           lte: beforeEndDate
@@ -146,7 +153,7 @@ export async function GET(request: NextRequest) {
 
     // 기본 정보
     worksheet.addRow(['기본 정보']).font = { bold: true }
-    worksheet.addRow(['지점', combined.branch?.name || '전체지점'])
+    worksheet.addRow(['지점', combined.branches.map(cb => cb.branch.name).join(', ')])
     worksheet.addRow(['기간', `${combined.startDate.toISOString().split('T')[0]} ~ ${combined.endDate.toISOString().split('T')[0]}`])
 
     // 빈 행

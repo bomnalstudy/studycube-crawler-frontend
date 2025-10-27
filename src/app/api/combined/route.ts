@@ -5,9 +5,23 @@ import { join } from 'path'
 
 export async function GET(request: NextRequest) {
   try {
+    const searchParams = request.nextUrl.searchParams
+    const branchId = searchParams.get('branchId')
+
     const combined = await prisma.combinedAnalysis.findMany({
+      where: branchId && branchId !== 'all'
+        ? {
+            branches: {
+              some: { branchId }
+            }
+          }
+        : {},
       include: {
-        branch: true
+        branches: {
+          include: {
+            branch: true
+          }
+        }
       },
       orderBy: {
         createdAt: 'desc'
@@ -17,9 +31,12 @@ export async function GET(request: NextRequest) {
     const combinedWithAnalysis = await Promise.all(
       combined.map(async (item) => {
         try {
+          // 통합분석에 연결된 지점 ID 목록
+          const combinedBranchIds = item.branches.map(cb => cb.branchId)
+
           const afterMetrics = await prisma.dailyMetric.findMany({
             where: {
-              branchId: item.branchId === 'all' ? undefined : item.branchId,
+              branchId: combinedBranchIds.length > 0 ? { in: combinedBranchIds } : undefined,
               date: { gte: item.startDate, lte: item.endDate }
             }
           })
@@ -32,7 +49,7 @@ export async function GET(request: NextRequest) {
 
           const beforeMetrics = await prisma.dailyMetric.findMany({
             where: {
-              branchId: item.branchId === 'all' ? undefined : item.branchId,
+              branchId: combinedBranchIds.length > 0 ? { in: combinedBranchIds } : undefined,
               date: { gte: beforeStartDate, lte: beforeEndDate }
             }
           })
@@ -72,11 +89,10 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { name, branchId, startDate, endDate, cost, impressions, clicks, strategyType, reason, description } = body
+    const { name, branchIds, startDate, endDate, cost, impressions, clicks, strategyType, reason, description } = body
 
     const combined = await prisma.combinedAnalysis.create({
       data: {
-        branchId: branchId || 'all',
         name,
         startDate: new Date(startDate),
         endDate: new Date(endDate),
@@ -85,27 +101,49 @@ export async function POST(request: NextRequest) {
         clicks,
         strategyType,
         reason,
-        description
+        description,
+        branches: {
+          create: branchIds.map((branchId: string) => ({
+            branchId
+          }))
+        }
+      },
+      include: {
+        branches: {
+          include: {
+            branch: true
+          }
+        }
       }
     })
 
-    let branchName = '전체지점'
-    if (branchId && branchId !== 'all') {
-      const branch = await prisma.branch.findUnique({ where: { id: branchId } })
-      if (branch) branchName = branch.name
-    }
-
+    // 파일 시스템에 지점별 폴더 생성 및 JSON 파일 저장
     try {
       const combinedDir = join(process.cwd(), 'combined')
-      const branchDir = join(combinedDir, branchName)
-      await mkdir(branchDir, { recursive: true })
 
-      const fileName = `${name.replace(/[^a-zA-Z0-9가-힣]/g, '_')}_${Date.now()}.json`
-      const filePath = join(branchDir, fileName)
+      // 각 지점별 폴더에 저장
+      for (const combinedBranch of combined.branches) {
+        const branchName = combinedBranch.branch.name
+        const branchDir = join(combinedDir, branchName)
 
-      await writeFile(filePath, JSON.stringify({ ...body, combined, savedAt: new Date().toISOString() }, null, 2), 'utf-8')
+        // 폴더 생성 (이미 존재하면 무시)
+        await mkdir(branchDir, { recursive: true })
+
+        // 통합분석 데이터 JSON 파일로 저장
+        const fileName = `${name.replace(/[^a-zA-Z0-9가-힣]/g, '_')}_${Date.now()}.json`
+        const filePath = join(branchDir, fileName)
+
+        const combinedData = {
+          ...body,
+          combined,
+          savedAt: new Date().toISOString()
+        }
+
+        await writeFile(filePath, JSON.stringify(combinedData, null, 2), 'utf-8')
+      }
     } catch (fsError) {
       console.error('Failed to save combined file:', fsError)
+      // 파일 저장 실패해도 DB 저장은 성공했으므로 경고만 출력
     }
 
     return NextResponse.json({
@@ -116,6 +154,85 @@ export async function POST(request: NextRequest) {
     console.error('Failed to save combined:', error)
     return NextResponse.json(
       { success: false, error: 'Failed to save combined' },
+      { status: 500 }
+    )
+  }
+}
+
+// 통합분석 수정
+export async function PATCH(request: NextRequest) {
+  try {
+    const body = await request.json()
+    const { id, name, branchIds, startDate, endDate, cost, impressions, clicks, strategyType, reason, description } = body
+
+    // 기존 지점 연결 삭제 후 새로 생성
+    const combined = await prisma.combinedAnalysis.update({
+      where: { id },
+      data: {
+        name,
+        startDate: new Date(startDate),
+        endDate: new Date(endDate),
+        cost,
+        impressions,
+        clicks,
+        strategyType,
+        reason,
+        description,
+        branches: {
+          deleteMany: {},
+          create: branchIds.map((branchId: string) => ({
+            branchId
+          }))
+        }
+      },
+      include: {
+        branches: {
+          include: {
+            branch: true
+          }
+        }
+      }
+    })
+
+    return NextResponse.json({
+      success: true,
+      data: combined
+    })
+  } catch (error) {
+    console.error('Failed to update combined:', error)
+    return NextResponse.json(
+      { success: false, error: 'Failed to update combined' },
+      { status: 500 }
+    )
+  }
+}
+
+// 통합분석 삭제
+export async function DELETE(request: NextRequest) {
+  try {
+    const searchParams = request.nextUrl.searchParams
+    const id = searchParams.get('id')
+
+    if (!id) {
+      return NextResponse.json(
+        { success: false, error: 'Combined analysis ID is required' },
+        { status: 400 }
+      )
+    }
+
+    // 통합분석 삭제 (CASCADE로 CombinedBranch도 자동 삭제됨)
+    await prisma.combinedAnalysis.delete({
+      where: { id }
+    })
+
+    return NextResponse.json({
+      success: true,
+      message: 'Combined analysis deleted successfully'
+    })
+  } catch (error) {
+    console.error('Failed to delete combined:', error)
+    return NextResponse.json(
+      { success: false, error: 'Failed to delete combined' },
       { status: 500 }
     )
   }

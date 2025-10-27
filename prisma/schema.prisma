@@ -23,7 +23,7 @@ model Branch {
   dailyVisitors    DailyVisitor[]
   campaignBranches CampaignBranch[]
   strategyBranches StrategyBranch[]
-  combinedAnalyses CombinedAnalysis[]
+  combinedBranches CombinedBranch[]
 
   @@map("branches")
 }
@@ -189,7 +189,6 @@ model StrategyBranch {
 // 통합 분석 (광고 + 전략)
 model CombinedAnalysis {
   id          String   @id @default(cuid())
-  branchId    String
   name        String   // 분석명
   startDate   DateTime @db.Date
   endDate     DateTime @db.Date
@@ -211,11 +210,26 @@ model CombinedAnalysis {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  // Relations
-  branch      Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  // Relations - Many-to-Many
+  branches    CombinedBranch[]
 
-  @@index([branchId])
   @@index([startDate, endDate])
   @@index([status])
   @@map("combined_analyses")
+}
+
+// 통합분석-지점 연결 테이블
+model CombinedBranch {
+  id         String   @id @default(cuid())
+  combinedId String
+  branchId   String
+  createdAt  DateTime @default(now())
+
+  combined   CombinedAnalysis @relation(fields: [combinedId], references: [id], onDelete: Cascade)
+  branch     Branch           @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@unique([combinedId, branchId])
+  @@index([combinedId])
+  @@index([branchId])
+  @@map("combined_branches")
 }

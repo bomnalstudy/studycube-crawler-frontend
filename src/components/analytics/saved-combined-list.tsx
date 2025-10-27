@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react'
 
 interface CombinedAnalysis {
   id: string
-  branchId: string
   name: string
   startDate: string
   endDate: string
@@ -17,10 +16,13 @@ interface CombinedAnalysis {
   status: string
   createdAt: string
   updatedAt: string
-  branch?: {
-    id: string
-    name: string
-  }
+  branches: Array<{
+    branchId: string
+    branch: {
+      id: string
+      name: string
+    }
+  }>
   analysis?: {
     changes: {
       revenueGrowth: number
@@ -29,19 +31,46 @@ interface CombinedAnalysis {
   }
 }
 
+interface Branch {
+  id: string
+  name: string
+}
+
+interface GroupedCombined {
+  [branchId: string]: {
+    branchName: string
+    items: CombinedAnalysis[]
+  }
+}
+
+interface CombinedFormData {
+  name: string
+  branchIds: string[]
+  startDate: string
+  endDate: string
+  cost: number | null
+  impressions: number | null
+  clicks: number | null
+  strategyType: string | null
+  reason: string | null
+  description: string | null
+}
+
 interface SavedCombinedListProps {
   onSelect?: (combined: CombinedAnalysis) => void
 }
 
 export default function SavedCombinedList({ onSelect }: SavedCombinedListProps) {
   const [combined, setCombined] = useState<CombinedAnalysis[]>([])
+  const [branches, setBranches] = useState<Branch[]>([])
   const [loading, setLoading] = useState(true)
   const [expandedBranches, setExpandedBranches] = useState<Set<string>>(new Set(['all']))
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [editingName, setEditingName] = useState('')
+  const [editModalCombined, setEditModalCombined] = useState<CombinedAnalysis | null>(null)
+  const [editFormData, setEditFormData] = useState<CombinedFormData | null>(null)
 
   useEffect(() => {
     fetchCombined()
+    loadBranches()
   }, [])
 
   const fetchCombined = async () => {
@@ -58,6 +87,19 @@ export default function SavedCombinedList({ onSelect }: SavedCombinedListProps) 
     }
   }
 
+  const loadBranches = async () => {
+    try {
+      const response = await fetch('/api/branches')
+      const result = await response.json()
+
+      if (result.success) {
+        setBranches(result.data)
+      }
+    } catch (error) {
+      console.error('지점 로드 실패:', error)
+    }
+  }
+
   const toggleBranch = (branchId: string) => {
     const newExpanded = new Set(expandedBranches)
     if (newExpanded.has(branchId)) {
@@ -68,45 +110,78 @@ export default function SavedCombinedList({ onSelect }: SavedCombinedListProps) 
     setExpandedBranches(newExpanded)
   }
 
-  const startEdit = (combined: CombinedAnalysis, e: React.MouseEvent) => {
+  const handleDelete = async (e: React.MouseEvent, combinedId: string, combinedName: string) => {
     e.stopPropagation()
-    setEditingId(combined.id)
-    setEditingName(combined.name)
-  }
 
-  const cancelEdit = () => {
-    setEditingId(null)
-    setEditingName('')
-  }
-
-  const saveEdit = async (combined: CombinedAnalysis) => {
-    if (!editingName.trim() || editingName === combined.name) {
-      cancelEdit()
+    if (!confirm(`"${combinedName}" 통합분석을 삭제하시겠습니까?`)) {
       return
     }
 
     try {
-      const response = await fetch(`/api/combined/${combined.id}/update-name`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: editingName.trim() })
+      const response = await fetch(`/api/combined?id=${combinedId}`, {
+        method: 'DELETE'
       })
 
-      if (response.ok) {
+      const result = await response.json()
+
+      if (result.success) {
         await fetchCombined()
-        cancelEdit()
+      } else {
+        alert('통합분석 삭제에 실패했습니다.')
       }
     } catch (error) {
-      console.error('Failed to update name:', error)
+      console.error('통합분석 삭제 실패:', error)
+      alert('통합분석 삭제에 실패했습니다.')
     }
   }
 
-  const handleKeyDown = (e: React.KeyboardEvent, combined: CombinedAnalysis) => {
-    if (e.key === 'Enter') {
-      e.preventDefault()
-      saveEdit(combined)
-    } else if (e.key === 'Escape') {
-      cancelEdit()
+  const handleOpenEditModal = (e: React.MouseEvent, item: CombinedAnalysis) => {
+    e.stopPropagation()
+    setEditModalCombined(item)
+    setEditFormData({
+      name: item.name,
+      branchIds: item.branches.map(cb => cb.branchId),
+      startDate: item.startDate.split('T')[0],
+      endDate: item.endDate.split('T')[0],
+      cost: item.cost,
+      impressions: item.impressions,
+      clicks: item.clicks,
+      strategyType: item.strategyType,
+      reason: item.reason,
+      description: item.description
+    })
+  }
+
+  const handleSaveEdit = async () => {
+    if (!editModalCombined || !editFormData) return
+
+    if (editFormData.branchIds.length === 0) {
+      alert('최소 1개의 지점을 선택해주세요.')
+      return
+    }
+
+    try {
+      const response = await fetch('/api/combined', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: editModalCombined.id,
+          ...editFormData
+        })
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        setEditModalCombined(null)
+        setEditFormData(null)
+        await fetchCombined()
+      } else {
+        alert('통합분석 수정에 실패했습니다.')
+      }
+    } catch (error) {
+      console.error('통합분석 수정 실패:', error)
+      alert('통합분석 수정에 실패했습니다.')
     }
   }
 
@@ -128,20 +203,22 @@ export default function SavedCombinedList({ onSelect }: SavedCombinedListProps) 
     NEW_CONTENT: '신규 콘텐츠'
   }
 
-  // Group by branch
-  const groupedByBranch = combined.reduce((acc, item) => {
-    const branchId = item.branchId || 'all'
-    const branchName = item.branch?.name || '전체지점'
-    if (!acc[branchId]) {
-      acc[branchId] = {
-        branchId,
-        branchName,
-        items: []
+  // 지점별로 통합분석 그룹화 (하나의 통합분석이 여러 지점에 표시될 수 있음)
+  const groupedCombined: GroupedCombined = {}
+  combined.forEach((item) => {
+    item.branches.forEach((cb) => {
+      if (!groupedCombined[cb.branchId]) {
+        groupedCombined[cb.branchId] = {
+          branchName: cb.branch.name,
+          items: []
+        }
       }
-    }
-    acc[branchId].items.push(item)
-    return acc
-  }, {} as Record<string, { branchId: string; branchName: string; items: CombinedAnalysis[] }>)
+      // 중복 방지
+      if (!groupedCombined[cb.branchId].items.find(c => c.id === item.id)) {
+        groupedCombined[cb.branchId].items.push(item)
+      }
+    })
+  })
 
   if (loading) {
     return (
@@ -161,15 +238,15 @@ export default function SavedCombinedList({ onSelect }: SavedCombinedListProps) 
 
   return (
     <div className="space-y-4">
-      {Object.values(groupedByBranch).map((group) => (
-        <div key={group.branchId} className="border border-gray-200 rounded-lg overflow-hidden">
+      {Object.values(groupedCombined).map((group) => (
+        <div key={group.branchName} className="border border-gray-200 rounded-lg overflow-hidden">
           <button
-            onClick={() => toggleBranch(group.branchId)}
+            onClick={() => toggleBranch(group.branchName)}
             className="w-full px-6 py-4 bg-gradient-to-r from-purple-50 to-blue-50 hover:from-purple-100 hover:to-blue-100 transition-colors flex items-center justify-between"
           >
             <div className="flex items-center gap-3">
               <span className="text-2xl">
-                {expandedBranches.has(group.branchId) ? '📂' : '📁'}
+                {expandedBranches.has(group.branchName) ? '📂' : '📁'}
               </span>
               <span className="font-bold text-lg text-gray-800">{group.branchName}</span>
               <span className="px-3 py-1 bg-white rounded-full text-sm text-gray-600">
@@ -177,11 +254,11 @@ export default function SavedCombinedList({ onSelect }: SavedCombinedListProps) 
               </span>
             </div>
             <span className="text-gray-400">
-              {expandedBranches.has(group.branchId) ? '▼' : '▶'}
+              {expandedBranches.has(group.branchName) ? '▼' : '▶'}
             </span>
           </button>
 
-          {expandedBranches.has(group.branchId) && (
+          {expandedBranches.has(group.branchName) && (
             <div className="divide-y divide-gray-100">
               {group.items.map((item) => (
                 <div
@@ -191,34 +268,12 @@ export default function SavedCombinedList({ onSelect }: SavedCombinedListProps) 
                 >
                   <div className="flex justify-between items-start mb-4">
                     <div className="flex-1">
-                      {editingId === item.id ? (
-                        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                          <input
-                            type="text"
-                            value={editingName}
-                            onChange={(e) => setEditingName(e.target.value)}
-                            onKeyDown={(e) => handleKeyDown(e, item)}
-                            className="flex-1 px-3 py-2 border border-blue-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            autoFocus
-                          />
-                          <button
-                            onClick={() => saveEdit(item)}
-                            className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-                          >
-                            저장
-                          </button>
-                          <button
-                            onClick={cancelEdit}
-                            className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-                          >
-                            취소
-                          </button>
-                        </div>
-                      ) : (
-                        <h3 className="text-xl font-bold text-gray-800 mb-2">{item.name}</h3>
-                      )}
+                      <h3 className="text-xl font-bold text-gray-800 mb-2">{item.name}</h3>
                       <p className="text-sm text-gray-500 mb-3">
                         {new Date(item.startDate).toLocaleDateString('ko-KR')} ~ {new Date(item.endDate).toLocaleDateString('ko-KR')}
+                      </p>
+                      <p className="text-xs text-gray-400 mb-3">
+                        적용 지점: {item.branches.map(cb => cb.branch.name).join(', ')}
                       </p>
 
                       <div className="grid grid-cols-2 gap-4 mb-3">
@@ -269,10 +324,16 @@ export default function SavedCombinedList({ onSelect }: SavedCombinedListProps) 
 
                     <div className="flex gap-2 ml-4">
                       <button
-                        onClick={(e) => startEdit(item, e)}
-                        className="px-3 py-2 text-sm text-gray-600 hover:text-blue-600 hover:bg-gray-100 rounded-lg transition-colors"
+                        onClick={(e) => handleOpenEditModal(e, item)}
+                        className="px-3 py-2 text-sm text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors"
                       >
-                        ✏️ 수정
+                        상세 수정
+                      </button>
+                      <button
+                        onClick={(e) => handleDelete(e, item.id, item.name)}
+                        className="px-3 py-2 text-sm text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition-colors"
+                      >
+                        삭제
                       </button>
                       <button
                         onClick={(e) => {
@@ -291,6 +352,198 @@ export default function SavedCombinedList({ onSelect }: SavedCombinedListProps) 
           )}
         </div>
       ))}
+
+      {/* 수정 모달 */}
+      {editModalCombined && editFormData && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <h3 className="text-2xl font-bold mb-6">통합분석 상세 수정</h3>
+
+              <div className="space-y-6">
+                {/* 분석명 */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    분석명 *
+                  </label>
+                  <input
+                    type="text"
+                    value={editFormData.name}
+                    onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="분석명을 입력하세요"
+                  />
+                </div>
+
+                {/* 지점 선택 */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-3">
+                    적용 지점 선택 * (최소 1개)
+                  </label>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {branches.map((branch) => (
+                      <label
+                        key={branch.id}
+                        className="flex items-center space-x-2 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={editFormData.branchIds.includes(branch.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setEditFormData({
+                                ...editFormData,
+                                branchIds: [...editFormData.branchIds, branch.id]
+                              })
+                            } else {
+                              setEditFormData({
+                                ...editFormData,
+                                branchIds: editFormData.branchIds.filter(id => id !== branch.id)
+                              })
+                            }
+                          }}
+                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                        />
+                        <span className="text-sm font-medium text-gray-700">{branch.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 기간 */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      시작 날짜 *
+                    </label>
+                    <input
+                      type="date"
+                      value={editFormData.startDate}
+                      onChange={(e) => setEditFormData({ ...editFormData, startDate: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      종료 날짜 *
+                    </label>
+                    <input
+                      type="date"
+                      value={editFormData.endDate}
+                      onChange={(e) => setEditFormData({ ...editFormData, endDate: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                </div>
+
+                {/* 광고 지표 */}
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      광고 비용 (원)
+                    </label>
+                    <input
+                      type="number"
+                      value={editFormData.cost ?? ''}
+                      onChange={(e) => setEditFormData({ ...editFormData, cost: e.target.value ? Number(e.target.value) : null })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="0"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      노출수
+                    </label>
+                    <input
+                      type="number"
+                      value={editFormData.impressions ?? ''}
+                      onChange={(e) => setEditFormData({ ...editFormData, impressions: e.target.value ? Number(e.target.value) : null })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="0"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      클릭수
+                    </label>
+                    <input
+                      type="number"
+                      value={editFormData.clicks ?? ''}
+                      onChange={(e) => setEditFormData({ ...editFormData, clicks: e.target.value ? Number(e.target.value) : null })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="0"
+                    />
+                  </div>
+                </div>
+
+                {/* 전략 유형 */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    전략 유형
+                  </label>
+                  <select
+                    value={editFormData.strategyType ?? ''}
+                    onChange={(e) => setEditFormData({ ...editFormData, strategyType: e.target.value || null })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="">선택하세요</option>
+                    <option value="PRICE_DISCOUNT">가격 할인</option>
+                    <option value="REVIEW_EVENT">이벤트</option>
+                    <option value="NEW_CONTENT">신규 콘텐츠</option>
+                  </select>
+                </div>
+
+                {/* 전략 수립 이유 */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    전략 수립 이유
+                  </label>
+                  <textarea
+                    value={editFormData.reason ?? ''}
+                    onChange={(e) => setEditFormData({ ...editFormData, reason: e.target.value || null })}
+                    rows={3}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="전략을 수립한 이유를 입력하세요"
+                  />
+                </div>
+
+                {/* 상세 내용 */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    상세 내용
+                  </label>
+                  <textarea
+                    value={editFormData.description ?? ''}
+                    onChange={(e) => setEditFormData({ ...editFormData, description: e.target.value || null })}
+                    rows={4}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="전략에 대한 상세 내용을 입력하세요"
+                  />
+                </div>
+              </div>
+
+              {/* 버튼 */}
+              <div className="mt-6 flex justify-end gap-3">
+                <button
+                  onClick={() => {
+                    setEditModalCombined(null)
+                    setEditFormData(null)
+                  }}
+                  className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  취소
+                </button>
+                <button
+                  onClick={handleSaveEdit}
+                  className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  저장
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

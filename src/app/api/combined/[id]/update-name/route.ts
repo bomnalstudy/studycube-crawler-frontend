@@ -23,7 +23,13 @@ export async function PATCH(
     // 기존 통합 분석 조회
     const combined = await prisma.combinedAnalysis.findUnique({
       where: { id },
-      include: { branch: true }
+      include: {
+        branches: {
+          include: {
+            branch: true
+          }
+        }
+      }
     })
 
     if (!combined) {
@@ -34,7 +40,6 @@ export async function PATCH(
     }
 
     const oldName = combined.name
-    const branchName = combined.branch?.name || '전체지점'
 
     // 데이터베이스 업데이트
     const updated = await prisma.combinedAnalysis.update({
@@ -42,20 +47,24 @@ export async function PATCH(
       data: { name: newName.trim() }
     })
 
-    // 파일 시스템의 파일 이름 변경
+    // 파일 시스템의 파일 이름 변경 (각 지점별 폴더)
     try {
       const combinedDir = join(process.cwd(), 'combined')
-      const branchDir = join(combinedDir, branchName)
 
-      if (existsSync(branchDir)) {
-        const oldFileName = `${oldName.replace(/[^a-zA-Z0-9가-힣]/g, '_')}_${combined.createdAt.getTime()}.json`
-        const newFileName = `${newName.trim().replace(/[^a-zA-Z0-9가-힣]/g, '_')}_${combined.createdAt.getTime()}.json`
+      for (const combinedBranch of combined.branches) {
+        const branchName = combinedBranch.branch.name
+        const branchDir = join(combinedDir, branchName)
 
-        const oldFilePath = join(branchDir, oldFileName)
-        const newFilePath = join(branchDir, newFileName)
+        if (existsSync(branchDir)) {
+          const oldFileName = `${oldName.replace(/[^a-zA-Z0-9가-힣]/g, '_')}_${combined.createdAt.getTime()}.json`
+          const newFileName = `${newName.trim().replace(/[^a-zA-Z0-9가-힣]/g, '_')}_${combined.createdAt.getTime()}.json`
 
-        if (existsSync(oldFilePath)) {
-          await rename(oldFilePath, newFilePath)
+          const oldFilePath = join(branchDir, oldFileName)
+          const newFilePath = join(branchDir, newFileName)
+
+          if (existsSync(oldFilePath)) {
+            await rename(oldFilePath, newFilePath)
+          }
         }
       }
     } catch (fsError) {
