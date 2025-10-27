@@ -35,11 +35,20 @@ npm install
 
 ### 2. 환경 변수 설정
 
-`.env.local` 파일을 생성하고 데이터베이스 연결 정보를 입력합니다:
+`.env` 파일을 생성하고 데이터베이스 연결 정보를 입력합니다:
 
 ```env
-DATABASE_URL="postgresql://user:password@host:port/database?sslmode=require"
+# Neon PostgreSQL 연결 정보
+DATABASE_URL="postgresql://neondb_owner:npg_HROChpt26JTN@ep-broad-forest-ae5r9rdj-pooler.c-2.us-east-2.aws.neon.tech/neondb?sslmode=require"
+
+# Next.js API URL
 NEXT_PUBLIC_API_URL="http://localhost:3000"
+```
+
+또는 `.env.example` 파일을 복사하여 사용할 수 있습니다:
+
+```bash
+cp .env.example .env
 ```
 
 ### 3. Prisma 설정
@@ -148,7 +157,14 @@ src/
 
 Vercel 대시보드에서 다음 환경 변수를 설정합니다:
 
-- `DATABASE_URL`: Neon PostgreSQL 연결 문자열
+**Settings → Environment Variables**
+
+- `DATABASE_URL`:
+  ```
+  postgresql://neondb_owner:npg_HROChpt26JTN@ep-broad-forest-ae5r9rdj-pooler.c-2.us-east-2.aws.neon.tech/neondb?sslmode=require
+  ```
+
+설정 후 **Redeploy**를 클릭하여 새로운 환경 변수를 적용합니다.
 
 ## 개발 가이드
 

@@ -70,8 +70,10 @@ export async function GET(request: NextRequest) {
     const cost = Number(campaign.cost || 0)
     const roi = cost > 0 ? ((afterRevenue - beforeRevenue - cost) / cost) * 100 : 0
     const roas = cost > 0 ? (afterRevenue / cost) * 100 : 0
-    const ctr = campaign.impressions && campaign.impressions > 0 ? (campaign.clicks / campaign.impressions) * 100 : 0
-    const cpc = campaign.clicks && campaign.clicks > 0 ? cost / campaign.clicks : 0
+    const clicks = campaign.clicks || 0
+    const impressions = campaign.impressions || 0
+    const ctr = impressions > 0 ? (clicks / impressions) * 100 : 0
+    const cpc = clicks > 0 ? cost / clicks : 0
 
     // Excel 생성
     const workbook = new ExcelJS.Workbook()

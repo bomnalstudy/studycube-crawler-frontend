@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { formatCurrency, formatNumber, formatPercent } from '@/lib/utils/formatters'
 import { BarChart } from '@/components/charts/bar-chart'
@@ -55,12 +55,7 @@ export default function StrategyDetailPage({ params }: { params: Promise<{ id: s
     params.then(p => setResolvedParams(p))
   }, [params])
 
-  useEffect(() => {
-    if (!resolvedParams) return
-    loadStrategyDetail()
-  }, [resolvedParams])
-
-  const loadStrategyDetail = async () => {
+  const loadStrategyDetail = useCallback(async () => {
     if (!resolvedParams) return
 
     try {
@@ -76,7 +71,12 @@ export default function StrategyDetailPage({ params }: { params: Promise<{ id: s
     } finally {
       setLoading(false)
     }
-  }
+  }, [resolvedParams])
+
+  useEffect(() => {
+    if (!resolvedParams) return
+    loadStrategyDetail()
+  }, [resolvedParams, loadStrategyDetail])
 
   const strategyTypeLabels: Record<string, string> = {
     PRICE_DISCOUNT: '가격 할인',

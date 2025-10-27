@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import { formatCurrency, formatNumber, formatPercent } from '@/lib/utils/formatters'
 import { formatDate } from '@/lib/utils/date-helpers'
@@ -62,11 +62,7 @@ export default function CampaignDetailPage() {
     clicks: 0
   })
 
-  useEffect(() => {
-    loadCampaign()
-  }, [campaignId])
-
-  const loadCampaign = async () => {
+  const loadCampaign = useCallback(async () => {
     try {
       // 캠페인 정보 로드
       const campaignResponse = await fetch(`/api/campaigns/${campaignId}`)
@@ -105,7 +101,11 @@ export default function CampaignDetailPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [campaignId])
+
+  useEffect(() => {
+    loadCampaign()
+  }, [loadCampaign])
 
   const handleStartEditMetrics = () => {
     if (campaign) {

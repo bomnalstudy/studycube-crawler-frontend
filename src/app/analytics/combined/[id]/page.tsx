@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, use } from 'react'
+import { useEffect, useState, use, useCallback } from 'react'
 import { BarChart } from '@/components/charts/bar-chart'
 
 interface CombinedAnalysis {
@@ -61,11 +61,7 @@ export default function CombinedDetailPage({ params }: { params: Promise<{ id: s
     clicks: 0
   })
 
-  useEffect(() => {
-    fetchCombinedDetail()
-  }, [id])
-
-  const fetchCombinedDetail = async () => {
+  const fetchCombinedDetail = useCallback(async () => {
     try {
       const response = await fetch(`/api/combined/${id}`)
       const data = await response.json()
@@ -84,7 +80,11 @@ export default function CombinedDetailPage({ params }: { params: Promise<{ id: s
     } finally {
       setLoading(false)
     }
-  }
+  }, [id])
+
+  useEffect(() => {
+    fetchCombinedDetail()
+  }, [fetchCombinedDetail])
 
   const startEditingMetrics = () => {
     if (combined) {
@@ -330,7 +330,6 @@ export default function CombinedDetailPage({ params }: { params: Promise<{ id: s
               ]}
               title="총 매출 전/후 비교"
               color="#10B981"
-              unit="원"
             />
           </div>
 
@@ -342,7 +341,6 @@ export default function CombinedDetailPage({ params }: { params: Promise<{ id: s
               ]}
               title="신규 이용자 전/후 비교"
               color="#3B82F6"
-              unit="명"
             />
           </div>
 
@@ -354,7 +352,6 @@ export default function CombinedDetailPage({ params }: { params: Promise<{ id: s
               ]}
               title="일평균 이용자 전/후 비교"
               color="#F59E0B"
-              unit="명"
             />
           </div>
 
@@ -366,7 +363,6 @@ export default function CombinedDetailPage({ params }: { params: Promise<{ id: s
               ]}
               title="재방문률 전/후 비교"
               color="#8B5CF6"
-              unit="%"
             />
           </div>
         </div>
