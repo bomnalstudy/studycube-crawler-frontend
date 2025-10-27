@@ -4,12 +4,12 @@ import { prisma } from '@/lib/prisma'
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { branchId, startDate, endDate, cost, impressions, clicks } = body
+    const { branchIds, startDate, endDate, cost, impressions, clicks } = body
 
     // 시행 후 메트릭 조회
     const afterMetrics = await prisma.dailyMetric.findMany({
       where: {
-        branchId: branchId === 'all' ? undefined : branchId,
+        branchId: branchIds && branchIds.length > 0 ? { in: branchIds } : undefined,
         date: {
           gte: new Date(startDate),
           lte: new Date(endDate)
@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
 
     const beforeMetrics = await prisma.dailyMetric.findMany({
       where: {
-        branchId: branchId === 'all' ? undefined : branchId,
+        branchId: branchIds && branchIds.length > 0 ? { in: branchIds } : undefined,
         date: {
           gte: beforeStartDate,
           lte: beforeEndDate
@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
     // 재방문률 계산
     const afterVisitors = await prisma.dailyVisitor.findMany({
       where: {
-        branchId: branchId === 'all' ? undefined : branchId,
+        branchId: branchIds && branchIds.length > 0 ? { in: branchIds } : undefined,
         visitDate: {
           gte: new Date(startDate),
           lte: new Date(endDate)
@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
 
     const beforeVisitors = await prisma.dailyVisitor.findMany({
       where: {
-        branchId: branchId === 'all' ? undefined : branchId,
+        branchId: branchIds && branchIds.length > 0 ? { in: branchIds } : undefined,
         visitDate: {
           gte: beforeStartDate,
           lte: beforeEndDate

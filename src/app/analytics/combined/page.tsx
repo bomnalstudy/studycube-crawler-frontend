@@ -12,7 +12,7 @@ interface Branch {
 
 interface CombinedForm {
   name: string
-  branchId: string
+  branchIds: string[]
   startDate: string
   endDate: string
   // 광고 지표
@@ -55,7 +55,7 @@ export default function CombinedAnalyticsPage() {
   const [branches, setBranches] = useState<Branch[]>([])
   const [formData, setFormData] = useState<CombinedForm>({
     name: '',
-    branchId: 'all',
+    branchIds: [],
     startDate: '',
     endDate: '',
     cost: 0,
@@ -165,22 +165,38 @@ export default function CombinedAnalyticsPage() {
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  지점
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-3">
+                  적용 지점 선택 * (최소 1개)
                 </label>
-                <select
-                  value={formData.branchId}
-                  onChange={(e) => setFormData({ ...formData, branchId: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="all">전체 지점</option>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   {branches.map((branch) => (
-                    <option key={branch.id} value={branch.id}>
-                      {branch.name}
-                    </option>
+                    <label
+                      key={branch.id}
+                      className="flex items-center space-x-2 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={formData.branchIds.includes(branch.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setFormData({
+                              ...formData,
+                              branchIds: [...formData.branchIds, branch.id]
+                            })
+                          } else {
+                            setFormData({
+                              ...formData,
+                              branchIds: formData.branchIds.filter(id => id !== branch.id)
+                            })
+                          }
+                        }}
+                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <span className="text-sm font-medium text-gray-700">{branch.name}</span>
+                    </label>
                   ))}
-                </select>
+                </div>
               </div>
 
               <div>
