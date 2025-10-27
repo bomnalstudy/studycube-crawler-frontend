@@ -7,20 +7,40 @@ import { formatDate } from '@/lib/utils/date-helpers'
 import Link from 'next/link'
 import { BarChart } from '@/components/charts/bar-chart'
 
+interface Branch {
+  id: string
+  name: string
+}
+
 interface CampaignDetail {
   id: string
   name: string
-  branchId: string
   startDate: string
   endDate: string
   cost: number
   impressions: number
   clicks: number
+  description: string
   status: string
   updatedAt: string
-  branch?: {
-    name: string
-  }
+  branches: Array<{
+    branchId: string
+    branch: {
+      id: string
+      name: string
+    }
+  }>
+}
+
+interface CampaignFormData {
+  name: string
+  branchIds: string[]
+  startDate: string
+  endDate: string
+  cost: number
+  impressions: number
+  clicks: number
+  description: string
 }
 
 interface CampaignAnalysis {
@@ -53,14 +73,11 @@ export default function CampaignDetailPage() {
   const campaignId = params.id as string
 
   const [campaign, setCampaign] = useState<CampaignDetail | null>(null)
+  const [branches, setBranches] = useState<Branch[]>([])
   const [analysis, setAnalysis] = useState<CampaignAnalysis | null>(null)
   const [loading, setLoading] = useState(true)
-  const [isEditingMetrics, setIsEditingMetrics] = useState(false)
-  const [editedMetrics, setEditedMetrics] = useState({
-    cost: 0,
-    impressions: 0,
-    clicks: 0
-  })
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [editFormData, setEditFormData] = useState<CampaignFormData | null>(null)
 
   const loadCampaign = useCallback(async () => {
     try {
@@ -70,18 +87,14 @@ export default function CampaignDetailPage() {
 
       if (campaignResult.success) {
         setCampaign(campaignResult.data)
-        setEditedMetrics({
-          cost: Number(campaignResult.data.cost),
-          impressions: campaignResult.data.impressions,
-          clicks: campaignResult.data.clicks
-        })
 
         // 캠페인 분석 실행
+        const branchIds = campaignResult.data.branches.map((b: any) => b.branchId)
         const analysisResponse = await fetch('/api/analytics/campaigns/analyze', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            branchId: campaignResult.data.branchId,
+            branchIds,
             startDate: campaignResult.data.startDate,
             endDate: campaignResult.data.endDate,
             cost: campaignResult.data.cost,
@@ -103,54 +116,70 @@ export default function CampaignDetailPage() {
     }
   }, [campaignId])
 
+  const loadBranches = useCallback(async () => {
+    try {
+      const response = await fetch('/api/branches')
+      const result = await response.json()
+      if (result.success) {
+        setBranches(result.data)
+      }
+    } catch (error) {
+      console.error('지점 로드 실패:', error)
+    }
+  }, [])
+
   useEffect(() => {
     loadCampaign()
-  }, [loadCampaign])
+    loadBranches()
+  }, [loadCampaign, loadBranches])
 
-  const handleStartEditMetrics = () => {
-    if (campaign) {
-      setEditedMetrics({
-        cost: Number(campaign.cost),
-        impressions: campaign.impressions,
-        clicks: campaign.clicks
-      })
-      setIsEditingMetrics(true)
-    }
+  const handleOpenEditModal = () => {
+    if (!campaign) return
+    setEditFormData({
+      name: campaign.name,
+      branchIds: campaign.branches.map(b => b.branchId),
+      startDate: campaign.startDate.split('T')[0],
+      endDate: campaign.endDate.split('T')[0],
+      cost: Number(campaign.cost),
+      impressions: campaign.impressions,
+      clicks: campaign.clicks,
+      description: campaign.description || ''
+    })
+    setShowEditModal(true)
   }
 
-  const handleSaveMetrics = async () => {
-    if (!campaign) return
+  const handleSaveEdit = async () => {
+    if (!campaign || !editFormData) return
+
+    if (editFormData.branchIds.length === 0) {
+      alert('최소 1개의 지점을 선택해주세요.')
+      return
+    }
 
     try {
-      const response = await fetch(`/api/campaigns/${campaignId}/update-metrics`, {
+      const response = await fetch('/api/campaigns', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(editedMetrics)
+        body: JSON.stringify({
+          id: campaign.id,
+          ...editFormData
+        })
       })
 
       const result = await response.json()
 
       if (result.success) {
-        setIsEditingMetrics(false)
-        loadCampaign() // 성과 분석 재계산
+        setShowEditModal(false)
+        setEditFormData(null)
+        await loadCampaign()
+        alert('캠페인이 수정되었습니다!')
       } else {
-        alert('메트릭 수정에 실패했습니다.')
+        alert('캠페인 수정에 실패했습니다.')
       }
     } catch (error) {
-      console.error('메트릭 수정 실패:', error)
-      alert('메트릭 수정에 실패했습니다.')
+      console.error('캠페인 수정 실패:', error)
+      alert('캠페인 수정에 실패했습니다.')
     }
-  }
-
-  const handleCancelEditMetrics = () => {
-    if (campaign) {
-      setEditedMetrics({
-        cost: Number(campaign.cost),
-        impressions: campaign.impressions,
-        clicks: campaign.clicks
-      })
-    }
-    setIsEditingMetrics(false)
   }
 
   if (loading) {
@@ -197,7 +226,7 @@ export default function CampaignDetailPage() {
                 </span>
               </div>
               <p className="text-gray-600 mt-2">
-                {campaign.branch?.name || '전체지점'} • {formatDate(new Date(campaign.startDate))} ~ {formatDate(new Date(campaign.endDate))}
+                {campaign.branches.map(b => b.branch.name).join(', ')} • {formatDate(new Date(campaign.startDate))} ~ {formatDate(new Date(campaign.endDate))}
               </p>
               {campaign.status === 'ONGOING' && (
                 <p className="text-sm text-blue-600 mt-1">
@@ -215,69 +244,25 @@ export default function CampaignDetailPage() {
         <div className="bg-white rounded-lg shadow-md p-6 mb-8">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-semibold">캠페인 정보</h2>
-            {!isEditingMetrics ? (
-              <button
-                onClick={handleStartEditMetrics}
-                className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
-              >
-                ✏️ 지표 수정
-              </button>
-            ) : (
-              <div className="flex gap-2">
-                <button
-                  onClick={handleSaveMetrics}
-                  className="px-4 py-2 text-sm bg-green-600 text-white rounded hover:bg-green-700"
-                >
-                  저장
-                </button>
-                <button
-                  onClick={handleCancelEditMetrics}
-                  className="px-4 py-2 text-sm bg-gray-400 text-white rounded hover:bg-gray-500"
-                >
-                  취소
-                </button>
-              </div>
-            )}
+            <button
+              onClick={handleOpenEditModal}
+              className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
+            >
+              ✏️ 상세 수정
+            </button>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
             <div>
               <p className="text-sm text-gray-600 mb-1">광고 비용</p>
-              {isEditingMetrics ? (
-                <input
-                  type="number"
-                  value={editedMetrics.cost}
-                  onChange={(e) => setEditedMetrics({...editedMetrics, cost: Number(e.target.value)})}
-                  className="w-full px-3 py-2 border rounded text-lg font-bold"
-                />
-              ) : (
-                <p className="text-2xl font-bold text-gray-900">{formatCurrency(Number(campaign.cost))}</p>
-              )}
+              <p className="text-2xl font-bold text-gray-900">{formatCurrency(Number(campaign.cost))}</p>
             </div>
             <div>
               <p className="text-sm text-gray-600 mb-1">노출수</p>
-              {isEditingMetrics ? (
-                <input
-                  type="number"
-                  value={editedMetrics.impressions}
-                  onChange={(e) => setEditedMetrics({...editedMetrics, impressions: Number(e.target.value)})}
-                  className="w-full px-3 py-2 border rounded text-lg font-bold"
-                />
-              ) : (
-                <p className="text-2xl font-bold text-gray-900">{formatNumber(campaign.impressions)}</p>
-              )}
+              <p className="text-2xl font-bold text-gray-900">{formatNumber(campaign.impressions)}</p>
             </div>
             <div>
               <p className="text-sm text-gray-600 mb-1">클릭수</p>
-              {isEditingMetrics ? (
-                <input
-                  type="number"
-                  value={editedMetrics.clicks}
-                  onChange={(e) => setEditedMetrics({...editedMetrics, clicks: Number(e.target.value)})}
-                  className="w-full px-3 py-2 border rounded text-lg font-bold"
-                />
-              ) : (
-                <p className="text-2xl font-bold text-gray-900">{formatNumber(campaign.clicks)}</p>
-              )}
+              <p className="text-2xl font-bold text-gray-900">{formatNumber(campaign.clicks)}</p>
             </div>
             <div>
               <p className="text-sm text-gray-600 mb-1">CTR</p>
@@ -412,6 +397,167 @@ export default function CampaignDetailPage() {
               </div>
             </div>
           </>
+        )}
+
+        {/* 수정 모달 */}
+        {showEditModal && editFormData && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="p-6">
+                <h3 className="text-2xl font-bold mb-6">캠페인 상세 수정</h3>
+
+                <div className="space-y-6">
+                  {/* 캠페인명 */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      캠페인명 *
+                    </label>
+                    <input
+                      type="text"
+                      value={editFormData.name}
+                      onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="캠페인명을 입력하세요"
+                    />
+                  </div>
+
+                  {/* 지점 선택 */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-3">
+                      적용 지점 선택 * (최소 1개)
+                    </label>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      {branches.map((branch) => (
+                        <label
+                          key={branch.id}
+                          className="flex items-center space-x-2 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={editFormData.branchIds.includes(branch.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setEditFormData({
+                                  ...editFormData,
+                                  branchIds: [...editFormData.branchIds, branch.id]
+                                })
+                              } else {
+                                setEditFormData({
+                                  ...editFormData,
+                                  branchIds: editFormData.branchIds.filter(id => id !== branch.id)
+                                })
+                              }
+                            }}
+                            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                          />
+                          <span className="text-sm font-medium text-gray-700">{branch.name}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* 기간 */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        시작 날짜 *
+                      </label>
+                      <input
+                        type="date"
+                        value={editFormData.startDate}
+                        onChange={(e) => setEditFormData({ ...editFormData, startDate: e.target.value })}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        종료 날짜 *
+                      </label>
+                      <input
+                        type="date"
+                        value={editFormData.endDate}
+                        onChange={(e) => setEditFormData({ ...editFormData, endDate: e.target.value })}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                  </div>
+
+                  {/* 광고 지표 */}
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        광고 비용 (원) *
+                      </label>
+                      <input
+                        type="number"
+                        value={editFormData.cost}
+                        onChange={(e) => setEditFormData({ ...editFormData, cost: Number(e.target.value) })}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="0"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        노출수 *
+                      </label>
+                      <input
+                        type="number"
+                        value={editFormData.impressions}
+                        onChange={(e) => setEditFormData({ ...editFormData, impressions: Number(e.target.value) })}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="0"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        클릭수 *
+                      </label>
+                      <input
+                        type="number"
+                        value={editFormData.clicks}
+                        onChange={(e) => setEditFormData({ ...editFormData, clicks: Number(e.target.value) })}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="0"
+                      />
+                    </div>
+                  </div>
+
+                  {/* 설명 */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      설명
+                    </label>
+                    <textarea
+                      value={editFormData.description}
+                      onChange={(e) => setEditFormData({ ...editFormData, description: e.target.value })}
+                      rows={4}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="캠페인에 대한 설명을 입력하세요"
+                    />
+                  </div>
+                </div>
+
+                {/* 버튼 */}
+                <div className="mt-6 flex justify-end gap-3">
+                  <button
+                    onClick={() => {
+                      setShowEditModal(false)
+                      setEditFormData(null)
+                    }}
+                    className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    취소
+                  </button>
+                  <button
+                    onClick={handleSaveEdit}
+                    className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    저장
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </main>
