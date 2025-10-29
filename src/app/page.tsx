@@ -240,6 +240,7 @@ export default function DashboardPage() {
             ]}
             title="이전 기간 대비 매출 변화율 (%)"
             color={metrics.revenueGrowthRate >= 0 ? '#10b981' : '#ef4444'}
+            formatValue={(value) => `${value.toFixed(2)}%`}
           />
 
           {/* 총 매출 */}
