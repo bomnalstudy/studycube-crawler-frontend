@@ -76,9 +76,18 @@ export async function GET(request: NextRequest) {
     const avgDailySeatUsage = totalSeatUsage / daysCount
     const avgDailyRevenue = totalRevenue / daysCount
 
+    // 이전 기간 일 평균 매출 계산
+    const prevDaysCount = previousMetrics.length || 1
+    const prevAvgDailyRevenue = prevTotalRevenue / prevDaysCount
+
     // 매출 상승률 계산
     const revenueGrowthRate = prevTotalRevenue > 0
       ? ((totalRevenue - prevTotalRevenue) / prevTotalRevenue) * 100
+      : 0
+
+    // 일 평균 매출 상승률 계산
+    const avgDailyRevenueGrowthRate = prevAvgDailyRevenue > 0
+      ? ((avgDailyRevenue - prevAvgDailyRevenue) / prevAvgDailyRevenue) * 100
       : 0
 
     // 이용권 타입별 매출 비율
@@ -114,19 +123,11 @@ export async function GET(request: NextRequest) {
       { ageGroup: '60대+', gender: '전체', count: total60plus }
     ].filter(item => item.count > 0) // count가 0인 항목 제거
 
-    // 재방문자 데이터 계산 (최근 일주일 - 마지막 데이터 날짜 기준)
-    // 마지막 데이터 날짜 찾기
-    const latestMetric = await prisma.dailyMetric.findFirst({
-      where: branchFilter,
-      orderBy: {
-        date: 'desc'
-      }
-    })
-
+    // 재방문자 데이터 계산 (선택된 endDate 기준 일주일)
     let weeklyRevisitData: Array<{ visitCount: number; count: number }> = []
 
-    if (latestMetric) {
-      const lastDataDate = new Date(latestMetric.date)
+    if (endDate) {
+      const lastDataDate = new Date(endDate)
       const weekAgoDate = new Date(lastDataDate)
       weekAgoDate.setDate(weekAgoDate.getDate() - 6) // 7일간 (오늘 포함)
 
@@ -175,6 +176,7 @@ export async function GET(request: NextRequest) {
       revenueGrowthRate,
       monthlyRevenue: totalRevenue,
       avgDailyRevenue,
+      avgDailyRevenueGrowthRate,
       weeklyRevisitData,
       customerDemographics
     }

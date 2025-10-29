@@ -24,6 +24,9 @@ export interface DashboardMetrics {
   // 일 평균 매출
   avgDailyRevenue: number
 
+  // 일 평균 매출 변화율
+  avgDailyRevenueGrowthRate: number
+
   // 일주일 재방문자 수
   weeklyRevisitData: {
     visitCount: number // 1회, 2회, 3회, 4회 이상

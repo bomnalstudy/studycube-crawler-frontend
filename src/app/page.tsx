@@ -225,6 +225,10 @@ export default function DashboardPage() {
           <MetricsCard
             title="일 평균 매출"
             value={formatCurrency(metrics.avgDailyRevenue)}
+            trend={{
+              value: Math.abs(metrics.avgDailyRevenueGrowthRate),
+              isPositive: metrics.avgDailyRevenueGrowthRate >= 0
+            }}
           />
         </div>
 
@@ -265,7 +269,7 @@ export default function DashboardPage() {
           {/* 재방문자 수 */}
           <BarChart
             data={revisitChartData}
-            title="최근 일주일 재방문자 수"
+            title="종료일 기준 일주일 재방문자 수"
             color="#8b5cf6"
           />
 
