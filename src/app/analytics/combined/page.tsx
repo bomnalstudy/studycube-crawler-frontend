@@ -67,6 +67,8 @@ export default function CombinedAnalyticsPage() {
   })
   const [analysis, setAnalysis] = useState<CombinedAnalysis | null>(null)
   const [loading, setLoading] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
 
   useEffect(() => {
@@ -101,6 +103,7 @@ export default function CombinedAnalyticsPage() {
 
       if (result.success) {
         setAnalysis(result.data)
+        setSaved(false)  // 새 분석 시 저장 상태 초기화
       }
     } catch (error) {
       console.error('분석 실패:', error)
@@ -110,8 +113,9 @@ export default function CombinedAnalyticsPage() {
   }
 
   const handleSave = async () => {
-    if (!analysis) return
+    if (!analysis || saving || saved) return
 
+    setSaving(true)
     try {
       const response = await fetch('/api/combined', {
         method: 'POST',
@@ -126,11 +130,14 @@ export default function CombinedAnalyticsPage() {
 
       if (result.success) {
         alert('분석이 저장되었습니다!')
+        setSaved(true)
         setRefreshKey(prev => prev + 1)
       }
     } catch (error) {
       console.error('저장 실패:', error)
       alert('저장에 실패했습니다.')
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -474,9 +481,16 @@ export default function CombinedAnalyticsPage() {
             <div className="flex gap-4">
               <button
                 onClick={handleSave}
-                className="flex-1 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
+                disabled={saving || saved}
+                className={`flex-1 px-6 py-3 text-white rounded-lg transition-colors font-medium ${
+                  saved
+                    ? 'bg-gray-400 cursor-not-allowed'
+                    : saving
+                      ? 'bg-gray-400 cursor-wait'
+                      : 'bg-green-600 hover:bg-green-700'
+                }`}
               >
-                분석 저장
+                {saving ? '저장 중...' : saved ? '저장 완료' : '분석 저장'}
               </button>
             </div>
           </div>

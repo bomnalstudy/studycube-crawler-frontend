@@ -60,6 +60,8 @@ export default function CampaignsAnalyticsPage() {
   })
   const [analysis, setAnalysis] = useState<CampaignAnalysis | null>(null)
   const [loading, setLoading] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
   const [savedCampaigns, setSavedCampaigns] = useState<any[]>([])
   const [branches, setBranches] = useState<Branch[]>([])
 
@@ -96,6 +98,7 @@ export default function CampaignsAnalyticsPage() {
 
       if (result.success) {
         setAnalysis(result.data)
+        setSaved(false)  // 새 분석 시 저장 상태 초기화
       }
     } catch (error) {
       console.error('분석 실패:', error)
@@ -105,8 +108,9 @@ export default function CampaignsAnalyticsPage() {
   }
 
   const handleSave = async () => {
-    if (!analysis) return
+    if (!analysis || saving || saved) return
 
+    setSaving(true)
     try {
       const response = await fetch('/api/campaigns', {
         method: 'POST',
@@ -121,10 +125,14 @@ export default function CampaignsAnalyticsPage() {
 
       if (result.success) {
         alert('캠페인이 저장되었습니다!')
+        setSaved(true)
         loadSavedCampaigns()
       }
     } catch (error) {
       console.error('저장 실패:', error)
+      alert('저장에 실패했습니다.')
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -371,9 +379,16 @@ export default function CampaignsAnalyticsPage() {
             <div className="flex gap-4">
               <button
                 onClick={handleSave}
-                className="flex-1 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
+                disabled={saving || saved}
+                className={`flex-1 px-6 py-3 text-white rounded-lg transition-colors font-medium ${
+                  saved
+                    ? 'bg-gray-400 cursor-not-allowed'
+                    : saving
+                      ? 'bg-gray-400 cursor-wait'
+                      : 'bg-green-600 hover:bg-green-700'
+                }`}
               >
-                캠페인 저장
+                {saving ? '저장 중...' : saved ? '저장 완료' : '캠페인 저장'}
               </button>
               <button
                 onClick={handleExport}

@@ -39,7 +39,7 @@ export function BarChart({
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis dataKey={xAxisKey} />
           <YAxis />
-          <Tooltip />
+          <Tooltip formatter={(value: number) => valueFormatter(value)} />
           <Bar dataKey={dataKey} fill={color} radius={[8, 8, 0, 0]}>
             {showValues && (
               <LabelList

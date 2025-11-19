@@ -14,13 +14,6 @@ export async function GET(request: NextRequest) {
     const startDate = startDateParam ? new Date(startDateParam) : new Date()
     const endDate = endDateParam ? new Date(endDateParam) : new Date()
 
-    // 이전 기간 계산 (같은 기간만큼 이전)
-    const daysDiff = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))
-    const prevStartDate = new Date(startDate)
-    prevStartDate.setDate(prevStartDate.getDate() - daysDiff)
-    const prevEndDate = new Date(startDate)
-    prevEndDate.setDate(prevEndDate.getDate() - 1)
-
     // 지점 필터 조건 생성
     const branchFilter = branchId === 'all' ? {} : { branchId }
 
@@ -32,19 +25,65 @@ export async function GET(request: NextRequest) {
           gte: startDate,
           lte: endDate
         }
+      },
+      orderBy: {
+        date: 'asc'
       }
     })
 
-    // 이전 기간 데이터 조회
-    const previousMetrics = await prisma.dailyMetric.findMany({
-      where: {
-        ...branchFilter,
-        date: {
-          gte: prevStartDate,
-          lte: prevEndDate
-        }
+    // 현재 기간에 실제 데이터가 있는 날짜들 추출
+    const currentDates = currentMetrics.map(m => m.date)
+    const actualDaysCount = currentDates.length
+
+    // 이전 기간 계산: 현재 기간에 데이터가 있는 일수만큼만 이전 달의 같은 날짜 범위와 비교
+    // 예: 11-01 ~ 11-15 데이터가 있으면 → 10-01 ~ 10-15와 비교
+    // 단, 현재 달이 끝까지 채워졌거나 이전 달과 일수가 다른 경우 각 달 전체 비교
+    let previousMetrics: typeof currentMetrics = []
+
+    if (actualDaysCount > 0) {
+      // 현재 기간의 첫 번째와 마지막 데이터 날짜
+      const firstDataDate = new Date(currentDates[0])
+      const lastDataDate = new Date(currentDates[currentDates.length - 1])
+
+      // 해당 월의 마지막 날 계산
+      const lastDayOfCurrentMonth = new Date(lastDataDate.getFullYear(), lastDataDate.getMonth() + 1, 0).getDate()
+      const lastDayOfPrevMonth = new Date(lastDataDate.getFullYear(), lastDataDate.getMonth(), 0).getDate()
+
+      // 마지막 데이터 날짜의 일(day)
+      const lastDataDay = lastDataDate.getDate()
+
+      // 이전 달의 날짜 범위 계산
+      const prevStartDate = new Date(firstDataDate)
+      prevStartDate.setMonth(prevStartDate.getMonth() - 1)
+
+      let prevEndDate: Date
+
+      // 현재 데이터가 월말까지 있는 경우에만 각 달 전체 비교
+      // (실제 데이터의 마지막 날이 해당 월의 마지막 날인 경우)
+      if (lastDataDay === lastDayOfCurrentMonth) {
+        // 이전 달 전체와 비교 (이전 달의 마지막 날까지)
+        prevEndDate = new Date(lastDataDate.getFullYear(), lastDataDate.getMonth(), 0)
+      } else {
+        // 이전 달 같은 날짜까지만 비교
+        // 단, 이전 달의 일수가 더 적은 경우 이전 달의 마지막 날까지만
+        const targetDay = Math.min(lastDataDay, lastDayOfPrevMonth)
+        prevEndDate = new Date(lastDataDate.getFullYear(), lastDataDate.getMonth() - 1, targetDay)
       }
-    })
+
+      // 이전 기간 데이터 조회
+      previousMetrics = await prisma.dailyMetric.findMany({
+        where: {
+          ...branchFilter,
+          date: {
+            gte: prevStartDate,
+            lte: prevEndDate
+          }
+        },
+        orderBy: {
+          date: 'asc'
+        }
+      })
+    }
 
     // 메트릭 계산
     const totalNewUsers = currentMetrics.reduce((sum, m) => sum + (m.newUsers || 0), 0)
@@ -123,11 +162,12 @@ export async function GET(request: NextRequest) {
       { ageGroup: '60대+', gender: '전체', count: total60plus }
     ].filter(item => item.count > 0) // count가 0인 항목 제거
 
-    // 재방문자 데이터 계산 (선택된 endDate 기준 일주일)
+    // 재방문자 데이터 계산 (실제 데이터의 마지막 날짜 기준 일주일)
     let weeklyRevisitData: Array<{ visitCount: number; count: number }> = []
 
-    if (endDate) {
-      const lastDataDate = new Date(endDate)
+    if (actualDaysCount > 0) {
+      // 실제 데이터의 마지막 날짜를 기준으로 일주일 계산
+      const lastDataDate = new Date(currentDates[currentDates.length - 1])
       const weekAgoDate = new Date(lastDataDate)
       weekAgoDate.setDate(weekAgoDate.getDate() - 6) // 7일간 (오늘 포함)
 
