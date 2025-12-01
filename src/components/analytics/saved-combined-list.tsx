@@ -2,6 +2,31 @@
 
 import { useEffect, useState } from 'react'
 
+interface BranchAnalysisData {
+  branchId: string
+  branchName: string
+  beforeMetrics: {
+    revenue: number
+    newUsers: number
+    avgDailyUsers: number
+    revisitRate: number
+  }
+  afterMetrics: {
+    revenue: number
+    newUsers: number
+    avgDailyUsers: number
+    revisitRate: number
+  }
+  changes: {
+    revenueGrowth: number
+    newUsersGrowth: number
+    avgDailyUsersGrowth: number
+    revisitRateGrowth: number
+  }
+  roi: number
+  roas: number
+}
+
 interface CombinedAnalysis {
   id: string
   name: string
@@ -24,7 +49,17 @@ interface CombinedAnalysis {
     }
   }>
   analysis?: {
-    changes: {
+    // 새 형식: branchAnalyses 배열
+    branchAnalyses?: BranchAnalysisData[]
+    adMetrics?: {
+      ctr: number
+      cpc: number
+      cost: number
+      impressions: number
+      clicks: number
+    }
+    // 기존 형식: 단일 changes 객체 (하위 호환성)
+    changes?: {
       revenueGrowth: number
       newUsersGrowth: number
     }
@@ -110,10 +145,11 @@ export default function SavedCombinedList({ onSelect }: SavedCombinedListProps) 
     setExpandedBranches(newExpanded)
   }
 
+  // 전체 통합분석 삭제
   const handleDelete = async (e: React.MouseEvent, combinedId: string, combinedName: string) => {
     e.stopPropagation()
 
-    if (!confirm(`"${combinedName}" 통합분석을 삭제하시겠습니까?`)) {
+    if (!confirm(`"${combinedName}" 통합분석을 모든 지점에서 삭제하시겠습니까?`)) {
       return
     }
 
@@ -132,6 +168,33 @@ export default function SavedCombinedList({ onSelect }: SavedCombinedListProps) 
     } catch (error) {
       console.error('통합분석 삭제 실패:', error)
       alert('통합분석 삭제에 실패했습니다.')
+    }
+  }
+
+  // 특정 지점에서만 통합분석 삭제
+  const handleDeleteFromBranch = async (e: React.MouseEvent, combinedId: string, combinedName: string, branchId: string, branchName: string) => {
+    e.stopPropagation()
+
+    if (!confirm(`"${combinedName}" 통합분석을 "${branchName}" 지점에서만 삭제하시겠습니까?`)) {
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/combined?id=${combinedId}&branchId=${branchId}`, {
+        method: 'DELETE'
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        alert(`${branchName} 지점에서 통합분석이 삭제되었습니다!`)
+        await fetchCombined()
+      } else {
+        alert('삭제에 실패했습니다.')
+      }
+    } catch (error) {
+      console.error('삭제 실패:', error)
+      alert('삭제에 실패했습니다.')
     }
   }
 
@@ -238,8 +301,8 @@ export default function SavedCombinedList({ onSelect }: SavedCombinedListProps) 
 
   return (
     <div className="space-y-4">
-      {Object.values(groupedCombined).map((group) => (
-        <div key={group.branchName} className="border border-gray-200 rounded-lg overflow-hidden">
+      {Object.entries(groupedCombined).map(([branchId, group]) => (
+        <div key={branchId} className="border border-gray-200 rounded-lg overflow-hidden">
           <button
             onClick={() => toggleBranch(group.branchName)}
             className="w-full px-6 py-4 bg-gradient-to-r from-purple-50 to-blue-50 hover:from-purple-100 hover:to-blue-100 transition-colors flex items-center justify-between"
@@ -304,22 +367,49 @@ export default function SavedCombinedList({ onSelect }: SavedCombinedListProps) 
                         )}
                       </div>
 
-                      {item.analysis && (
-                        <div className="grid grid-cols-2 gap-4 p-3 bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg">
-                          <div>
-                            <p className="text-xs text-gray-600">매출 증가율</p>
-                            <p className={`text-lg font-bold ${item.analysis.changes.revenueGrowth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                              {formatPercent(item.analysis.changes.revenueGrowth)}
-                            </p>
+                      {/* 성과 미리보기 - 현재 폴더의 지점 분석 결과만 표시 */}
+                      {item.analysis && item.analysis.branchAnalyses && (() => {
+                        // 현재 폴더(branchId)에 해당하는 분석 결과만 필터링
+                        const currentBranchAnalysis = item.analysis.branchAnalyses.find(
+                          (ba) => ba.branchId === branchId
+                        )
+
+                        if (!currentBranchAnalysis) return null
+
+                        return (
+                          <div className="p-3 bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg">
+                            <p className="text-sm font-semibold text-blue-600 mb-2">시행 전/후 변화 ({currentBranchAnalysis.branchName})</p>
+                            <div className="bg-white p-3 rounded-lg">
+                              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                <div>
+                                  <p className="text-xs text-gray-600">매출 증가율</p>
+                                  <p className={`text-sm font-bold ${currentBranchAnalysis.changes.revenueGrowth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                    {formatPercent(currentBranchAnalysis.changes.revenueGrowth)}
+                                  </p>
+                                </div>
+                                <div>
+                                  <p className="text-xs text-gray-600">신규 이용자</p>
+                                  <p className={`text-sm font-bold ${currentBranchAnalysis.changes.newUsersGrowth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                    {formatPercent(currentBranchAnalysis.changes.newUsersGrowth)}
+                                  </p>
+                                </div>
+                                <div>
+                                  <p className="text-xs text-gray-600">ROI</p>
+                                  <p className={`text-sm font-bold ${currentBranchAnalysis.roi >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                    {formatPercent(currentBranchAnalysis.roi)}
+                                  </p>
+                                </div>
+                                <div>
+                                  <p className="text-xs text-gray-600">ROAS</p>
+                                  <p className={`text-sm font-bold ${currentBranchAnalysis.roas >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                    {formatPercent(currentBranchAnalysis.roas)}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
                           </div>
-                          <div>
-                            <p className="text-xs text-gray-600">신규 이용자 증가율</p>
-                            <p className={`text-lg font-bold ${item.analysis.changes.newUsersGrowth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                              {formatPercent(item.analysis.changes.newUsersGrowth)}
-                            </p>
-                          </div>
-                        </div>
-                      )}
+                        )
+                      })()}
                     </div>
 
                     <div className="flex gap-2 ml-4">
@@ -329,11 +419,19 @@ export default function SavedCombinedList({ onSelect }: SavedCombinedListProps) 
                       >
                         상세 수정
                       </button>
+                      {item.branches.length > 1 && (
+                        <button
+                          onClick={(e) => handleDeleteFromBranch(e, item.id, item.name, branchId, group.branchName)}
+                          className="px-3 py-2 text-sm text-orange-600 hover:text-orange-700 hover:bg-orange-50 rounded-lg transition-colors"
+                        >
+                          이 지점에서만 삭제
+                        </button>
+                      )}
                       <button
                         onClick={(e) => handleDelete(e, item.id, item.name)}
                         className="px-3 py-2 text-sm text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition-colors"
                       >
-                        삭제
+                        전체 삭제
                       </button>
                       <button
                         onClick={(e) => {

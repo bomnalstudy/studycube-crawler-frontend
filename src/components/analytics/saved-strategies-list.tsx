@@ -3,6 +3,29 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 
+interface BranchAnalysis {
+  branchId: string
+  branchName: string
+  beforeMetrics: {
+    revenue: number
+    newUsers: number
+    avgDailyUsers: number
+    revisitRate: number
+  }
+  afterMetrics: {
+    revenue: number
+    newUsers: number
+    avgDailyUsers: number
+    revisitRate: number
+  }
+  changes: {
+    revenueGrowth: number
+    newUsersGrowth: number
+    avgDailyUsersGrowth: number
+    revisitRateGrowth: number
+  }
+}
+
 interface Strategy {
   id: string
   name: string
@@ -20,7 +43,10 @@ interface Strategy {
     }
   }>
   analysis?: {
-    changes: {
+    // 새 형식: branchAnalyses 배열
+    branchAnalyses?: BranchAnalysis[]
+    // 기존 형식: 단일 changes 객체 (하위 호환성)
+    changes?: {
       revenueGrowth: number
       newUsersGrowth: number
       avgDailyUsersGrowth: number
@@ -103,10 +129,11 @@ export function SavedStrategiesList() {
     setExpandedBranches(newExpanded)
   }
 
+  // 전체 전략 삭제
   const handleDelete = async (e: React.MouseEvent, strategyId: string, strategyName: string) => {
     e.stopPropagation()
 
-    if (!confirm(`"${strategyName}" 전략을 삭제하시겠습니까?`)) {
+    if (!confirm(`"${strategyName}" 전략을 모든 지점에서 삭제하시겠습니까?`)) {
       return
     }
 
@@ -125,6 +152,33 @@ export function SavedStrategiesList() {
     } catch (error) {
       console.error('전략 삭제 실패:', error)
       alert('전략 삭제에 실패했습니다.')
+    }
+  }
+
+  // 특정 지점에서만 전략 삭제
+  const handleDeleteFromBranch = async (e: React.MouseEvent, strategyId: string, strategyName: string, branchId: string, branchName: string) => {
+    e.stopPropagation()
+
+    if (!confirm(`"${strategyName}" 전략을 "${branchName}" 지점에서만 삭제하시겠습니까?`)) {
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/strategies?id=${strategyId}&branchId=${branchId}`, {
+        method: 'DELETE'
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        alert(`${branchName} 지점에서 전략이 삭제되었습니다!`)
+        await loadStrategies()
+      } else {
+        alert('삭제에 실패했습니다.')
+      }
+    } catch (error) {
+      console.error('삭제 실패:', error)
+      alert('삭제에 실패했습니다.')
     }
   }
 
@@ -259,11 +313,19 @@ export function SavedStrategiesList() {
                         >
                           상세 수정
                         </button>
+                        {strategy.branches.length > 1 && (
+                          <button
+                            onClick={(e) => handleDeleteFromBranch(e, strategy.id, strategy.name, branchId, branchName)}
+                            className="px-3 py-2 text-sm text-orange-600 hover:text-orange-700 hover:bg-orange-50 rounded-lg transition-colors"
+                          >
+                            이 지점에서만 삭제
+                          </button>
+                        )}
                         <button
                           onClick={(e) => handleDelete(e, strategy.id, strategy.name)}
                           className="px-3 py-2 text-sm text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition-colors"
                         >
-                          삭제
+                          전체 삭제
                         </button>
                         <button
                           onClick={(e) => {
@@ -283,38 +345,49 @@ export function SavedStrategiesList() {
                       <p className="text-sm text-gray-700">{strategy.reason}</p>
                     </div>
 
-                    {/* 성과 미리보기 */}
-                    {strategy.analysis && (
-                      <div className="pt-3 border-t">
-                        <p className="text-xs text-gray-500 mb-2">전략 전/후 변화</p>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                          <div>
-                            <span className="text-xs text-gray-600">매출 변화:</span>
-                            <p className={`font-bold text-sm ${strategy.analysis.changes.revenueGrowth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                              {strategy.analysis.changes.revenueGrowth >= 0 ? '+' : ''}{strategy.analysis.changes.revenueGrowth.toFixed(1)}%
-                            </p>
-                          </div>
-                          <div>
-                            <span className="text-xs text-gray-600">신규 이용자:</span>
-                            <p className={`font-bold text-sm ${strategy.analysis.changes.newUsersGrowth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                              {strategy.analysis.changes.newUsersGrowth >= 0 ? '+' : ''}{strategy.analysis.changes.newUsersGrowth.toFixed(1)}%
-                            </p>
-                          </div>
-                          <div>
-                            <span className="text-xs text-gray-600">일평균 이용자:</span>
-                            <p className={`font-bold text-sm ${strategy.analysis.changes.avgDailyUsersGrowth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                              {strategy.analysis.changes.avgDailyUsersGrowth >= 0 ? '+' : ''}{strategy.analysis.changes.avgDailyUsersGrowth.toFixed(1)}%
-                            </p>
-                          </div>
-                          <div>
-                            <span className="text-xs text-gray-600">재방문률:</span>
-                            <p className={`font-bold text-sm ${strategy.analysis.changes.revisitRateGrowth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                              {strategy.analysis.changes.revisitRateGrowth >= 0 ? '+' : ''}{strategy.analysis.changes.revisitRateGrowth.toFixed(1)}%
-                            </p>
+                    {/* 성과 미리보기 - 현재 폴더의 지점 분석 결과만 표시 */}
+                    {strategy.analysis && strategy.analysis.branchAnalyses && (() => {
+                      // 현재 폴더(branchId)에 해당하는 분석 결과만 필터링
+                      const currentBranchAnalysis = strategy.analysis.branchAnalyses.find(
+                        (ba) => ba.branchId === branchId
+                      )
+
+                      if (!currentBranchAnalysis) return null
+
+                      return (
+                        <div className="pt-3 border-t">
+                          <p className="text-xs text-gray-500 mb-2">전략 전/후 변화 ({currentBranchAnalysis.branchName})</p>
+                          <div className="bg-gray-50 p-3 rounded-lg">
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                              <div>
+                                <span className="text-xs text-gray-600">매출 변화:</span>
+                                <p className={`font-bold text-sm ${currentBranchAnalysis.changes.revenueGrowth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                  {currentBranchAnalysis.changes.revenueGrowth >= 0 ? '+' : ''}{currentBranchAnalysis.changes.revenueGrowth.toFixed(1)}%
+                                </p>
+                              </div>
+                              <div>
+                                <span className="text-xs text-gray-600">신규 이용자:</span>
+                                <p className={`font-bold text-sm ${currentBranchAnalysis.changes.newUsersGrowth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                  {currentBranchAnalysis.changes.newUsersGrowth >= 0 ? '+' : ''}{currentBranchAnalysis.changes.newUsersGrowth.toFixed(1)}%
+                                </p>
+                              </div>
+                              <div>
+                                <span className="text-xs text-gray-600">일평균 이용자:</span>
+                                <p className={`font-bold text-sm ${currentBranchAnalysis.changes.avgDailyUsersGrowth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                  {currentBranchAnalysis.changes.avgDailyUsersGrowth >= 0 ? '+' : ''}{currentBranchAnalysis.changes.avgDailyUsersGrowth.toFixed(1)}%
+                                </p>
+                              </div>
+                              <div>
+                                <span className="text-xs text-gray-600">재방문률:</span>
+                                <p className={`font-bold text-sm ${currentBranchAnalysis.changes.revisitRateGrowth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                  {currentBranchAnalysis.changes.revisitRateGrowth >= 0 ? '+' : ''}{currentBranchAnalysis.changes.revisitRateGrowth.toFixed(1)}%
+                                </p>
+                              </div>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    )}
+                      )
+                    })()}
                   </div>
                 ))}
               </div>

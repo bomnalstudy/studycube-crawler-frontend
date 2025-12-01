@@ -19,33 +19,40 @@ interface CampaignForm {
   clicks: number
 }
 
-interface CampaignAnalysis {
-  // 광고 전 데이터
+interface BranchAnalysis {
+  branchId: string
+  branchName: string
   beforeMetrics: {
     revenue: number
     newUsers: number
     avgDailyUsers: number
     revisitRate: number
   }
-  // 광고 후 데이터
   afterMetrics: {
     revenue: number
     newUsers: number
     avgDailyUsers: number
     revisitRate: number
   }
-  // 변화량
   changes: {
     revenueGrowth: number
     newUsersGrowth: number
     avgDailyUsersGrowth: number
     revisitRateGrowth: number
   }
-  // ROI/ROAS
   roi: number
   roas: number
-  ctr: number // Click Through Rate
-  cpc: number // Cost Per Click
+}
+
+interface CampaignAnalysis {
+  branchAnalyses: BranchAnalysis[]
+  adMetrics: {
+    ctr: number
+    cpc: number
+    cost: number
+    impressions: number
+    clicks: number
+  }
 }
 
 export default function CampaignsAnalyticsPage() {
@@ -62,16 +69,13 @@ export default function CampaignsAnalyticsPage() {
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
-  const [savedCampaigns, setSavedCampaigns] = useState<any[]>([])
   const [branches, setBranches] = useState<Branch[]>([])
 
-  // 지점 목록 불러오기
   useEffect(() => {
     async function fetchBranches() {
       try {
         const response = await fetch('/api/branches')
         const result = await response.json()
-
         if (result.success) {
           setBranches(result.data)
         }
@@ -79,7 +83,6 @@ export default function CampaignsAnalyticsPage() {
         console.error('지점 로드 실패:', error)
       }
     }
-
     fetchBranches()
   }, [])
 
@@ -98,7 +101,7 @@ export default function CampaignsAnalyticsPage() {
 
       if (result.success) {
         setAnalysis(result.data)
-        setSaved(false)  // 새 분석 시 저장 상태 초기화
+        setSaved(false)
       }
     } catch (error) {
       console.error('분석 실패:', error)
@@ -126,7 +129,6 @@ export default function CampaignsAnalyticsPage() {
       if (result.success) {
         alert('캠페인이 저장되었습니다!')
         setSaved(true)
-        loadSavedCampaigns()
       }
     } catch (error) {
       console.error('저장 실패:', error)
@@ -134,25 +136,6 @@ export default function CampaignsAnalyticsPage() {
     } finally {
       setSaving(false)
     }
-  }
-
-  const loadSavedCampaigns = async () => {
-    try {
-      const response = await fetch('/api/campaigns')
-      const result = await response.json()
-
-      if (result.success) {
-        setSavedCampaigns(result.data)
-      }
-    } catch (error) {
-      console.error('캠페인 로드 실패:', error)
-    }
-  }
-
-  const handleExport = () => {
-    if (!analysis) return
-    // Excel 내보내기 기능 (추후 구현)
-    window.location.href = `/api/campaigns/export?name=${encodeURIComponent(formData.name)}`
   }
 
   return (
@@ -216,9 +199,7 @@ export default function CampaignsAnalyticsPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                시작일
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">시작일</label>
               <input
                 type="date"
                 value={formData.startDate}
@@ -229,9 +210,7 @@ export default function CampaignsAnalyticsPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                종료일
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">종료일</label>
               <input
                 type="date"
                 value={formData.endDate}
@@ -242,9 +221,7 @@ export default function CampaignsAnalyticsPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                광고 비용 (원)
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">광고 비용 (원)</label>
               <input
                 type="number"
                 value={formData.cost || ''}
@@ -257,9 +234,7 @@ export default function CampaignsAnalyticsPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                노출수
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">노출수</label>
               <input
                 type="number"
                 value={formData.impressions || ''}
@@ -272,9 +247,7 @@ export default function CampaignsAnalyticsPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                클릭수
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">클릭수</label>
               <input
                 type="number"
                 value={formData.clicks || ''}
@@ -301,85 +274,109 @@ export default function CampaignsAnalyticsPage() {
         {/* 분석 결과 */}
         {analysis && (
           <div className="space-y-6">
-            {/* 주요 지표 */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-              <div className="bg-white p-6 rounded-lg shadow-md">
-                <h3 className="text-sm font-medium text-gray-600 mb-2">ROI</h3>
-                <p className="text-3xl font-bold text-blue-600">{formatPercent(analysis.roi)}</p>
-              </div>
-              <div className="bg-white p-6 rounded-lg shadow-md">
-                <h3 className="text-sm font-medium text-gray-600 mb-2">ROAS</h3>
-                <p className="text-3xl font-bold text-green-600">{formatPercent(analysis.roas)}</p>
-              </div>
-              <div className="bg-white p-6 rounded-lg shadow-md">
-                <h3 className="text-sm font-medium text-gray-600 mb-2">CTR</h3>
-                <p className="text-3xl font-bold text-purple-600">{formatPercent(analysis.ctr)}</p>
-              </div>
-              <div className="bg-white p-6 rounded-lg shadow-md">
-                <h3 className="text-sm font-medium text-gray-600 mb-2">CPC</h3>
-                <p className="text-3xl font-bold text-orange-600">{formatCurrency(analysis.cpc)}</p>
-              </div>
-            </div>
-
-            {/* 비교 테이블 */}
+            {/* 광고 지표 (공통) */}
             <div className="bg-white rounded-lg shadow-md p-6">
-              <h2 className="text-xl font-semibold mb-4">성과 비교</h2>
-
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="text-left py-3 px-4">지표</th>
-                      <th className="text-right py-3 px-4">광고 전</th>
-                      <th className="text-right py-3 px-4">광고 후</th>
-                      <th className="text-right py-3 px-4">변화량</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr className="border-b">
-                      <td className="py-3 px-4">총 매출</td>
-                      <td className="text-right py-3 px-4">{formatCurrency(analysis.beforeMetrics.revenue)}</td>
-                      <td className="text-right py-3 px-4">{formatCurrency(analysis.afterMetrics.revenue)}</td>
-                      <td className={`text-right py-3 px-4 font-semibold ${
-                        analysis.changes.revenueGrowth >= 0 ? 'text-green-600' : 'text-red-600'
-                      }`}>
-                        {analysis.changes.revenueGrowth >= 0 ? '+' : ''}{formatPercent(analysis.changes.revenueGrowth)}
-                      </td>
-                    </tr>
-                    <tr className="border-b">
-                      <td className="py-3 px-4">신규 이용자</td>
-                      <td className="text-right py-3 px-4">{formatNumber(analysis.beforeMetrics.newUsers)}</td>
-                      <td className="text-right py-3 px-4">{formatNumber(analysis.afterMetrics.newUsers)}</td>
-                      <td className={`text-right py-3 px-4 font-semibold ${
-                        analysis.changes.newUsersGrowth >= 0 ? 'text-green-600' : 'text-red-600'
-                      }`}>
-                        {analysis.changes.newUsersGrowth >= 0 ? '+' : ''}{formatPercent(analysis.changes.newUsersGrowth)}
-                      </td>
-                    </tr>
-                    <tr className="border-b">
-                      <td className="py-3 px-4">일 평균 이용자</td>
-                      <td className="text-right py-3 px-4">{formatNumber(analysis.beforeMetrics.avgDailyUsers)}</td>
-                      <td className="text-right py-3 px-4">{formatNumber(analysis.afterMetrics.avgDailyUsers)}</td>
-                      <td className={`text-right py-3 px-4 font-semibold ${
-                        analysis.changes.avgDailyUsersGrowth >= 0 ? 'text-green-600' : 'text-red-600'
-                      }`}>
-                        {analysis.changes.avgDailyUsersGrowth >= 0 ? '+' : ''}{formatPercent(analysis.changes.avgDailyUsersGrowth)}
-                      </td>
-                    </tr>
-                    <tr>
-                      <td className="py-3 px-4">재방문률</td>
-                      <td className="text-right py-3 px-4">{formatPercent(analysis.beforeMetrics.revisitRate)}</td>
-                      <td className="text-right py-3 px-4">{formatPercent(analysis.afterMetrics.revisitRate)}</td>
-                      <td className={`text-right py-3 px-4 font-semibold ${
-                        analysis.changes.revisitRateGrowth >= 0 ? 'text-green-600' : 'text-red-600'
-                      }`}>
-                        {analysis.changes.revisitRateGrowth >= 0 ? '+' : ''}{formatPercent(analysis.changes.revisitRateGrowth)}
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
+              <h2 className="text-xl font-semibold mb-4">광고 지표</h2>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="text-center p-4 bg-blue-50 rounded-lg">
+                  <p className="text-sm text-gray-600">CTR (클릭률)</p>
+                  <p className="text-2xl font-bold text-blue-600">{formatPercent(analysis.adMetrics.ctr)}</p>
+                </div>
+                <div className="text-center p-4 bg-orange-50 rounded-lg">
+                  <p className="text-sm text-gray-600">CPC (클릭당 비용)</p>
+                  <p className="text-2xl font-bold text-orange-600">{formatCurrency(analysis.adMetrics.cpc)}</p>
+                </div>
+                <div className="text-center p-4 bg-gray-50 rounded-lg">
+                  <p className="text-sm text-gray-600">총 비용</p>
+                  <p className="text-2xl font-bold text-gray-600">{formatCurrency(analysis.adMetrics.cost)}</p>
+                </div>
+                <div className="text-center p-4 bg-gray-50 rounded-lg">
+                  <p className="text-sm text-gray-600">노출수 / 클릭수</p>
+                  <p className="text-2xl font-bold text-gray-600">{formatNumber(analysis.adMetrics.impressions)} / {formatNumber(analysis.adMetrics.clicks)}</p>
+                </div>
               </div>
             </div>
+
+            {/* 각 지점별 성과 */}
+            {analysis.branchAnalyses.map((branch) => (
+              <div key={branch.branchId} className="bg-white rounded-lg shadow-md p-6">
+                <h2 className="text-xl font-semibold mb-4 text-blue-600">{branch.branchName}</h2>
+
+                {/* 주요 지표 */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                  <div className="text-center p-4 bg-green-50 rounded-lg">
+                    <p className="text-sm text-gray-600">ROI</p>
+                    <p className={`text-2xl font-bold ${branch.roi >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {branch.roi >= 0 ? '+' : ''}{formatPercent(branch.roi)}
+                    </p>
+                  </div>
+                  <div className="text-center p-4 bg-purple-50 rounded-lg">
+                    <p className="text-sm text-gray-600">ROAS</p>
+                    <p className="text-2xl font-bold text-purple-600">{formatPercent(branch.roas)}</p>
+                  </div>
+                  <div className="text-center p-4 bg-blue-50 rounded-lg">
+                    <p className="text-sm text-gray-600">매출 변화</p>
+                    <p className={`text-2xl font-bold ${branch.changes.revenueGrowth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {branch.changes.revenueGrowth >= 0 ? '+' : ''}{formatPercent(branch.changes.revenueGrowth)}
+                    </p>
+                  </div>
+                  <div className="text-center p-4 bg-yellow-50 rounded-lg">
+                    <p className="text-sm text-gray-600">신규 이용자 변화</p>
+                    <p className={`text-2xl font-bold ${branch.changes.newUsersGrowth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {branch.changes.newUsersGrowth >= 0 ? '+' : ''}{formatPercent(branch.changes.newUsersGrowth)}
+                    </p>
+                  </div>
+                </div>
+
+                {/* 비교 테이블 */}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b bg-gray-50">
+                        <th className="text-left py-2 px-3">지표</th>
+                        <th className="text-right py-2 px-3">광고 전</th>
+                        <th className="text-right py-2 px-3">광고 후</th>
+                        <th className="text-right py-2 px-3">변화량</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr className="border-b">
+                        <td className="py-2 px-3">총 매출</td>
+                        <td className="text-right py-2 px-3">{formatCurrency(branch.beforeMetrics.revenue)}</td>
+                        <td className="text-right py-2 px-3">{formatCurrency(branch.afterMetrics.revenue)}</td>
+                        <td className={`text-right py-2 px-3 font-semibold ${branch.changes.revenueGrowth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {branch.changes.revenueGrowth >= 0 ? '+' : ''}{formatPercent(branch.changes.revenueGrowth)}
+                        </td>
+                      </tr>
+                      <tr className="border-b">
+                        <td className="py-2 px-3">신규 이용자</td>
+                        <td className="text-right py-2 px-3">{formatNumber(branch.beforeMetrics.newUsers)}</td>
+                        <td className="text-right py-2 px-3">{formatNumber(branch.afterMetrics.newUsers)}</td>
+                        <td className={`text-right py-2 px-3 font-semibold ${branch.changes.newUsersGrowth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {branch.changes.newUsersGrowth >= 0 ? '+' : ''}{formatPercent(branch.changes.newUsersGrowth)}
+                        </td>
+                      </tr>
+                      <tr className="border-b">
+                        <td className="py-2 px-3">일 평균 이용자</td>
+                        <td className="text-right py-2 px-3">{formatNumber(branch.beforeMetrics.avgDailyUsers)}</td>
+                        <td className="text-right py-2 px-3">{formatNumber(branch.afterMetrics.avgDailyUsers)}</td>
+                        <td className={`text-right py-2 px-3 font-semibold ${branch.changes.avgDailyUsersGrowth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {branch.changes.avgDailyUsersGrowth >= 0 ? '+' : ''}{formatPercent(branch.changes.avgDailyUsersGrowth)}
+                        </td>
+                      </tr>
+                      <tr>
+                        <td className="py-2 px-3">재방문률</td>
+                        <td className="text-right py-2 px-3">{formatPercent(branch.beforeMetrics.revisitRate)}</td>
+                        <td className="text-right py-2 px-3">{formatPercent(branch.afterMetrics.revisitRate)}</td>
+                        <td className={`text-right py-2 px-3 font-semibold ${branch.changes.revisitRateGrowth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {branch.changes.revisitRateGrowth >= 0 ? '+' : ''}{formatPercent(branch.changes.revisitRateGrowth)}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ))}
 
             {/* 액션 버튼 */}
             <div className="flex gap-4">
@@ -395,12 +392,6 @@ export default function CampaignsAnalyticsPage() {
                 }`}
               >
                 {saving ? '저장 중...' : saved ? '저장 완료' : '캠페인 저장'}
-              </button>
-              <button
-                onClick={handleExport}
-                className="flex-1 px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors font-medium"
-              >
-                Excel로 내보내기
               </button>
             </div>
           </div>

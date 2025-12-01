@@ -19,30 +19,31 @@ interface StrategyForm {
   description: string
 }
 
-interface StrategyAnalysis {
-  // 전략 전 데이터
+interface BranchAnalysis {
+  branchId: string
+  branchName: string
   beforeMetrics: {
     revenue: number
     newUsers: number
     avgDailyUsers: number
     revisitRate: number
   }
-  // 전략 후 데이터
   afterMetrics: {
     revenue: number
     newUsers: number
     avgDailyUsers: number
     revisitRate: number
   }
-  // 변화량
   changes: {
     revenueGrowth: number
     newUsersGrowth: number
     avgDailyUsersGrowth: number
     revisitRateGrowth: number
   }
-  // ROI (전략 실행 비용이 없으므로 제외 가능)
-  roi: number
+}
+
+interface StrategyAnalysis {
+  branchAnalyses: BranchAnalysis[]
 }
 
 export default function StrategiesAnalyticsPage() {
@@ -284,89 +285,98 @@ export default function StrategiesAnalyticsPage() {
         </div>
 
         {/* 분석 결과 */}
-        {analysis && (
+        {analysis && analysis.branchAnalyses && (
           <div className="space-y-6">
-            {/* 주요 지표 */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="bg-white p-6 rounded-lg shadow-md">
-                <h3 className="text-sm font-medium text-gray-600 mb-2">매출 변화</h3>
-                <p className={`text-3xl font-bold ${analysis.changes.revenueGrowth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {analysis.changes.revenueGrowth >= 0 ? '+' : ''}{formatPercent(analysis.changes.revenueGrowth)}
-                </p>
-              </div>
-              <div className="bg-white p-6 rounded-lg shadow-md">
-                <h3 className="text-sm font-medium text-gray-600 mb-2">신규 이용자 변화</h3>
-                <p className={`text-3xl font-bold ${analysis.changes.newUsersGrowth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {analysis.changes.newUsersGrowth >= 0 ? '+' : ''}{formatPercent(analysis.changes.newUsersGrowth)}
-                </p>
-              </div>
-              <div className="bg-white p-6 rounded-lg shadow-md">
-                <h3 className="text-sm font-medium text-gray-600 mb-2">일평균 이용자 변화</h3>
-                <p className={`text-3xl font-bold ${analysis.changes.avgDailyUsersGrowth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {analysis.changes.avgDailyUsersGrowth >= 0 ? '+' : ''}{formatPercent(analysis.changes.avgDailyUsersGrowth)}
-                </p>
-              </div>
-            </div>
+            {/* 각 지점별 분석 결과 */}
+            {analysis.branchAnalyses.map((branchAnalysis) => (
+              <div key={branchAnalysis.branchId} className="bg-white rounded-lg shadow-md p-6">
+                <h2 className="text-xl font-semibold mb-4 text-blue-600">{branchAnalysis.branchName}</h2>
 
-            {/* 비교 테이블 */}
-            <div className="bg-white rounded-lg shadow-md p-6">
-              <h2 className="text-xl font-semibold mb-4">성과 비교</h2>
+                {/* 주요 지표 */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <h3 className="text-sm font-medium text-gray-600 mb-1">매출 변화</h3>
+                    <p className={`text-2xl font-bold ${branchAnalysis.changes.revenueGrowth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {branchAnalysis.changes.revenueGrowth >= 0 ? '+' : ''}{formatPercent(branchAnalysis.changes.revenueGrowth)}
+                    </p>
+                  </div>
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <h3 className="text-sm font-medium text-gray-600 mb-1">신규 이용자 변화</h3>
+                    <p className={`text-2xl font-bold ${branchAnalysis.changes.newUsersGrowth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {branchAnalysis.changes.newUsersGrowth >= 0 ? '+' : ''}{formatPercent(branchAnalysis.changes.newUsersGrowth)}
+                    </p>
+                  </div>
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <h3 className="text-sm font-medium text-gray-600 mb-1">일평균 이용자 변화</h3>
+                    <p className={`text-2xl font-bold ${branchAnalysis.changes.avgDailyUsersGrowth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {branchAnalysis.changes.avgDailyUsersGrowth >= 0 ? '+' : ''}{formatPercent(branchAnalysis.changes.avgDailyUsersGrowth)}
+                    </p>
+                  </div>
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <h3 className="text-sm font-medium text-gray-600 mb-1">재방문률 변화</h3>
+                    <p className={`text-2xl font-bold ${branchAnalysis.changes.revisitRateGrowth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {branchAnalysis.changes.revisitRateGrowth >= 0 ? '+' : ''}{formatPercent(branchAnalysis.changes.revisitRateGrowth)}
+                    </p>
+                  </div>
+                </div>
 
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="text-left py-3 px-4">지표</th>
-                      <th className="text-right py-3 px-4">전략 전</th>
-                      <th className="text-right py-3 px-4">전략 후</th>
-                      <th className="text-right py-3 px-4">변화량</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr className="border-b">
-                      <td className="py-3 px-4">총 매출</td>
-                      <td className="text-right py-3 px-4">{formatCurrency(analysis.beforeMetrics.revenue)}</td>
-                      <td className="text-right py-3 px-4">{formatCurrency(analysis.afterMetrics.revenue)}</td>
-                      <td className={`text-right py-3 px-4 font-semibold ${
-                        analysis.changes.revenueGrowth >= 0 ? 'text-green-600' : 'text-red-600'
-                      }`}>
-                        {analysis.changes.revenueGrowth >= 0 ? '+' : ''}{formatPercent(analysis.changes.revenueGrowth)}
-                      </td>
-                    </tr>
-                    <tr className="border-b">
-                      <td className="py-3 px-4">신규 이용자</td>
-                      <td className="text-right py-3 px-4">{formatNumber(analysis.beforeMetrics.newUsers)}</td>
-                      <td className="text-right py-3 px-4">{formatNumber(analysis.afterMetrics.newUsers)}</td>
-                      <td className={`text-right py-3 px-4 font-semibold ${
-                        analysis.changes.newUsersGrowth >= 0 ? 'text-green-600' : 'text-red-600'
-                      }`}>
-                        {analysis.changes.newUsersGrowth >= 0 ? '+' : ''}{formatPercent(analysis.changes.newUsersGrowth)}
-                      </td>
-                    </tr>
-                    <tr className="border-b">
-                      <td className="py-3 px-4">일 평균 이용자</td>
-                      <td className="text-right py-3 px-4">{formatNumber(analysis.beforeMetrics.avgDailyUsers)}</td>
-                      <td className="text-right py-3 px-4">{formatNumber(analysis.afterMetrics.avgDailyUsers)}</td>
-                      <td className={`text-right py-3 px-4 font-semibold ${
-                        analysis.changes.avgDailyUsersGrowth >= 0 ? 'text-green-600' : 'text-red-600'
-                      }`}>
-                        {analysis.changes.avgDailyUsersGrowth >= 0 ? '+' : ''}{formatPercent(analysis.changes.avgDailyUsersGrowth)}
-                      </td>
-                    </tr>
-                    <tr>
-                      <td className="py-3 px-4">재방문률</td>
-                      <td className="text-right py-3 px-4">{formatPercent(analysis.beforeMetrics.revisitRate)}</td>
-                      <td className="text-right py-3 px-4">{formatPercent(analysis.afterMetrics.revisitRate)}</td>
-                      <td className={`text-right py-3 px-4 font-semibold ${
-                        analysis.changes.revisitRateGrowth >= 0 ? 'text-green-600' : 'text-red-600'
-                      }`}>
-                        {analysis.changes.revisitRateGrowth >= 0 ? '+' : ''}{formatPercent(analysis.changes.revisitRateGrowth)}
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
+                {/* 비교 테이블 */}
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-left py-3 px-4">지표</th>
+                        <th className="text-right py-3 px-4">전략 전</th>
+                        <th className="text-right py-3 px-4">전략 후</th>
+                        <th className="text-right py-3 px-4">변화량</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr className="border-b">
+                        <td className="py-3 px-4">총 매출</td>
+                        <td className="text-right py-3 px-4">{formatCurrency(branchAnalysis.beforeMetrics.revenue)}</td>
+                        <td className="text-right py-3 px-4">{formatCurrency(branchAnalysis.afterMetrics.revenue)}</td>
+                        <td className={`text-right py-3 px-4 font-semibold ${
+                          branchAnalysis.changes.revenueGrowth >= 0 ? 'text-green-600' : 'text-red-600'
+                        }`}>
+                          {branchAnalysis.changes.revenueGrowth >= 0 ? '+' : ''}{formatPercent(branchAnalysis.changes.revenueGrowth)}
+                        </td>
+                      </tr>
+                      <tr className="border-b">
+                        <td className="py-3 px-4">신규 이용자</td>
+                        <td className="text-right py-3 px-4">{formatNumber(branchAnalysis.beforeMetrics.newUsers)}</td>
+                        <td className="text-right py-3 px-4">{formatNumber(branchAnalysis.afterMetrics.newUsers)}</td>
+                        <td className={`text-right py-3 px-4 font-semibold ${
+                          branchAnalysis.changes.newUsersGrowth >= 0 ? 'text-green-600' : 'text-red-600'
+                        }`}>
+                          {branchAnalysis.changes.newUsersGrowth >= 0 ? '+' : ''}{formatPercent(branchAnalysis.changes.newUsersGrowth)}
+                        </td>
+                      </tr>
+                      <tr className="border-b">
+                        <td className="py-3 px-4">일 평균 이용자</td>
+                        <td className="text-right py-3 px-4">{formatNumber(branchAnalysis.beforeMetrics.avgDailyUsers)}</td>
+                        <td className="text-right py-3 px-4">{formatNumber(branchAnalysis.afterMetrics.avgDailyUsers)}</td>
+                        <td className={`text-right py-3 px-4 font-semibold ${
+                          branchAnalysis.changes.avgDailyUsersGrowth >= 0 ? 'text-green-600' : 'text-red-600'
+                        }`}>
+                          {branchAnalysis.changes.avgDailyUsersGrowth >= 0 ? '+' : ''}{formatPercent(branchAnalysis.changes.avgDailyUsersGrowth)}
+                        </td>
+                      </tr>
+                      <tr>
+                        <td className="py-3 px-4">재방문률</td>
+                        <td className="text-right py-3 px-4">{formatPercent(branchAnalysis.beforeMetrics.revisitRate)}</td>
+                        <td className="text-right py-3 px-4">{formatPercent(branchAnalysis.afterMetrics.revisitRate)}</td>
+                        <td className={`text-right py-3 px-4 font-semibold ${
+                          branchAnalysis.changes.revisitRateGrowth >= 0 ? 'text-green-600' : 'text-red-600'
+                        }`}>
+                          {branchAnalysis.changes.revisitRateGrowth >= 0 ? '+' : ''}{formatPercent(branchAnalysis.changes.revisitRateGrowth)}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </div>
+            ))}
 
             {/* 액션 버튼 */}
             <div className="flex gap-4">

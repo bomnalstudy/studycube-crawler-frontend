@@ -6,16 +6,13 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { branchIds, startDate, endDate, cost, impressions, clicks } = body
 
-    // 시행 후 메트릭 조회
-    const afterMetrics = await prisma.dailyMetric.findMany({
-      where: {
-        branchId: branchIds && branchIds.length > 0 ? { in: branchIds } : undefined,
-        date: {
-          gte: new Date(startDate),
-          lte: new Date(endDate)
-        }
-      }
-    })
+    // 선택된 지점이 없으면 에러
+    if (!branchIds || branchIds.length === 0) {
+      return NextResponse.json(
+        { success: false, error: '지점을 선택해주세요' },
+        { status: 400 }
+      )
+    }
 
     // 이전 기간 (같은 길이)
     const start = new Date(startDate)
@@ -27,51 +24,13 @@ export async function POST(request: NextRequest) {
     const beforeEndDate = new Date(start)
     beforeEndDate.setDate(beforeEndDate.getDate() - 1)
 
-    const beforeMetrics = await prisma.dailyMetric.findMany({
-      where: {
-        branchId: branchIds && branchIds.length > 0 ? { in: branchIds } : undefined,
-        date: {
-          gte: beforeStartDate,
-          lte: beforeEndDate
-        }
-      }
+    // 지점 정보 조회
+    const branches = await prisma.branch.findMany({
+      where: { id: { in: branchIds } }
     })
+    const branchMap = new Map(branches.map(b => [b.id, b.name]))
 
-    // 시행 후 지표 계산
-    const afterRevenue = afterMetrics.reduce((sum, m) => sum + Number(m.totalRevenue || 0), 0)
-    const afterNewUsers = afterMetrics.reduce((sum, m) => sum + (m.newUsers || 0), 0)
-    const afterAvgDailyUsers = afterMetrics.length > 0
-      ? afterMetrics.reduce((sum, m) => sum + (m.seatUsage || 0), 0) / afterMetrics.length
-      : 0
-
-    // 시행 전 지표 계산
-    const beforeRevenue = beforeMetrics.reduce((sum, m) => sum + Number(m.totalRevenue || 0), 0)
-    const beforeNewUsers = beforeMetrics.reduce((sum, m) => sum + (m.newUsers || 0), 0)
-    const beforeAvgDailyUsers = beforeMetrics.length > 0
-      ? beforeMetrics.reduce((sum, m) => sum + (m.seatUsage || 0), 0) / beforeMetrics.length
-      : 0
-
-    // 재방문률 계산
-    const afterVisitors = await prisma.dailyVisitor.findMany({
-      where: {
-        branchId: branchIds && branchIds.length > 0 ? { in: branchIds } : undefined,
-        visitDate: {
-          gte: new Date(startDate),
-          lte: new Date(endDate)
-        }
-      }
-    })
-
-    const beforeVisitors = await prisma.dailyVisitor.findMany({
-      where: {
-        branchId: branchIds && branchIds.length > 0 ? { in: branchIds } : undefined,
-        visitDate: {
-          gte: beforeStartDate,
-          lte: beforeEndDate
-        }
-      }
-    })
-
+    // 재방문자 수 계산 함수
     const calculateRevisitRate = (visitors: any[]) => {
       const phoneVisitDates = new Map<string, Set<string>>()
 
@@ -89,50 +48,107 @@ export async function POST(request: NextRequest) {
       return totalUsers > 0 ? (revisitors / totalUsers) * 100 : 0
     }
 
-    const afterRevisitRate = calculateRevisitRate(afterVisitors)
-    const beforeRevisitRate = calculateRevisitRate(beforeVisitors)
+    // 각 지점별로 분석 수행
+    const branchAnalyses = await Promise.all(
+      branchIds.map(async (branchId: string) => {
+        // 시행 후 메트릭 조회
+        const afterMetrics = await prisma.dailyMetric.findMany({
+          where: {
+            branchId,
+            date: { gte: new Date(startDate), lte: new Date(endDate) }
+          }
+        })
 
-    // 변화율 계산
-    const revenueGrowth = beforeRevenue > 0 ? ((afterRevenue - beforeRevenue) / beforeRevenue) * 100 : 0
-    const newUsersGrowth = beforeNewUsers > 0 ? ((afterNewUsers - beforeNewUsers) / beforeNewUsers) * 100 : 0
-    const avgDailyUsersGrowth = beforeAvgDailyUsers > 0 ? ((afterAvgDailyUsers - beforeAvgDailyUsers) / beforeAvgDailyUsers) * 100 : 0
-    const revisitRateGrowth = beforeRevisitRate > 0 ? ((afterRevisitRate - beforeRevisitRate) / beforeRevisitRate) * 100 : 0
+        // 시행 전 메트릭 조회
+        const beforeMetrics = await prisma.dailyMetric.findMany({
+          where: {
+            branchId,
+            date: { gte: beforeStartDate, lte: beforeEndDate }
+          }
+        })
 
-    // 광고 지표 계산
+        // 시행 후 지표 계산
+        const afterRevenue = afterMetrics.reduce((sum, m) => sum + Number(m.totalRevenue || 0), 0)
+        const afterNewUsers = afterMetrics.reduce((sum, m) => sum + (m.newUsers || 0), 0)
+        const afterAvgDailyUsers = afterMetrics.length > 0
+          ? afterMetrics.reduce((sum, m) => sum + (m.seatUsage || 0), 0) / afterMetrics.length
+          : 0
+
+        // 시행 전 지표 계산
+        const beforeRevenue = beforeMetrics.reduce((sum, m) => sum + Number(m.totalRevenue || 0), 0)
+        const beforeNewUsers = beforeMetrics.reduce((sum, m) => sum + (m.newUsers || 0), 0)
+        const beforeAvgDailyUsers = beforeMetrics.length > 0
+          ? beforeMetrics.reduce((sum, m) => sum + (m.seatUsage || 0), 0) / beforeMetrics.length
+          : 0
+
+        // 재방문률 계산
+        const afterVisitors = await prisma.dailyVisitor.findMany({
+          where: {
+            branchId,
+            visitDate: { gte: new Date(startDate), lte: new Date(endDate) }
+          }
+        })
+
+        const beforeVisitors = await prisma.dailyVisitor.findMany({
+          where: {
+            branchId,
+            visitDate: { gte: beforeStartDate, lte: beforeEndDate }
+          }
+        })
+
+        const afterRevisitRate = calculateRevisitRate(afterVisitors)
+        const beforeRevisitRate = calculateRevisitRate(beforeVisitors)
+
+        // 변화율 계산
+        const revenueGrowth = beforeRevenue > 0 ? ((afterRevenue - beforeRevenue) / beforeRevenue) * 100 : 0
+        const newUsersGrowth = beforeNewUsers > 0 ? ((afterNewUsers - beforeNewUsers) / beforeNewUsers) * 100 : 0
+        const avgDailyUsersGrowth = beforeAvgDailyUsers > 0 ? ((afterAvgDailyUsers - beforeAvgDailyUsers) / beforeAvgDailyUsers) * 100 : 0
+        const revisitRateGrowth = beforeRevisitRate > 0 ? ((afterRevisitRate - beforeRevisitRate) / beforeRevisitRate) * 100 : 0
+
+        // ROI/ROAS 계산 (지점별)
+        const branchCost = (cost || 0) / branchIds.length
+        const revenueIncrease = afterRevenue - beforeRevenue
+        const roi = branchCost > 0 ? ((revenueIncrease - branchCost) / branchCost) * 100 : 0
+        const roas = branchCost > 0 ? (afterRevenue / branchCost) * 100 : 0
+
+        return {
+          branchId,
+          branchName: branchMap.get(branchId) || branchId,
+          beforeMetrics: {
+            revenue: beforeRevenue,
+            newUsers: beforeNewUsers,
+            avgDailyUsers: Math.round(beforeAvgDailyUsers),
+            revisitRate: beforeRevisitRate
+          },
+          afterMetrics: {
+            revenue: afterRevenue,
+            newUsers: afterNewUsers,
+            avgDailyUsers: Math.round(afterAvgDailyUsers),
+            revisitRate: afterRevisitRate
+          },
+          changes: {
+            revenueGrowth,
+            newUsersGrowth,
+            avgDailyUsersGrowth,
+            revisitRateGrowth
+          },
+          roi,
+          roas
+        }
+      })
+    )
+
+    // CTR, CPC 계산 (전체 공통)
     const costNum = Number(cost || 0)
-    const roi = costNum > 0 ? ((afterRevenue - beforeRevenue - costNum) / costNum) * 100 : 0
-    const roas = costNum > 0 ? (afterRevenue / costNum) * 100 : 0
     const ctr = impressions && impressions > 0 ? (clicks / impressions) * 100 : 0
     const cpc = clicks && clicks > 0 ? costNum / clicks : 0
 
-    const analysis = {
-      beforeMetrics: {
-        revenue: beforeRevenue,
-        newUsers: beforeNewUsers,
-        avgDailyUsers: Math.round(beforeAvgDailyUsers),
-        revisitRate: beforeRevisitRate
-      },
-      afterMetrics: {
-        revenue: afterRevenue,
-        newUsers: afterNewUsers,
-        avgDailyUsers: Math.round(afterAvgDailyUsers),
-        revisitRate: afterRevisitRate
-      },
-      changes: {
-        revenueGrowth,
-        newUsersGrowth,
-        avgDailyUsersGrowth,
-        revisitRateGrowth
-      },
-      roi,
-      roas,
-      ctr,
-      cpc
-    }
-
     return NextResponse.json({
       success: true,
-      data: analysis
+      data: {
+        branchAnalyses,
+        adMetrics: { ctr, cpc, cost: costNum, impressions, clicks }
+      }
     })
   } catch (error) {
     console.error('Failed to analyze combined:', error)

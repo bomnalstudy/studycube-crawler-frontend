@@ -4,6 +4,31 @@ import { useEffect, useState } from 'react'
 import { formatCurrency, formatNumber } from '@/lib/utils/formatters'
 import { formatDate } from '@/lib/utils/date-helpers'
 
+interface BranchAnalysis {
+  branchId: string
+  branchName: string
+  beforeMetrics: {
+    revenue: number
+    newUsers: number
+    avgDailyUsers: number
+    revisitRate: number
+  }
+  afterMetrics: {
+    revenue: number
+    newUsers: number
+    avgDailyUsers: number
+    revisitRate: number
+  }
+  changes: {
+    revenueGrowth: number
+    newUsersGrowth: number
+    avgDailyUsersGrowth: number
+    revisitRateGrowth: number
+  }
+  roi: number
+  roas: number
+}
+
 interface Campaign {
   id: string
   name: string
@@ -22,7 +47,17 @@ interface Campaign {
     }
   }>
   analysis?: {
-    changes: {
+    // 새 형식: branchAnalyses 배열
+    branchAnalyses?: BranchAnalysis[]
+    adMetrics?: {
+      ctr: number
+      cpc: number
+      cost: number
+      impressions: number
+      clicks: number
+    }
+    // 기존 형식: 단일 changes 객체 (하위 호환성)
+    changes?: {
       revenueGrowth: number
       newUsersGrowth: number
       avgDailyUsersGrowth: number
@@ -113,10 +148,11 @@ export function SavedCampaignsList() {
     window.location.href = `/api/campaigns/export?id=${campaignId}&name=${encodeURIComponent(campaignName)}`
   }
 
+  // 전체 캠페인 삭제
   const handleDelete = async (e: React.MouseEvent, campaignId: string, campaignName: string) => {
     e.stopPropagation()
 
-    if (!confirm(`"${campaignName}" 캠페인을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`)) {
+    if (!confirm(`"${campaignName}" 캠페인을 모든 지점에서 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`)) {
       return
     }
 
@@ -129,6 +165,33 @@ export function SavedCampaignsList() {
 
       if (result.success) {
         alert('캠페인이 삭제되었습니다!')
+        await loadCampaigns()
+      } else {
+        alert('삭제에 실패했습니다.')
+      }
+    } catch (error) {
+      console.error('삭제 실패:', error)
+      alert('삭제에 실패했습니다.')
+    }
+  }
+
+  // 특정 지점에서만 캠페인 삭제
+  const handleDeleteFromBranch = async (e: React.MouseEvent, campaignId: string, campaignName: string, branchId: string, branchName: string) => {
+    e.stopPropagation()
+
+    if (!confirm(`"${campaignName}" 캠페인을 "${branchName}" 지점에서만 삭제하시겠습니까?`)) {
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/campaigns?id=${campaignId}&branchId=${branchId}`, {
+        method: 'DELETE'
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        alert(`${branchName} 지점에서 캠페인이 삭제되었습니다!`)
         await loadCampaigns()
       } else {
         alert('삭제에 실패했습니다.')
@@ -417,11 +480,19 @@ export function SavedCampaignsList() {
                           >
                             Excel 다운로드
                           </button>
+                          {campaign.branches.length > 1 && (
+                            <button
+                              onClick={(e) => handleDeleteFromBranch(e, campaign.id, campaign.name, branchId, group.branchName)}
+                              className="px-3 py-2 text-sm text-orange-600 hover:text-orange-700 hover:bg-orange-50 rounded-lg transition-colors"
+                            >
+                              🗑️ 이 지점에서만 삭제
+                            </button>
+                          )}
                           <button
                             onClick={(e) => handleDelete(e, campaign.id, campaign.name)}
                             className="px-3 py-2 text-sm text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
                           >
-                            🗑️ 삭제
+                            🗑️ 전체 삭제
                           </button>
                         </div>
                       )}
@@ -467,42 +538,53 @@ export function SavedCampaignsList() {
                         </div>
                       </div>
 
-                      {/* 성과 변화 */}
-                      {campaign.analysis && (
-                        <div className="pt-3 border-t border-gray-200">
-                          <p className="text-xs text-gray-500 mb-2 font-medium">광고 전/후 변화</p>
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-                            <div>
-                              <span className="text-gray-600 text-xs">매출 변화:</span>
-                              <p className={`font-bold ${campaign.analysis.changes.revenueGrowth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                {campaign.analysis.changes.revenueGrowth >= 0 ? '+' : ''}
-                                {campaign.analysis.changes.revenueGrowth.toFixed(1)}%
-                              </p>
-                            </div>
-                            <div>
-                              <span className="text-gray-600 text-xs">신규 이용자:</span>
-                              <p className={`font-bold ${campaign.analysis.changes.newUsersGrowth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                {campaign.analysis.changes.newUsersGrowth >= 0 ? '+' : ''}
-                                {campaign.analysis.changes.newUsersGrowth.toFixed(1)}%
-                              </p>
-                            </div>
-                            <div>
-                              <span className="text-gray-600 text-xs">일평균 이용자:</span>
-                              <p className={`font-bold ${campaign.analysis.changes.avgDailyUsersGrowth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                {campaign.analysis.changes.avgDailyUsersGrowth >= 0 ? '+' : ''}
-                                {campaign.analysis.changes.avgDailyUsersGrowth.toFixed(1)}%
-                              </p>
-                            </div>
-                            <div>
-                              <span className="text-gray-600 text-xs">재방문률:</span>
-                              <p className={`font-bold ${campaign.analysis.changes.revisitRateGrowth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                {campaign.analysis.changes.revisitRateGrowth >= 0 ? '+' : ''}
-                                {campaign.analysis.changes.revisitRateGrowth.toFixed(1)}%
-                              </p>
+                      {/* 성과 변화 - 현재 폴더의 지점 분석 결과만 표시 */}
+                      {campaign.analysis && campaign.analysis.branchAnalyses && (() => {
+                        // 현재 폴더(branchId)에 해당하는 분석 결과만 필터링
+                        const currentBranchAnalysis = campaign.analysis.branchAnalyses.find(
+                          (ba) => ba.branchId === branchId
+                        )
+
+                        if (!currentBranchAnalysis) return null
+
+                        return (
+                          <div className="pt-3 border-t border-gray-200">
+                            <p className="text-xs text-gray-500 mb-2 font-medium">광고 전/후 변화 ({currentBranchAnalysis.branchName})</p>
+                            <div className="bg-gray-50 p-3 rounded-lg">
+                              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                                <div>
+                                  <span className="text-gray-600 text-xs">매출 변화:</span>
+                                  <p className={`font-bold ${currentBranchAnalysis.changes.revenueGrowth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                    {currentBranchAnalysis.changes.revenueGrowth >= 0 ? '+' : ''}
+                                    {currentBranchAnalysis.changes.revenueGrowth.toFixed(1)}%
+                                  </p>
+                                </div>
+                                <div>
+                                  <span className="text-gray-600 text-xs">신규 이용자:</span>
+                                  <p className={`font-bold ${currentBranchAnalysis.changes.newUsersGrowth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                    {currentBranchAnalysis.changes.newUsersGrowth >= 0 ? '+' : ''}
+                                    {currentBranchAnalysis.changes.newUsersGrowth.toFixed(1)}%
+                                  </p>
+                                </div>
+                                <div>
+                                  <span className="text-gray-600 text-xs">일평균 이용자:</span>
+                                  <p className={`font-bold ${currentBranchAnalysis.changes.avgDailyUsersGrowth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                    {currentBranchAnalysis.changes.avgDailyUsersGrowth >= 0 ? '+' : ''}
+                                    {currentBranchAnalysis.changes.avgDailyUsersGrowth.toFixed(1)}%
+                                  </p>
+                                </div>
+                                <div>
+                                  <span className="text-gray-600 text-xs">재방문률:</span>
+                                  <p className={`font-bold ${currentBranchAnalysis.changes.revisitRateGrowth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                    {currentBranchAnalysis.changes.revisitRateGrowth >= 0 ? '+' : ''}
+                                    {currentBranchAnalysis.changes.revisitRateGrowth.toFixed(1)}%
+                                  </p>
+                                </div>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      )}
+                        )
+                      })()}
                     </div>
                   </div>
                 ))}
