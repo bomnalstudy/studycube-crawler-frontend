@@ -70,13 +70,9 @@ export async function GET(request: NextRequest) {
               const afterAvgUsers = afterMetrics.length > 0 ? afterMetrics.reduce((sum, m) => sum + (m.seatUsage || 0), 0) / afterMetrics.length : 0
               const beforeAvgUsers = beforeMetrics.length > 0 ? beforeMetrics.reduce((sum, m) => sum + (m.seatUsage || 0), 0) / beforeMetrics.length : 0
 
-              // 재방문자 데이터
-              const afterRevisit = afterMetrics.reduce((sum, m) => sum + (m.revisitCount2 || 0) + (m.revisitCount3 || 0) + (m.revisitCount4Plus || 0), 0)
-              const beforeRevisit = beforeMetrics.reduce((sum, m) => sum + (m.revisitCount2 || 0) + (m.revisitCount3 || 0) + (m.revisitCount4Plus || 0), 0)
-              const afterTotalUsers = afterMetrics.reduce((sum, m) => sum + (m.revisitCount1 || 0) + (m.revisitCount2 || 0) + (m.revisitCount3 || 0) + (m.revisitCount4Plus || 0), 0)
-              const beforeTotalUsers = beforeMetrics.reduce((sum, m) => sum + (m.revisitCount1 || 0) + (m.revisitCount2 || 0) + (m.revisitCount3 || 0) + (m.revisitCount4Plus || 0), 0)
-              const afterRevisitRate = afterTotalUsers > 0 ? (afterRevisit / afterTotalUsers) * 100 : 0
-              const beforeRevisitRate = beforeTotalUsers > 0 ? (beforeRevisit / beforeTotalUsers) * 100 : 0
+              // 재방문률은 DailyVisitor에서 계산 필요 - 현재는 0으로 처리
+              const afterRevisitRate = 0
+              const beforeRevisitRate = 0
 
               return {
                 branchId,
