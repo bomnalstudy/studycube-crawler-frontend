@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -32,117 +29,83 @@ model User {
   @@map("users")
 }
 
-// 지점 정보
 model Branch {
-  id        String   @id @default(cuid())
-  name      String   @unique  // 지점명 (예: "센시빌리티")
-  index     Int      @unique  // 드롭다운 인덱스
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relations
+  id               String           @id @default(cuid())
+  name             String           @unique
+  index            Int
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
   users            User[]
+  campaignBranches CampaignBranch[]
+  combinedBranches CombinedBranch[]
   dailyMetrics     DailyMetric[]
   dailyVisitors    DailyVisitor[]
   hourlyUsages     HourlyUsage[]
-  campaignBranches CampaignBranch[]
   strategyBranches StrategyBranch[]
-  combinedBranches CombinedBranch[]
+  ticket_revenue   ticket_revenue[]
 
   @@map("branches")
 }
 
-// 일일 지표 (매일 크롤링되는 데이터)
 model DailyMetric {
-  id        String   @id @default(cuid())
-  branchId  String
-  date      DateTime @db.Date  // 수집 날짜 (YYYY-MM-DD)
+  id                String   @id @default(cuid())
+  branchId          String
+  date              DateTime @db.Date
+  newUsers          Int?
+  seatUsage         Int?
+  totalRevenue      Decimal? @db.Decimal(10, 2)
+  dayTicketRevenue  Decimal? @db.Decimal(10, 2)
+  timeTicketRevenue Decimal? @db.Decimal(10, 2)
+  termTicketRevenue Decimal? @db.Decimal(10, 2)
+  collectedAt       DateTime @default(now())
+  newUsers10s       Int?
+  newUsers20s       Int?
+  newUsers30s       Int?
+  newUsers40s       Int?
+  newUsers50s       Int?
+  newUsers60plus    Int?
+  newUsersFemale    Int?
+  newUsersMale      Int?
+  pointUsed         Decimal? @db.Decimal(10, 2)
+  branch            Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
 
-  // 신규 이용자 수
-  newUsers  Int?
-
-  // 좌석 이용자 수
-  seatUsage Int?
-
-  // 매출 데이터
-  totalRevenue      Decimal?  @db.Decimal(10, 2)  // 총 매출
-  dayTicketRevenue  Decimal?  @db.Decimal(10, 2)  // 당일권 매출
-  timeTicketRevenue Decimal?  @db.Decimal(10, 2)  // 시간권 매출
-  termTicketRevenue Decimal?  @db.Decimal(10, 2)  // 기간권 매출
-
-  // 신규 이용자 상세 통계
-  newUsersMale      Int?  // 신규 남자 이용자 수
-  newUsersFemale    Int?  // 신규 여자 이용자 수
-  newUsers10s       Int?  // 신규 10대
-  newUsers20s       Int?  // 신규 20대
-  newUsers30s       Int?  // 신규 30대
-  newUsers40s       Int?  // 신규 40대
-  newUsers50s       Int?  // 신규 50대
-  newUsers60plus    Int?  // 신규 60대 이상
-
-  // 메타 정보
-  collectedAt DateTime @default(now())  // 실제 수집 시간
-
-  // Relations
-  branch    Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
-
-  @@unique([branchId, date])  // 지점당 하루에 하나의 레코드만
+  @@unique([branchId, date])
   @@index([date])
   @@index([branchId, date])
   @@map("daily_metrics")
 }
 
-// 일일 방문자 (좌석 이용자) - 재방문 추적용
 model DailyVisitor {
-  id           String   @id @default(cuid())
-  branchId     String
-  visitDate    DateTime @db.Date  // 방문 날짜
-
-  // 개인 식별 정보 (해시 처리)
-  phoneHash    String   // SHA256 해시된 전화번호 (재방문 추적용)
-  phoneLast4   String?  // 전화번호 뒤 4자리 (관리자 확인용)
-
-  // 방문자 정보
-  gender       String?  // 성별 (남자/여자/미상)
-  age          Int?     // 나이
-  ageGroup     String?  // 연령대 (10대/20대/30대...)
-
-  // 방문 유형
-  isNewUser    Boolean  @default(false)  // 신규 이용자 여부
-
-  // 메타 정보
-  collectedAt  DateTime @default(now())
-
-  // Relations
-  branch       Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  id          String   @id @default(cuid())
+  branchId    String
+  visitDate   DateTime @db.Date
+  phoneHash   String
+  phoneLast4  String?
+  gender      String?
+  age         Int?
+  ageGroup    String?
+  isNewUser   Boolean  @default(false)
+  collectedAt DateTime @default(now())
+  branch      Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
 
   @@index([branchId, visitDate])
-  @@index([phoneHash])  // 재방문 조회용
+  @@index([phoneHash])
   @@index([visitDate])
   @@map("daily_visitors")
 }
 
-// 광고 캠페인
 model Campaign {
-  id          String   @id @default(cuid())
-  name        String   // 캠페인명
-  startDate   DateTime @db.Date
-  endDate     DateTime @db.Date
-
-  // 광고 지표
-  impressions Int?     // 노출수
-  clicks      Int?     // 클릭수
-  cost        Decimal? @db.Decimal(10, 2)  // 비용
-
-  // 상태 관리
-  status      String   @default("ONGOING")  // ONGOING: 진행중, COMPLETED: 완료
-
-  // 메타 정보
-  description String?  @db.Text
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  // Relations - Many-to-Many
+  id          String           @id @default(cuid())
+  name        String
+  startDate   DateTime         @db.Date
+  endDate     DateTime         @db.Date
+  impressions Int?
+  clicks      Int?
+  cost        Decimal?         @db.Decimal(10, 2)
+  description String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  status      String           @default("ONGOING")
   branches    CampaignBranch[]
 
   @@index([startDate, endDate])
@@ -150,15 +113,13 @@ model Campaign {
   @@map("campaigns")
 }
 
-// 캠페인-지점 연결 테이블
 model CampaignBranch {
   id         String   @id @default(cuid())
   campaignId String
   branchId   String
   createdAt  DateTime @default(now())
-
-  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   branch     Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
 
   @@unique([campaignId, branchId])
   @@index([campaignId])
@@ -166,26 +127,17 @@ model CampaignBranch {
   @@map("campaign_branches")
 }
 
-// 지점 전략
 model Strategy {
-  id          String   @id @default(cuid())
-  name        String   // 전략명
-  type        String   // 전략 유형: PRICE_DISCOUNT, REVIEW_EVENT, NEW_CONTENT, etc.
-  startDate   DateTime @db.Date
-  endDate     DateTime @db.Date
-
-  // 전략 상세
-  reason      String?  @db.Text  // 전략 수립 이유
-  description String?  @db.Text  // 전략 상세 내용
-
-  // 상태 관리
-  status      String   @default("ONGOING")  // ONGOING: 진행중, COMPLETED: 완료
-
-  // 메타 정보
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  // Relations - Many-to-Many
+  id          String           @id @default(cuid())
+  name        String
+  type        String
+  startDate   DateTime         @db.Date
+  endDate     DateTime         @db.Date
+  description String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  reason      String?
+  status      String           @default("ONGOING")
   branches    StrategyBranch[]
 
   @@index([type])
@@ -194,15 +146,13 @@ model Strategy {
   @@map("strategies")
 }
 
-// 전략-지점 연결 테이블
 model StrategyBranch {
   id         String   @id @default(cuid())
   strategyId String
   branchId   String
   createdAt  DateTime @default(now())
-
-  strategy   Strategy @relation(fields: [strategyId], references: [id], onDelete: Cascade)
   branch     Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  strategy   Strategy @relation(fields: [strategyId], references: [id], onDelete: Cascade)
 
   @@unique([strategyId, branchId])
   @@index([strategyId])
@@ -210,47 +160,34 @@ model StrategyBranch {
   @@map("strategy_branches")
 }
 
-// 통합 분석 (광고 + 전략)
 model CombinedAnalysis {
-  id          String   @id @default(cuid())
-  name        String   // 분석명
-  startDate   DateTime @db.Date
-  endDate     DateTime @db.Date
-
-  // 광고 지표
-  cost        Decimal? @db.Decimal(10, 2)  // 광고 비용
-  impressions Int?     // 노출수
-  clicks      Int?     // 클릭수
-
-  // 전략 정보
-  strategyType String?  // 전략 유형: PRICE_DISCOUNT, REVIEW_EVENT, NEW_CONTENT
-  reason       String?  @db.Text  // 전략 수립 이유
-  description  String?  @db.Text  // 전략 상세 내용
-
-  // 상태 관리
-  status      String   @default("ONGOING")  // ONGOING: 진행중, COMPLETED: 완료
-
-  // 메타 정보
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  // Relations - Many-to-Many
-  branches    CombinedBranch[]
+  id           String           @id @default(cuid())
+  name         String
+  startDate    DateTime         @db.Date
+  endDate      DateTime         @db.Date
+  cost         Decimal?         @db.Decimal(10, 2)
+  impressions  Int?
+  clicks       Int?
+  strategyType String?
+  reason       String?
+  description  String?
+  status       String           @default("ONGOING")
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  branches     CombinedBranch[]
 
   @@index([startDate, endDate])
   @@index([status])
   @@map("combined_analyses")
 }
 
-// 통합분석-지점 연결 테이블
 model CombinedBranch {
-  id         String   @id @default(cuid())
+  id         String           @id @default(cuid())
   combinedId String
   branchId   String
-  createdAt  DateTime @default(now())
-
-  combined   CombinedAnalysis @relation(fields: [combinedId], references: [id], onDelete: Cascade)
+  createdAt  DateTime         @default(now())
   branch     Branch           @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  combined   CombinedAnalysis @relation(fields: [combinedId], references: [id], onDelete: Cascade)
 
   @@unique([combinedId, branchId])
   @@index([combinedId])
@@ -258,20 +195,32 @@ model CombinedBranch {
   @@map("combined_branches")
 }
 
-// 시간대별 이용자 수
 model HourlyUsage {
   id          String   @id @default(cuid())
   branchId    String
-  date        DateTime @db.Date  // 날짜
-  hour        Int      // 시간 (0-23)
-  usageCount  Int      // 해당 시간 이용자 수
+  date        DateTime @db.Date
+  hour        Int
+  usageCount  Int
   collectedAt DateTime @default(now())
-
-  // Relations
   branch      Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
 
   @@unique([branchId, date, hour])
   @@index([branchId, date])
   @@index([date])
   @@map("hourly_usage")
+}
+
+model ticket_revenue {
+  id          String   @id
+  branchId    String
+  date        DateTime @db.Date
+  ticketName  String
+  revenue     Decimal  @db.Decimal(10, 2)
+  collectedAt DateTime @default(now())
+  branches    Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@unique([branchId, date, ticketName])
+  @@index([branchId, date])
+  @@index([date])
+  @@index([ticketName])
 }

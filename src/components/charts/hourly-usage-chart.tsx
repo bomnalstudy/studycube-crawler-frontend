@@ -84,6 +84,8 @@ export function HourlyUsageChart({
             strokeWidth={2}
             dot={{ fill: '#ef4444', strokeWidth: 2, r: 3 }}
             activeDot={{ r: 5, fill: '#ef4444' }}
+            legendType="line"
+            tooltipType="none"
           />
         </ComposedChart>
       </ResponsiveContainer>

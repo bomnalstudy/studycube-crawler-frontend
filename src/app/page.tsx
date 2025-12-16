@@ -7,6 +7,7 @@ import { signOut } from 'next-auth/react'
 import { BarChart } from '@/components/charts/bar-chart'
 import { DonutChart } from '@/components/charts/donut-chart'
 import { HourlyUsageChart } from '@/components/charts/hourly-usage-chart'
+import { TicketRevenueChart } from '@/components/charts/ticket-revenue-chart'
 import { MetricsCard } from '@/components/dashboard/metrics-card'
 import { LoadingSkeleton } from '@/components/dashboard/loading-skeleton'
 import { BranchSelector } from '@/components/dashboard/branch-selector'
@@ -353,6 +354,14 @@ export default function DashboardPage() {
             data={genderData}
             title="고객 성별 분포"
             colors={['#3b82f6', '#ec4899']}
+          />
+        </div>
+
+        {/* 이용권별 매출 Top 10 차트 (전체 너비) */}
+        <div className="mb-8">
+          <TicketRevenueChart
+            data={metrics.ticketRevenueTop10}
+            title="이용권별 매출 Top 10"
           />
         </div>
 

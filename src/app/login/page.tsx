@@ -22,13 +22,13 @@ export default function LoginPage() {
       redirect: false
     })
 
-    setLoading(false)
-
     if (result?.error) {
+      setLoading(false)
       setError('아이디 또는 비밀번호가 올바르지 않습니다.')
       return
     }
 
+    // 로그인 성공 시 로딩 상태 유지하면서 리다이렉트
     router.push('/')
     router.refresh()
   }
@@ -109,7 +109,7 @@ export default function LoginPage() {
                     d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                   />
                 </svg>
-                로그인 중...
+                대시보드로 이동 중...
               </span>
             ) : (
               '로그인'

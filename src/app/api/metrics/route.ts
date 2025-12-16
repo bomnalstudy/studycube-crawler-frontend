@@ -34,27 +34,62 @@ export async function GET(request: NextRequest) {
     // 권한 기반 지점 필터 (지점 계정은 자기 지점만)
     const branchFilter = getBranchFilter(session, requestedBranchId)
 
-    // 현재 기간 데이터 조회
-    const currentMetrics = await prisma.dailyMetric.findMany({
-      where: {
-        ...branchFilter,
-        date: {
-          gte: startDate,
-          lte: endDate
+    // 모든 쿼리를 병렬로 실행하여 로딩 시간 단축
+    const [
+      currentMetrics,
+      previousMetrics,
+      latestMetric,
+      hourlyUsageRecords,
+      ticketRevenueRecords
+    ] = await Promise.all([
+      // 현재 기간 데이터 조회
+      prisma.dailyMetric.findMany({
+        where: {
+          ...branchFilter,
+          date: {
+            gte: startDate,
+            lte: endDate
+          }
         }
-      }
-    })
-
-    // 이전 기간 데이터 조회
-    const previousMetrics = await prisma.dailyMetric.findMany({
-      where: {
-        ...branchFilter,
-        date: {
-          gte: prevStartDate,
-          lte: prevEndDate
+      }),
+      // 이전 기간 데이터 조회
+      prisma.dailyMetric.findMany({
+        where: {
+          ...branchFilter,
+          date: {
+            gte: prevStartDate,
+            lte: prevEndDate
+          }
         }
-      }
-    })
+      }),
+      // 마지막 데이터 날짜 찾기
+      prisma.dailyMetric.findFirst({
+        where: branchFilter,
+        orderBy: {
+          date: 'desc'
+        }
+      }),
+      // 시간대별 이용자 데이터 조회
+      prisma.hourlyUsage.findMany({
+        where: {
+          ...branchFilter,
+          date: {
+            gte: startDate,
+            lte: endDate
+          }
+        }
+      }),
+      // 이용권별 매출 조회
+      prisma.ticket_revenue.findMany({
+        where: {
+          ...branchFilter,
+          date: {
+            gte: startDate,
+            lte: endDate
+          }
+        }
+      })
+    ])
 
     // 메트릭 계산
     const totalNewUsers = currentMetrics.reduce((sum, m) => sum + (m.newUsers || 0), 0)
@@ -125,14 +160,6 @@ export async function GET(request: NextRequest) {
     ].filter(item => item.count > 0) // count가 0인 항목 제거
 
     // 재방문자 데이터 계산 (최근 일주일 - 마지막 데이터 날짜 기준)
-    // 마지막 데이터 날짜 찾기
-    const latestMetric = await prisma.dailyMetric.findFirst({
-      where: branchFilter,
-      orderBy: {
-        date: 'desc'
-      }
-    })
-
     let weeklyRevisitData: Array<{ visitCount: number; count: number }> = []
 
     if (latestMetric) {
@@ -178,17 +205,6 @@ export async function GET(request: NextRequest) {
         .sort((a, b) => a.visitCount - b.visitCount)
     }
 
-    // 시간대별 이용자 데이터 조회
-    const hourlyUsageRecords = await prisma.hourlyUsage.findMany({
-      where: {
-        ...branchFilter,
-        date: {
-          gte: startDate,
-          lte: endDate
-        }
-      }
-    })
-
     // 시간대별 평균 이용자 수 계산
     const hourlyTotals = new Map<number, { total: number; days: Set<string> }>()
 
@@ -211,6 +227,19 @@ export async function GET(request: NextRequest) {
       return { hour, count: avgCount }
     })
 
+    // 이용권명별 매출 합계 계산 (병렬로 이미 조회됨)
+    const ticketRevenueMap = new Map<string, number>()
+    ticketRevenueRecords.forEach(record => {
+      const current = ticketRevenueMap.get(record.ticketName) || 0
+      ticketRevenueMap.set(record.ticketName, current + decimalToNumber(record.revenue))
+    })
+
+    // Top 10 정렬
+    const ticketRevenueTop10 = Array.from(ticketRevenueMap.entries())
+      .map(([ticketName, revenue]) => ({ ticketName, revenue }))
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 10)
+
     const metrics: DashboardMetrics = {
       newUsersThisMonth: totalNewUsers,
       avgDailyTicketUsage: Math.round(avgDailySeatUsage),
@@ -220,7 +249,8 @@ export async function GET(request: NextRequest) {
       avgDailyRevenue,
       weeklyRevisitData,
       customerDemographics,
-      hourlyUsageData
+      hourlyUsageData,
+      ticketRevenueTop10
     }
 
     return NextResponse.json({

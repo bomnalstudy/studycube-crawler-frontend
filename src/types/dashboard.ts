@@ -42,6 +42,12 @@ export interface DashboardMetrics {
     hour: number
     count: number
   }[]
+
+  // 이용권별 매출 Top 10
+  ticketRevenueTop10: {
+    ticketName: string
+    revenue: number
+  }[]
 }
 
 // 차트 데이터 타입
