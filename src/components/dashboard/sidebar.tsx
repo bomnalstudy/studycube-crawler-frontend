@@ -3,17 +3,33 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useRole } from '@/hooks/useRole'
 
 export function Sidebar() {
   const [isOpen, setIsOpen] = useState(false)
   const pathname = usePathname()
+  const { isAdmin, branchName } = useRole()
 
-  const menuItems = [
-    { name: '대시보드', href: '/', icon: '📊' },
+  // 로그인 페이지에서는 사이드바 숨김
+  if (pathname === '/login') {
+    return null
+  }
+
+  // 기본 메뉴 (모든 사용자)
+  const baseMenuItems = [
+    { name: '대시보드', href: '/', icon: '📊' }
+  ]
+
+  // 어드민 전용 메뉴
+  const adminMenuItems = [
     { name: '광고 성과 분석', href: '/analytics/campaigns', icon: '📈' },
     { name: '지점 전략 성과 분석', href: '/analytics/strategies', icon: '🎯' },
     { name: '광고 + 전략 성과 분석', href: '/analytics/combined', icon: '📉' }
   ]
+
+  const menuItems = isAdmin
+    ? [...baseMenuItems, ...adminMenuItems]
+    : baseMenuItems
 
   return (
     <>
@@ -51,10 +67,19 @@ export function Sidebar() {
           isOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <div className="p-6">
-          <h2 className="text-xl font-bold text-gray-800 mb-6">Studycube</h2>
+        <div className="p-6 h-full flex flex-col">
+          <div>
+            <h2 className="text-xl font-bold text-gray-800">Studycube</h2>
+            {/* 지점 계정이면 지점명 표시 */}
+            {branchName && (
+              <p className="text-sm text-gray-500 mt-1">{branchName}</p>
+            )}
+            {isAdmin && (
+              <p className="text-xs text-blue-600 mt-1 font-medium">관리자</p>
+            )}
+          </div>
 
-          <nav className="space-y-2">
+          <nav className="space-y-2 mt-6 flex-1">
             {menuItems.map((item) => {
               const isActive = pathname === item.href
               return (

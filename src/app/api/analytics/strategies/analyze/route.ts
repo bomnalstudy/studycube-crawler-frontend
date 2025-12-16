@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { checkAdminApi, isErrorResponse } from '@/lib/auth-helpers'
 
+// 전략 분석 (어드민 전용)
 export async function POST(request: NextRequest) {
   try {
+    // 어드민 권한 체크
+    const authResult = await checkAdminApi()
+    if (isErrorResponse(authResult)) return authResult
+
     const body = await request.json()
     const { branchIds, startDate, endDate } = body
 

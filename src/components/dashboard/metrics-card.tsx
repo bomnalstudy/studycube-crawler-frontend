@@ -20,7 +20,7 @@ export function MetricsCard({ title, value, subtitle, trend }: MetricsCardProps)
               trend.isPositive ? 'text-green-600' : 'text-red-600'
             }`}
           >
-            {trend.isPositive ? '↑' : '↓'} {Math.abs(trend.value).toFixed(2)}%
+            {trend.isPositive ? '↑' : '↓'} {Math.abs(trend.value).toFixed(1)}%
           </span>
         )}
       </div>

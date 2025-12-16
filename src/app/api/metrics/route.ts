@@ -2,11 +2,21 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { decimalToNumber } from '@/lib/utils/formatters'
 import { DashboardMetrics } from '@/types/dashboard'
+import { getAuthSession, getBranchFilter } from '@/lib/auth-helpers'
 
 export async function GET(request: NextRequest) {
   try {
+    // 인증 체크
+    const session = await getAuthSession()
+    if (!session) {
+      return NextResponse.json(
+        { success: false, error: 'Unauthorized' },
+        { status: 401 }
+      )
+    }
+
     const searchParams = request.nextUrl.searchParams
-    const branchId = searchParams.get('branchId') || 'all'
+    const requestedBranchId = searchParams.get('branchId') || 'all'
     const startDateParam = searchParams.get('startDate')
     const endDateParam = searchParams.get('endDate')
 
@@ -14,76 +24,72 @@ export async function GET(request: NextRequest) {
     const startDate = startDateParam ? new Date(startDateParam) : new Date()
     const endDate = endDateParam ? new Date(endDateParam) : new Date()
 
-    // 지점 필터 조건 생성
-    const branchFilter = branchId === 'all' ? {} : { branchId }
+    // 이전 기간 계산 (같은 기간만큼 이전)
+    const daysDiff = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))
+    const prevStartDate = new Date(startDate)
+    prevStartDate.setDate(prevStartDate.getDate() - daysDiff)
+    const prevEndDate = new Date(startDate)
+    prevEndDate.setDate(prevEndDate.getDate() - 1)
 
-    // 현재 기간 데이터 조회
-    const currentMetrics = await prisma.dailyMetric.findMany({
-      where: {
-        ...branchFilter,
-        date: {
-          gte: startDate,
-          lte: endDate
+    // 권한 기반 지점 필터 (지점 계정은 자기 지점만)
+    const branchFilter = getBranchFilter(session, requestedBranchId)
+
+    // 모든 쿼리를 병렬로 실행하여 로딩 시간 단축
+    const [
+      currentMetrics,
+      previousMetrics,
+      latestMetric,
+      hourlyUsageRecords,
+      ticketRevenueRecords
+    ] = await Promise.all([
+      // 현재 기간 데이터 조회
+      prisma.dailyMetric.findMany({
+        where: {
+          ...branchFilter,
+          date: {
+            gte: startDate,
+            lte: endDate
+          }
         }
-      },
-      orderBy: {
-        date: 'asc'
-      }
-    })
-
-    // 현재 기간에 실제 데이터가 있는 날짜들 추출
-    const currentDates = currentMetrics.map(m => m.date)
-    const actualDaysCount = currentDates.length
-
-    // 이전 기간 계산: 현재 기간에 데이터가 있는 일수만큼만 이전 달의 같은 날짜 범위와 비교
-    // 예: 11-01 ~ 11-15 데이터가 있으면 → 10-01 ~ 10-15와 비교
-    // 단, 현재 달이 끝까지 채워졌거나 이전 달과 일수가 다른 경우 각 달 전체 비교
-    let previousMetrics: typeof currentMetrics = []
-
-    if (actualDaysCount > 0) {
-      // 현재 기간의 첫 번째와 마지막 데이터 날짜
-      const firstDataDate = new Date(currentDates[0])
-      const lastDataDate = new Date(currentDates[currentDates.length - 1])
-
-      // 해당 월의 마지막 날 계산
-      const lastDayOfCurrentMonth = new Date(lastDataDate.getFullYear(), lastDataDate.getMonth() + 1, 0).getDate()
-      const lastDayOfPrevMonth = new Date(lastDataDate.getFullYear(), lastDataDate.getMonth(), 0).getDate()
-
-      // 마지막 데이터 날짜의 일(day)
-      const lastDataDay = lastDataDate.getDate()
-
-      // 이전 달의 날짜 범위 계산
-      const prevStartDate = new Date(firstDataDate)
-      prevStartDate.setMonth(prevStartDate.getMonth() - 1)
-
-      let prevEndDate: Date
-
-      // 현재 데이터가 월말까지 있는 경우에만 각 달 전체 비교
-      // (실제 데이터의 마지막 날이 해당 월의 마지막 날인 경우)
-      if (lastDataDay === lastDayOfCurrentMonth) {
-        // 이전 달 전체와 비교 (이전 달의 마지막 날까지)
-        prevEndDate = new Date(lastDataDate.getFullYear(), lastDataDate.getMonth(), 0)
-      } else {
-        // 이전 달 같은 날짜까지만 비교
-        // 단, 이전 달의 일수가 더 적은 경우 이전 달의 마지막 날까지만
-        const targetDay = Math.min(lastDataDay, lastDayOfPrevMonth)
-        prevEndDate = new Date(lastDataDate.getFullYear(), lastDataDate.getMonth() - 1, targetDay)
-      }
-
+      }),
       // 이전 기간 데이터 조회
-      previousMetrics = await prisma.dailyMetric.findMany({
+      prisma.dailyMetric.findMany({
         where: {
           ...branchFilter,
           date: {
             gte: prevStartDate,
             lte: prevEndDate
           }
-        },
+        }
+      }),
+      // 마지막 데이터 날짜 찾기
+      prisma.dailyMetric.findFirst({
+        where: branchFilter,
         orderBy: {
-          date: 'asc'
+          date: 'desc'
+        }
+      }),
+      // 시간대별 이용자 데이터 조회
+      prisma.hourlyUsage.findMany({
+        where: {
+          ...branchFilter,
+          date: {
+            gte: startDate,
+            lte: endDate
+          }
+        }
+      }),
+      // 이용권별 매출 조회
+      prisma.ticket_revenue.findMany({
+        where: {
+          ...branchFilter,
+          date: {
+            gte: startDate,
+            lte: endDate
+          }
         }
       })
-    }
+    ])
 
     // 메트릭 계산
     const totalNewUsers = currentMetrics.reduce((sum, m) => sum + (m.newUsers || 0), 0)
@@ -112,11 +118,9 @@ export async function GET(request: NextRequest) {
     )
 
     const daysCount = currentMetrics.length || 1
+    const prevDaysCount = previousMetrics.length || 1
     const avgDailySeatUsage = totalSeatUsage / daysCount
     const avgDailyRevenue = totalRevenue / daysCount
-
-    // 이전 기간 일 평균 매출 계산
-    const prevDaysCount = previousMetrics.length || 1
     const prevAvgDailyRevenue = prevTotalRevenue / prevDaysCount
 
     // 매출 상승률 계산
@@ -124,7 +128,7 @@ export async function GET(request: NextRequest) {
       ? ((totalRevenue - prevTotalRevenue) / prevTotalRevenue) * 100
       : 0
 
-    // 일 평균 매출 상승률 계산
+    // 일 평균 매출 변화율 계산
     const avgDailyRevenueGrowthRate = prevAvgDailyRevenue > 0
       ? ((avgDailyRevenue - prevAvgDailyRevenue) / prevAvgDailyRevenue) * 100
       : 0
@@ -162,12 +166,11 @@ export async function GET(request: NextRequest) {
       { ageGroup: '60대+', gender: '전체', count: total60plus }
     ].filter(item => item.count > 0) // count가 0인 항목 제거
 
-    // 재방문자 데이터 계산 (실제 데이터의 마지막 날짜 기준 일주일)
+    // 재방문자 데이터 계산 (최근 일주일 - 마지막 데이터 날짜 기준)
     let weeklyRevisitData: Array<{ visitCount: number; count: number }> = []
 
-    if (actualDaysCount > 0) {
-      // 실제 데이터의 마지막 날짜를 기준으로 일주일 계산
-      const lastDataDate = new Date(currentDates[currentDates.length - 1])
+    if (latestMetric) {
+      const lastDataDate = new Date(latestMetric.date)
       const weekAgoDate = new Date(lastDataDate)
       weekAgoDate.setDate(weekAgoDate.getDate() - 6) // 7일간 (오늘 포함)
 
@@ -209,6 +212,41 @@ export async function GET(request: NextRequest) {
         .sort((a, b) => a.visitCount - b.visitCount)
     }
 
+    // 시간대별 평균 이용자 수 계산
+    const hourlyTotals = new Map<number, { total: number; days: Set<string> }>()
+
+    hourlyUsageRecords.forEach(record => {
+      const dateStr = record.date.toISOString().split('T')[0]
+      if (!hourlyTotals.has(record.hour)) {
+        hourlyTotals.set(record.hour, { total: 0, days: new Set() })
+      }
+      const hourData = hourlyTotals.get(record.hour)!
+      hourData.total += record.usageCount
+      hourData.days.add(dateStr)
+    })
+
+    // 0~23시까지 모든 시간대 데이터 생성 (평균값)
+    const hourlyUsageData = Array.from({ length: 24 }, (_, hour) => {
+      const hourData = hourlyTotals.get(hour)
+      const avgCount = hourData && hourData.days.size > 0
+        ? Math.round(hourData.total / hourData.days.size)
+        : 0
+      return { hour, count: avgCount }
+    })
+
+    // 이용권명별 매출 합계 계산 (병렬로 이미 조회됨)
+    const ticketRevenueMap = new Map<string, number>()
+    ticketRevenueRecords.forEach(record => {
+      const current = ticketRevenueMap.get(record.ticketName) || 0
+      ticketRevenueMap.set(record.ticketName, current + decimalToNumber(record.revenue))
+    })
+
+    // Top 10 정렬
+    const ticketRevenueTop10 = Array.from(ticketRevenueMap.entries())
+      .map(([ticketName, revenue]) => ({ ticketName, revenue }))
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 10)
+
     const metrics: DashboardMetrics = {
       newUsersThisMonth: totalNewUsers,
       avgDailyTicketUsage: Math.round(avgDailySeatUsage),
@@ -218,7 +256,9 @@ export async function GET(request: NextRequest) {
       avgDailyRevenue,
       avgDailyRevenueGrowthRate,
       weeklyRevisitData,
-      customerDemographics
+      customerDemographics,
+      hourlyUsageData,
+      ticketRevenueTop10
     }
 
     return NextResponse.json({

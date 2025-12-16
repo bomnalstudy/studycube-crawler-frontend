@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import ExcelJS from 'exceljs'
+import { checkAdminApi, isErrorResponse } from '@/lib/auth-helpers'
 
+// 전략 Excel 내보내기 (어드민 전용)
 export async function GET(request: NextRequest) {
   try {
+    // 어드민 권한 체크
+    const authResult = await checkAdminApi()
+    if (isErrorResponse(authResult)) return authResult
+
     const searchParams = request.nextUrl.searchParams
     const strategyId = searchParams.get('id')
     const strategyName = searchParams.get('name') || '전략'
