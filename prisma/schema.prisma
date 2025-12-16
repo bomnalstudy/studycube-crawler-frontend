@@ -10,6 +10,28 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// 사용자 역할
+enum UserRole {
+  ADMIN   // 어드민: 모든 지점 데이터 + 성과지표 UI 접근
+  BRANCH  // 지점: 할당된 지점 데이터만 접근
+}
+
+// 사용자
+model User {
+  id        String    @id @default(cuid())
+  username  String    @unique  // 로그인 아이디
+  password  String    // bcrypt 해시
+  name      String    // 표시 이름
+  role      UserRole  @default(BRANCH)
+  branchId  String?   // BRANCH 역할일 경우 접근 가능한 지점
+  branch    Branch?   @relation(fields: [branchId], references: [id])
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@map("users")
+}
+
 // 지점 정보
 model Branch {
   id        String   @id @default(cuid())
@@ -19,8 +41,10 @@ model Branch {
   updatedAt DateTime @updatedAt
 
   // Relations
+  users            User[]
   dailyMetrics     DailyMetric[]
   dailyVisitors    DailyVisitor[]
+  hourlyUsages     HourlyUsage[]
   campaignBranches CampaignBranch[]
   strategyBranches StrategyBranch[]
   combinedBranches CombinedBranch[]
@@ -232,4 +256,22 @@ model CombinedBranch {
   @@index([combinedId])
   @@index([branchId])
   @@map("combined_branches")
+}
+
+// 시간대별 이용자 수
+model HourlyUsage {
+  id          String   @id @default(cuid())
+  branchId    String
+  date        DateTime @db.Date  // 날짜
+  hour        Int      // 시간 (0-23)
+  usageCount  Int      // 해당 시간 이용자 수
+  collectedAt DateTime @default(now())
+
+  // Relations
+  branch      Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@unique([branchId, date, hour])
+  @@index([branchId, date])
+  @@index([date])
+  @@map("hourly_usage")
 }

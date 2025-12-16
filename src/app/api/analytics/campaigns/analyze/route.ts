@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { decimalToNumber } from '@/lib/utils/formatters'
+import { checkAdminApi, isErrorResponse } from '@/lib/auth-helpers'
 
+// 캠페인 분석 (어드민 전용)
 export async function POST(request: NextRequest) {
   try {
+    // 어드민 권한 체크
+    const authResult = await checkAdminApi()
+    if (isErrorResponse(authResult)) return authResult
+
     const body = await request.json()
     const { branchId, startDate, endDate, cost, impressions, clicks } = body
 

@@ -2,9 +2,15 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { mkdir, writeFile } from 'fs/promises'
 import { join } from 'path'
+import { checkAdminApi, isErrorResponse } from '@/lib/auth-helpers'
 
+// 통합분석 목록 조회 (어드민 전용)
 export async function GET(request: NextRequest) {
   try {
+    // 어드민 권한 체크
+    const authResult = await checkAdminApi()
+    if (isErrorResponse(authResult)) return authResult
+
     const searchParams = request.nextUrl.searchParams
     const branchId = searchParams.get('branchId')
 
@@ -86,8 +92,13 @@ export async function GET(request: NextRequest) {
   }
 }
 
+// 통합분석 저장 (어드민 전용)
 export async function POST(request: NextRequest) {
   try {
+    // 어드민 권한 체크
+    const authResult = await checkAdminApi()
+    if (isErrorResponse(authResult)) return authResult
+
     const body = await request.json()
     const { name, branchIds, startDate, endDate, cost, impressions, clicks, strategyType, reason, description } = body
 
@@ -159,9 +170,13 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// 통합분석 수정
+// 통합분석 수정 (어드민 전용)
 export async function PATCH(request: NextRequest) {
   try {
+    // 어드민 권한 체크
+    const authResult = await checkAdminApi()
+    if (isErrorResponse(authResult)) return authResult
+
     const body = await request.json()
     const { id, name, branchIds, startDate, endDate, cost, impressions, clicks, strategyType, reason, description } = body
 
@@ -207,9 +222,13 @@ export async function PATCH(request: NextRequest) {
   }
 }
 
-// 통합분석 삭제
+// 통합분석 삭제 (어드민 전용)
 export async function DELETE(request: NextRequest) {
   try {
+    // 어드민 권한 체크
+    const authResult = await checkAdminApi()
+    if (isErrorResponse(authResult)) return authResult
+
     const searchParams = request.nextUrl.searchParams
     const id = searchParams.get('id')
 

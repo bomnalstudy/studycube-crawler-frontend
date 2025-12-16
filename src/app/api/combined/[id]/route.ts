@@ -1,11 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { checkAdminApi, isErrorResponse } from '@/lib/auth-helpers'
 
+// 통합분석 상세 조회 (어드민 전용)
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // 어드민 권한 체크
+    const authResult = await checkAdminApi()
+    if (isErrorResponse(authResult)) return authResult
+
     const { id } = await params
 
     const combined = await prisma.combinedAnalysis.findUnique({

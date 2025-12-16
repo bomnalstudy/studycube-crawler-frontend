@@ -36,6 +36,12 @@ export interface DashboardMetrics {
     gender: string
     count: number
   }[]
+
+  // 시간대별 이용자 수
+  hourlyUsageData: {
+    hour: number
+    count: number
+  }[]
 }
 
 // 차트 데이터 타입

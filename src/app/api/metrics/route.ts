@@ -2,11 +2,21 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { decimalToNumber } from '@/lib/utils/formatters'
 import { DashboardMetrics } from '@/types/dashboard'
+import { getAuthSession, getBranchFilter } from '@/lib/auth-helpers'
 
 export async function GET(request: NextRequest) {
   try {
+    // 인증 체크
+    const session = await getAuthSession()
+    if (!session) {
+      return NextResponse.json(
+        { success: false, error: 'Unauthorized' },
+        { status: 401 }
+      )
+    }
+
     const searchParams = request.nextUrl.searchParams
-    const branchId = searchParams.get('branchId') || 'all'
+    const requestedBranchId = searchParams.get('branchId') || 'all'
     const startDateParam = searchParams.get('startDate')
     const endDateParam = searchParams.get('endDate')
 
@@ -21,8 +31,8 @@ export async function GET(request: NextRequest) {
     const prevEndDate = new Date(startDate)
     prevEndDate.setDate(prevEndDate.getDate() - 1)
 
-    // 지점 필터 조건 생성
-    const branchFilter = branchId === 'all' ? {} : { branchId }
+    // 권한 기반 지점 필터 (지점 계정은 자기 지점만)
+    const branchFilter = getBranchFilter(session, requestedBranchId)
 
     // 현재 기간 데이터 조회
     const currentMetrics = await prisma.dailyMetric.findMany({
@@ -168,6 +178,39 @@ export async function GET(request: NextRequest) {
         .sort((a, b) => a.visitCount - b.visitCount)
     }
 
+    // 시간대별 이용자 데이터 조회
+    const hourlyUsageRecords = await prisma.hourlyUsage.findMany({
+      where: {
+        ...branchFilter,
+        date: {
+          gte: startDate,
+          lte: endDate
+        }
+      }
+    })
+
+    // 시간대별 평균 이용자 수 계산
+    const hourlyTotals = new Map<number, { total: number; days: Set<string> }>()
+
+    hourlyUsageRecords.forEach(record => {
+      const dateStr = record.date.toISOString().split('T')[0]
+      if (!hourlyTotals.has(record.hour)) {
+        hourlyTotals.set(record.hour, { total: 0, days: new Set() })
+      }
+      const hourData = hourlyTotals.get(record.hour)!
+      hourData.total += record.usageCount
+      hourData.days.add(dateStr)
+    })
+
+    // 0~23시까지 모든 시간대 데이터 생성 (평균값)
+    const hourlyUsageData = Array.from({ length: 24 }, (_, hour) => {
+      const hourData = hourlyTotals.get(hour)
+      const avgCount = hourData && hourData.days.size > 0
+        ? Math.round(hourData.total / hourData.days.size)
+        : 0
+      return { hour, count: avgCount }
+    })
+
     const metrics: DashboardMetrics = {
       newUsersThisMonth: totalNewUsers,
       avgDailyTicketUsage: Math.round(avgDailySeatUsage),
@@ -176,7 +219,8 @@ export async function GET(request: NextRequest) {
       monthlyRevenue: totalRevenue,
       avgDailyRevenue,
       weeklyRevisitData,
-      customerDemographics
+      customerDemographics,
+      hourlyUsageData
     }
 
     return NextResponse.json({
