@@ -137,7 +137,7 @@ export default function DashboardPage() {
 
   // 재방문자 수 차트 데이터
   const revisitChartData: BarChartData[] = metrics.weeklyRevisitData.map(item => ({
-    label: item.visitCount === 4 ? '4회 이상' : `${item.visitCount}회`,
+    label: `${item.visitCount}회`,
     value: item.count
   }))
 
@@ -386,7 +386,7 @@ export default function DashboardPage() {
           {/* 재방문자 수 */}
           <BarChart
             data={revisitChartData}
-            title="종료일 기준 일주일 재방문자 수"
+            title="기간 내 방문 횟수별 이용자 수"
             color="#8b5cf6"
           />
 

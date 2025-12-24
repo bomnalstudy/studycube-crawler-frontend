@@ -129,42 +129,35 @@ export async function GET(request: NextRequest) {
       { ageGroup: '60대+', gender: '전체', count: total60plus }
     ].filter(item => item.count > 0)
 
-    // 재방문자 데이터 계산
+    // 재방문자 데이터 계산 (선택한 기간 전체)
     let weeklyRevisitData: Array<{ visitCount: number; count: number }> = []
 
-    if (latestMetric) {
-      const lastDataDate = new Date(latestMetric.date)
-      const weekAgoDate = new Date(lastDataDate)
-      weekAgoDate.setDate(weekAgoDate.getDate() - 6)
+    const periodVisitors = await prisma.dailyVisitor.findMany({
+      where: {
+        ...branchFilter,
+        visitDate: { gte: start, lte: end }
+      }
+    })
 
-      const recentVisitors = await prisma.dailyVisitor.findMany({
-        where: {
-          ...branchFilter,
-          visitDate: { gte: weekAgoDate, lte: lastDataDate }
-        }
-      })
+    const phoneVisitDates = new Map<string, Set<string>>()
+    periodVisitors.forEach(visitor => {
+      const dateStr = visitor.visitDate.toISOString().split('T')[0]
+      if (!phoneVisitDates.has(visitor.phoneHash)) {
+        phoneVisitDates.set(visitor.phoneHash, new Set())
+      }
+      phoneVisitDates.get(visitor.phoneHash)!.add(dateStr)
+    })
 
-      const phoneVisitDates = new Map<string, Set<string>>()
-      recentVisitors.forEach(visitor => {
-        const dateStr = visitor.visitDate.toISOString().split('T')[0]
-        if (!phoneVisitDates.has(visitor.phoneHash)) {
-          phoneVisitDates.set(visitor.phoneHash, new Set())
-        }
-        phoneVisitDates.get(visitor.phoneHash)!.add(dateStr)
-      })
+    const visitCountMap = new Map<number, number>()
+    phoneVisitDates.forEach((dates) => {
+      const visitCount = dates.size
+      const current = visitCountMap.get(visitCount) || 0
+      visitCountMap.set(visitCount, current + 1)
+    })
 
-      const visitCountMap = new Map<number, number>()
-      phoneVisitDates.forEach((dates) => {
-        const visitCount = dates.size
-        const displayCount = visitCount >= 4 ? 4 : visitCount
-        const current = visitCountMap.get(displayCount) || 0
-        visitCountMap.set(displayCount, current + 1)
-      })
-
-      weeklyRevisitData = Array.from(visitCountMap.entries())
-        .map(([visitCount, count]) => ({ visitCount, count }))
-        .sort((a, b) => a.visitCount - b.visitCount)
-    }
+    weeklyRevisitData = Array.from(visitCountMap.entries())
+      .map(([visitCount, count]) => ({ visitCount, count }))
+      .sort((a, b) => a.visitCount - b.visitCount)
 
     // 시간대별 평균 이용자 수
     const hourlyTotals = new Map<number, { total: number; days: Set<string> }>()
