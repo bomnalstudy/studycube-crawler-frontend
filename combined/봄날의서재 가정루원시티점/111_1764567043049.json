@@ -1,0 +1,82 @@
+{
+  "name": "111",
+  "branchIds": [
+    "cmh7jo5tn00033vs0cotm9xj2",
+    "cmh7jo6aj000f3vs0wpp1vbs7"
+  ],
+  "startDate": "2025-10-30",
+  "endDate": "2025-10-31",
+  "cost": 111,
+  "impressions": 1,
+  "clicks": 1,
+  "strategyType": "PRICE_DISCOUNT",
+  "reason": "1",
+  "description": "1",
+  "analysis": {
+    "branchAnalyses": [
+      {
+        "branchId": "cmh7jo5tn00033vs0cotm9xj2",
+        "branchName": "봄날의서재 가정루원시티점",
+        "beforeMetrics": {
+          "revenue": 125000,
+          "newUsers": 1,
+          "avgDailyUsers": 32,
+          "revisitRate": 0
+        },
+        "afterMetrics": {
+          "revenue": 238000,
+          "newUsers": 3,
+          "avgDailyUsers": 38,
+          "revisitRate": 52.083333333333336
+        },
+        "changes": {
+          "revenueGrowth": 90.4,
+          "newUsersGrowth": 200,
+          "avgDailyUsersGrowth": 18.75,
+          "revisitRateGrowth": 0
+        },
+        "roi": 203503.6036036036,
+        "roas": 428828.8288288289
+      }
+    ],
+    "adMetrics": {
+      "ctr": 100,
+      "cpc": 111,
+      "cost": 111,
+      "impressions": 1,
+      "clicks": 1
+    }
+  },
+  "branchId": "cmh7jo5tn00033vs0cotm9xj2",
+  "combined": {
+    "id": "cmimpnmrt0008mov7o5b1usai",
+    "name": "111",
+    "startDate": "2025-10-30T00:00:00.000Z",
+    "endDate": "2025-10-31T00:00:00.000Z",
+    "cost": "111",
+    "impressions": 1,
+    "clicks": 1,
+    "strategyType": "PRICE_DISCOUNT",
+    "reason": "1",
+    "description": "1",
+    "status": "ONGOING",
+    "createdAt": "2025-12-01T05:30:41.033Z",
+    "updatedAt": "2025-12-01T05:30:41.033Z",
+    "branches": [
+      {
+        "id": "cmimpnmrt000bmov79y96ey8x",
+        "combinedId": "cmimpnmrt0008mov7o5b1usai",
+        "branchId": "cmh7jo5tn00033vs0cotm9xj2",
+        "createdAt": "2025-12-01T05:30:41.033Z",
+        "branch": {
+          "id": "cmh7jo5tn00033vs0cotm9xj2",
+          "name": "봄날의서재 가정루원시티점",
+          "index": 1,
+          "createdAt": "2025-10-26T10:06:53.051Z",
+          "updatedAt": "2025-11-26T02:41:38.235Z"
+        }
+      }
+    ]
+  },
+  "savedAt": "2025-12-01T05:30:43.049Z"
+}

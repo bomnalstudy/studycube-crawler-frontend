@@ -1,0 +1,82 @@
+{
+  "name": "111",
+  "branchIds": [
+    "cmh7jo5tn00033vs0cotm9xj2",
+    "cmh7jo6aj000f3vs0wpp1vbs7"
+  ],
+  "startDate": "2025-10-30",
+  "endDate": "2025-10-31",
+  "cost": 111,
+  "impressions": 1,
+  "clicks": 1,
+  "strategyType": "PRICE_DISCOUNT",
+  "reason": "1",
+  "description": "1",
+  "analysis": {
+    "branchAnalyses": [
+      {
+        "branchId": "cmh7jo6aj000f3vs0wpp1vbs7",
+        "branchName": "봄날의서재 울산달동점",
+        "beforeMetrics": {
+          "revenue": 337500,
+          "newUsers": 2,
+          "avgDailyUsers": 38,
+          "revisitRate": 0
+        },
+        "afterMetrics": {
+          "revenue": 669000,
+          "newUsers": 4,
+          "avgDailyUsers": 32,
+          "revisitRate": 50
+        },
+        "changes": {
+          "revenueGrowth": 98.22222222222223,
+          "newUsersGrowth": 100,
+          "avgDailyUsersGrowth": -17.105263157894736,
+          "revisitRateGrowth": 0
+        },
+        "roi": 597197.2972972973,
+        "roas": 1205405.4054054054
+      }
+    ],
+    "adMetrics": {
+      "ctr": 100,
+      "cpc": 111,
+      "cost": 111,
+      "impressions": 1,
+      "clicks": 1
+    }
+  },
+  "branchId": "cmh7jo6aj000f3vs0wpp1vbs7",
+  "combined": {
+    "id": "cmimpnmrt000amov73plgpn0c",
+    "name": "111",
+    "startDate": "2025-10-30T00:00:00.000Z",
+    "endDate": "2025-10-31T00:00:00.000Z",
+    "cost": "111",
+    "impressions": 1,
+    "clicks": 1,
+    "strategyType": "PRICE_DISCOUNT",
+    "reason": "1",
+    "description": "1",
+    "status": "ONGOING",
+    "createdAt": "2025-12-01T05:30:41.033Z",
+    "updatedAt": "2025-12-01T05:30:41.033Z",
+    "branches": [
+      {
+        "id": "cmimpnmrt000dmov7dcihd1pc",
+        "combinedId": "cmimpnmrt000amov73plgpn0c",
+        "branchId": "cmh7jo6aj000f3vs0wpp1vbs7",
+        "createdAt": "2025-12-01T05:30:41.033Z",
+        "branch": {
+          "id": "cmh7jo6aj000f3vs0wpp1vbs7",
+          "name": "봄날의서재 울산달동점",
+          "index": 5,
+          "createdAt": "2025-10-26T10:06:53.659Z",
+          "updatedAt": "2025-11-26T02:42:17.376Z"
+        }
+      }
+    ]
+  },
+  "savedAt": "2025-12-01T05:30:43.055Z"
+}

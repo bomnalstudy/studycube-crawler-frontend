@@ -242,29 +242,72 @@ export default function DashboardPage() {
 
           {/* 필터 컨트롤 */}
           <div className="flex flex-col md:flex-row gap-4 bg-white p-4 rounded-lg shadow">
-            {/* 어드민은 모든 지점 선택 가능, 지점 계정은 자기 지점만 */}
-            {isAdmin ? (
-              <BranchSelector
-                branches={branches}
-                selectedBranchId={selectedBranchId}
-                onBranchChange={setSelectedBranchId}
+            <div className="flex flex-col md:flex-row gap-4 flex-1">
+              {/* 어드민은 모든 지점 선택 가능, 지점 계정은 자기 지점만 */}
+              {isAdmin ? (
+                <BranchSelector
+                  branches={branches}
+                  selectedBranchId={selectedBranchId}
+                  onBranchChange={setSelectedBranchId}
+                />
+              ) : (
+                <div className="flex items-center gap-2 px-3 py-2 bg-gray-100 rounded-lg">
+                  <span className="text-gray-600">지점:</span>
+                  <span className="font-medium">
+                    {branches.find(b => b.id === userBranchId)?.name || '내 지점'}
+                  </span>
+                </div>
+              )}
+              <DateRangePicker
+                startDate={startDate}
+                endDate={endDate}
+                onStartDateChange={setStartDate}
+                onEndDateChange={setEndDate}
+                onPreviousMonth={handlePreviousMonth}
+                onNextMonth={handleNextMonth}
               />
-            ) : (
-              <div className="flex items-center gap-2 px-3 py-2 bg-gray-100 rounded-lg">
-                <span className="text-gray-600">지점:</span>
-                <span className="font-medium">
-                  {branches.find(b => b.id === userBranchId)?.name || '내 지점'}
-                </span>
+            </div>
+
+            {/* 관리자 전용: JSON 추출 버튼 */}
+            {isAdmin && (
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    if (selectedBranchId === 'all') {
+                      alert('전체 지점 합산 데이터는 추출할 수 없습니다. 특정 지점을 선택하거나 "모든 지점 JSON 추출" 버튼을 사용하세요.')
+                      return
+                    }
+                    const params = new URLSearchParams({
+                      branchId: selectedBranchId,
+                      startDate: formatDate(startDate),
+                      endDate: formatDate(endDate)
+                    })
+                    window.location.href = `/api/export/json?${params}`
+                  }}
+                  className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-lg hover:from-indigo-600 hover:to-purple-600 transition-colors shadow-md flex items-center gap-2 whitespace-nowrap"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  JSON 추출
+                </button>
+                <button
+                  onClick={() => {
+                    const params = new URLSearchParams({
+                      startDate: formatDate(startDate),
+                      endDate: formatDate(endDate)
+                    })
+                    window.location.href = `/api/export/json-all?${params}`
+                  }}
+                  className="px-4 py-2 bg-gradient-to-r from-green-500 to-teal-500 text-white rounded-lg hover:from-green-600 hover:to-teal-600 transition-colors shadow-md flex items-center gap-2 whitespace-nowrap"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  모든 지점 JSON 추출
+                </button>
               </div>
             )}
-            <DateRangePicker
-              startDate={startDate}
-              endDate={endDate}
-              onStartDateChange={setStartDate}
-              onEndDateChange={setEndDate}
-              onPreviousMonth={handlePreviousMonth}
-              onNextMonth={handleNextMonth}
-            />
           </div>
 
           {/* 선택된 지점 표시 */}

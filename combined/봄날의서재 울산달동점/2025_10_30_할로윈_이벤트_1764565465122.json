@@ -1,0 +1,118 @@
+{
+  "name": "2025/10/30 할로윈 이벤트",
+  "branchIds": [
+    "cmh7jo5tn00033vs0cotm9xj2",
+    "cmh7jo6aj000f3vs0wpp1vbs7"
+  ],
+  "startDate": "2025-10-30",
+  "endDate": "2025-10-31",
+  "cost": 19830,
+  "impressions": 1545,
+  "clicks": 86,
+  "strategyType": "PRICE_DISCOUNT",
+  "reason": "할로윈이란 특수성을 이용해 이벤트를 진행하여 젊은 세대의 입소문을 통한 신규 유입을 노림",
+  "description": "가챠 사탕(1~50시간의 랜덤 이용권이 사탕에 말려있으며, DM으로 인증 시 시간 부여)",
+  "analysis": {
+    "branchAnalyses": [
+      {
+        "branchId": "cmh7jo5tn00033vs0cotm9xj2",
+        "branchName": "봄날의서재 가정루원시티점",
+        "beforeMetrics": {
+          "revenue": 125000,
+          "newUsers": 1,
+          "avgDailyUsers": 32,
+          "revisitRate": 0
+        },
+        "afterMetrics": {
+          "revenue": 238000,
+          "newUsers": 3,
+          "avgDailyUsers": 38,
+          "revisitRate": 52.083333333333336
+        },
+        "changes": {
+          "revenueGrowth": 90.4,
+          "newUsersGrowth": 200,
+          "avgDailyUsersGrowth": 18.75,
+          "revisitRateGrowth": 0
+        },
+        "roi": 1039.687342410489,
+        "roas": 2400.403429147756
+      },
+      {
+        "branchId": "cmh7jo6aj000f3vs0wpp1vbs7",
+        "branchName": "봄날의서재 울산달동점",
+        "beforeMetrics": {
+          "revenue": 337500,
+          "newUsers": 2,
+          "avgDailyUsers": 38,
+          "revisitRate": 0
+        },
+        "afterMetrics": {
+          "revenue": 669000,
+          "newUsers": 4,
+          "avgDailyUsers": 32,
+          "revisitRate": 50
+        },
+        "changes": {
+          "revenueGrowth": 98.22222222222223,
+          "newUsersGrowth": 100,
+          "avgDailyUsersGrowth": -17.105263157894736,
+          "revisitRateGrowth": 0
+        },
+        "roi": 3243.419062027232,
+        "roas": 6747.352496217852
+      }
+    ],
+    "adMetrics": {
+      "ctr": 5.566343042071197,
+      "cpc": 230.58139534883722,
+      "cost": 19830,
+      "impressions": 1545,
+      "clicks": 86
+    }
+  },
+  "combined": {
+    "id": "cmimopt7u0000mov7gppzupeq",
+    "name": "2025/10/30 할로윈 이벤트",
+    "startDate": "2025-10-30T00:00:00.000Z",
+    "endDate": "2025-10-31T00:00:00.000Z",
+    "cost": "19830",
+    "impressions": 1545,
+    "clicks": 86,
+    "strategyType": "PRICE_DISCOUNT",
+    "reason": "할로윈이란 특수성을 이용해 이벤트를 진행하여 젊은 세대의 입소문을 통한 신규 유입을 노림",
+    "description": "가챠 사탕(1~50시간의 랜덤 이용권이 사탕에 말려있으며, DM으로 인증 시 시간 부여)",
+    "status": "ONGOING",
+    "createdAt": "2025-12-01T05:04:23.081Z",
+    "updatedAt": "2025-12-01T05:04:23.081Z",
+    "branches": [
+      {
+        "id": "cmimopt7v0002mov7tu00p57e",
+        "combinedId": "cmimopt7u0000mov7gppzupeq",
+        "branchId": "cmh7jo5tn00033vs0cotm9xj2",
+        "createdAt": "2025-12-01T05:04:23.081Z",
+        "branch": {
+          "id": "cmh7jo5tn00033vs0cotm9xj2",
+          "name": "봄날의서재 가정루원시티점",
+          "index": 1,
+          "createdAt": "2025-10-26T10:06:53.051Z",
+          "updatedAt": "2025-11-26T02:41:38.235Z"
+        }
+      },
+      {
+        "id": "cmimopt7v0003mov7jhieldgm",
+        "combinedId": "cmimopt7u0000mov7gppzupeq",
+        "branchId": "cmh7jo6aj000f3vs0wpp1vbs7",
+        "createdAt": "2025-12-01T05:04:23.081Z",
+        "branch": {
+          "id": "cmh7jo6aj000f3vs0wpp1vbs7",
+          "name": "봄날의서재 울산달동점",
+          "index": 5,
+          "createdAt": "2025-10-26T10:06:53.659Z",
+          "updatedAt": "2025-11-26T02:42:17.376Z"
+        }
+      }
+    ]
+  },
+  "savedAt": "2025-12-01T05:04:25.122Z"
+}

@@ -1,0 +1,69 @@
+{
+  "name": "werw",
+  "branchIds": [
+    "cmh7jo5tn00033vs0cotm9xj2"
+  ],
+  "startDate": "2025-11-06",
+  "endDate": "2025-11-21",
+  "cost": 0,
+  "impressions": 0,
+  "clicks": 0,
+  "strategyType": "PRICE_DISCOUNT",
+  "reason": "r",
+  "description": "r",
+  "analysis": {
+    "beforeMetrics": {
+      "revenue": 2891000,
+      "newUsers": 41,
+      "avgDailyUsers": 41,
+      "revisitRate": 65.625
+    },
+    "afterMetrics": {
+      "revenue": 2682500,
+      "newUsers": 27,
+      "avgDailyUsers": 33,
+      "revisitRate": 56.25
+    },
+    "changes": {
+      "revenueGrowth": -7.212037357315808,
+      "newUsersGrowth": -34.146341463414636,
+      "avgDailyUsersGrowth": -20.96774193548388,
+      "revisitRateGrowth": -14.285714285714285
+    },
+    "roi": 0,
+    "roas": 0,
+    "ctr": 0,
+    "cpc": 0
+  },
+  "combined": {
+    "id": "cmi5czlhu0000ijmhaz9pihi7",
+    "name": "werw",
+    "startDate": "2025-11-06T00:00:00.000Z",
+    "endDate": "2025-11-21T00:00:00.000Z",
+    "cost": "0",
+    "impressions": 0,
+    "clicks": 0,
+    "strategyType": "PRICE_DISCOUNT",
+    "reason": "r",
+    "description": "r",
+    "status": "ONGOING",
+    "createdAt": "2025-11-19T02:03:59.251Z",
+    "updatedAt": "2025-11-19T02:03:59.251Z",
+    "branches": [
+      {
+        "id": "cmi5czlhu0002ijmh73iwcdqd",
+        "combinedId": "cmi5czlhu0000ijmhaz9pihi7",
+        "branchId": "cmh7jo5tn00033vs0cotm9xj2",
+        "createdAt": "2025-11-19T02:03:59.251Z",
+        "branch": {
+          "id": "cmh7jo5tn00033vs0cotm9xj2",
+          "name": "봄날의서재 가정루원시티점",
+          "index": 1,
+          "createdAt": "2025-10-26T10:06:53.051Z",
+          "updatedAt": "2025-11-03T06:29:30.478Z"
+        }
+      }
+    ]
+  },
+  "savedAt": "2025-11-19T02:04:01.462Z"
+}
