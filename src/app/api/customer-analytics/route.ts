@@ -22,39 +22,43 @@ export async function GET(request: NextRequest) {
 
     const branchFilter = getBranchFilter(session, requestedBranchId)
 
-    // ticket_buyers 데이터 조회
+    // ticket_buyers 데이터 조회 (매출 정보 포함)
     let ticketBuyers: any[]
 
     if (branchFilter.branchId) {
       // 특정 지점
       ticketBuyers = await prisma.$queryRaw`
         SELECT
-          "customerHash",
-          "gender",
-          "ageGroup",
-          "ticketName",
-          "date",
-          "branchId"
-        FROM ticket_buyers
-        WHERE "branchId" = ${branchFilter.branchId}
-          AND "date" >= ${startDate}
-          AND "date" <= ${endDate}
-        ORDER BY "date" ASC
+          tb."customerHash",
+          tb."gender",
+          tb."ageGroup",
+          tb."ticketName",
+          tb."date",
+          tb."branchId",
+          tr."revenue"
+        FROM ticket_buyers tb
+        LEFT JOIN ticket_revenue tr ON tb."ticketRevenueId" = tr."id"
+        WHERE tb."branchId" = ${branchFilter.branchId}
+          AND tb."date" >= ${startDate}
+          AND tb."date" <= ${endDate}
+        ORDER BY tb."date" ASC
       `
     } else {
       // 전체 지점
       ticketBuyers = await prisma.$queryRaw`
         SELECT
-          "customerHash",
-          "gender",
-          "ageGroup",
-          "ticketName",
-          "date",
-          "branchId"
-        FROM ticket_buyers
-        WHERE "date" >= ${startDate}
-          AND "date" <= ${endDate}
-        ORDER BY "date" ASC
+          tb."customerHash",
+          tb."gender",
+          tb."ageGroup",
+          tb."ticketName",
+          tb."date",
+          tb."branchId",
+          tr."revenue"
+        FROM ticket_buyers tb
+        LEFT JOIN ticket_revenue tr ON tb."ticketRevenueId" = tr."id"
+        WHERE tb."date" >= ${startDate}
+          AND tb."date" <= ${endDate}
+        ORDER BY tb."date" ASC
       `
     }
 
@@ -106,7 +110,7 @@ function calculateLTVBySegment(buyers: any[], segmentKey: string) {
     totalCustomers: Set<string>
     totalPurchases: number
     totalRevenue: number
-    avgPurchasePerCustomer: number
+    customerRevenue: Map<string, number>
   }>()
 
   buyers.forEach(buyer => {
@@ -116,26 +120,38 @@ function calculateLTVBySegment(buyers: any[], segmentKey: string) {
         totalCustomers: new Set(),
         totalPurchases: 0,
         totalRevenue: 0,
-        avgPurchasePerCustomer: 0
+        customerRevenue: new Map()
       })
     }
 
     const data = segmentMap.get(segment)!
     data.totalCustomers.add(buyer.customerHash)
     data.totalPurchases++
+
+    // 실제 매출 데이터 집계
+    const revenue = buyer.revenue ? parseFloat(buyer.revenue.toString()) : 0
+    data.totalRevenue += revenue
+
+    // 고객별 매출 집계
+    const customerHash = buyer.customerHash
+    const currentRevenue = data.customerRevenue.get(customerHash) || 0
+    data.customerRevenue.set(customerHash, currentRevenue + revenue)
   })
 
-  // LTV 계산 (간단 버전: 평균 구매 횟수 * 예상 구매 금액)
+  // LTV 계산 (실제 데이터 기반)
   const result = Array.from(segmentMap.entries()).map(([segment, data]) => {
     const avgPurchasePerCustomer = data.totalPurchases / data.totalCustomers.size
-    const estimatedLTV = avgPurchasePerCustomer * 50000 // 평균 이용권 가격 5만원 가정
+    const avgRevenuePerCustomer = data.totalRevenue / data.totalCustomers.size
+    const avgRevenuePerPurchase = data.totalPurchases > 0 ? data.totalRevenue / data.totalPurchases : 0
 
     return {
       segment,
       totalCustomers: data.totalCustomers.size,
       totalPurchases: data.totalPurchases,
       avgPurchasePerCustomer: Math.round(avgPurchasePerCustomer * 10) / 10,
-      estimatedLTV: Math.round(estimatedLTV)
+      avgRevenuePerPurchase: Math.round(avgRevenuePerPurchase),
+      totalRevenue: Math.round(data.totalRevenue),
+      estimatedLTV: Math.round(avgRevenuePerCustomer)
     }
   })
 
@@ -144,42 +160,65 @@ function calculateLTVBySegment(buyers: any[], segmentKey: string) {
 
 // 행동 패턴별 LTV 분석 (구매 빈도 기준)
 function calculateLTVByBehavior(buyers: any[]) {
-  const customerPurchases = new Map<string, number>()
+  const customerData = new Map<string, {
+    purchaseCount: number
+    totalRevenue: number
+  }>()
 
   buyers.forEach(buyer => {
     const hash = buyer.customerHash
-    customerPurchases.set(hash, (customerPurchases.get(hash) || 0) + 1)
+    if (!customerData.has(hash)) {
+      customerData.set(hash, {
+        purchaseCount: 0,
+        totalRevenue: 0
+      })
+    }
+
+    const data = customerData.get(hash)!
+    data.purchaseCount++
+    data.totalRevenue += buyer.revenue ? parseFloat(buyer.revenue.toString()) : 0
   })
 
   // 구매 빈도별 그룹화
-  const behaviorGroups = {
-    '1회 구매': 0,
-    '2-3회 구매': 0,
-    '4-5회 구매': 0,
-    '6-10회 구매': 0,
-    '11회 이상': 0
-  }
+  const behaviorGroups = new Map<string, {
+    customerCount: number
+    totalPurchases: number
+    totalRevenue: number
+  }>()
 
-  customerPurchases.forEach(count => {
-    if (count === 1) behaviorGroups['1회 구매']++
-    else if (count <= 3) behaviorGroups['2-3회 구매']++
-    else if (count <= 5) behaviorGroups['4-5회 구매']++
-    else if (count <= 10) behaviorGroups['6-10회 구매']++
-    else behaviorGroups['11회 이상']++
+  const groupNames = ['1회 구매', '2-3회 구매', '4-5회 구매', '6-10회 구매', '11회 이상']
+  groupNames.forEach(name => {
+    behaviorGroups.set(name, {
+      customerCount: 0,
+      totalPurchases: 0,
+      totalRevenue: 0
+    })
   })
 
-  return Object.entries(behaviorGroups).map(([behavior, count]) => {
-    let avgPurchases = 0
-    if (behavior === '1회 구매') avgPurchases = 1
-    else if (behavior === '2-3회 구매') avgPurchases = 2.5
-    else if (behavior === '4-5회 구매') avgPurchases = 4.5
-    else if (behavior === '6-10회 구매') avgPurchases = 8
-    else avgPurchases = 15
+  customerData.forEach((data) => {
+    let groupName = ''
+    if (data.purchaseCount === 1) groupName = '1회 구매'
+    else if (data.purchaseCount <= 3) groupName = '2-3회 구매'
+    else if (data.purchaseCount <= 5) groupName = '4-5회 구매'
+    else if (data.purchaseCount <= 10) groupName = '6-10회 구매'
+    else groupName = '11회 이상'
+
+    const group = behaviorGroups.get(groupName)!
+    group.customerCount++
+    group.totalPurchases += data.purchaseCount
+    group.totalRevenue += data.totalRevenue
+  })
+
+  return Array.from(behaviorGroups.entries()).map(([behavior, data]) => {
+    const avgPurchases = data.customerCount > 0 ? data.totalPurchases / data.customerCount : 0
+    const avgLTV = data.customerCount > 0 ? data.totalRevenue / data.customerCount : 0
 
     return {
       behavior,
-      customerCount: count,
-      estimatedLTV: Math.round(avgPurchases * 50000)
+      customerCount: data.customerCount,
+      avgPurchases: Math.round(avgPurchases * 10) / 10,
+      avgRevenuePerPurchase: data.totalPurchases > 0 ? Math.round(data.totalRevenue / data.totalPurchases) : 0,
+      estimatedLTV: Math.round(avgLTV)
     }
   })
 }
@@ -346,6 +385,8 @@ function calculateLTVByAgeGender(buyers: any[]) {
   const segmentMap = new Map<string, {
     totalCustomers: Set<string>
     totalPurchases: number
+    totalRevenue: number
+    customerRevenue: Map<string, number>
   }>()
 
   buyers.forEach(buyer => {
@@ -356,25 +397,37 @@ function calculateLTVByAgeGender(buyers: any[]) {
     if (!segmentMap.has(segment)) {
       segmentMap.set(segment, {
         totalCustomers: new Set(),
-        totalPurchases: 0
+        totalPurchases: 0,
+        totalRevenue: 0,
+        customerRevenue: new Map()
       })
     }
 
     const data = segmentMap.get(segment)!
     data.totalCustomers.add(buyer.customerHash)
     data.totalPurchases++
+
+    const revenue = buyer.revenue ? parseFloat(buyer.revenue.toString()) : 0
+    data.totalRevenue += revenue
+
+    const customerHash = buyer.customerHash
+    const currentRevenue = data.customerRevenue.get(customerHash) || 0
+    data.customerRevenue.set(customerHash, currentRevenue + revenue)
   })
 
   const result = Array.from(segmentMap.entries()).map(([segment, data]) => {
     const avgPurchasePerCustomer = data.totalPurchases / data.totalCustomers.size
-    const estimatedLTV = avgPurchasePerCustomer * 50000
+    const avgRevenuePerCustomer = data.totalRevenue / data.totalCustomers.size
+    const avgRevenuePerPurchase = data.totalPurchases > 0 ? data.totalRevenue / data.totalPurchases : 0
 
     return {
       segment,
       totalCustomers: data.totalCustomers.size,
       totalPurchases: data.totalPurchases,
       avgPurchasePerCustomer: Math.round(avgPurchasePerCustomer * 10) / 10,
-      estimatedLTV: Math.round(estimatedLTV)
+      avgRevenuePerPurchase: Math.round(avgRevenuePerPurchase),
+      totalRevenue: Math.round(data.totalRevenue),
+      estimatedLTV: Math.round(avgRevenuePerCustomer)
     }
   })
 
@@ -383,9 +436,10 @@ function calculateLTVByAgeGender(buyers: any[]) {
 
 // 연령+성별+행동패턴 복합 LTV 분석
 function calculateLTVByAgeGenderBehavior(buyers: any[]) {
-  // 먼저 고객별 구매 횟수 계산
+  // 먼저 고객별 구매 횟수 및 매출 계산
   const customerPurchases = new Map<string, {
     count: number
+    totalRevenue: number
     age: string
     gender: string
   }>()
@@ -395,20 +449,24 @@ function calculateLTVByAgeGenderBehavior(buyers: any[]) {
     if (!customerPurchases.has(hash)) {
       customerPurchases.set(hash, {
         count: 0,
+        totalRevenue: 0,
         age: buyer.ageGroup || '미상',
         gender: buyer.gender || '미상'
       })
     }
-    customerPurchases.get(hash)!.count++
+    const data = customerPurchases.get(hash)!
+    data.count++
+    data.totalRevenue += buyer.revenue ? parseFloat(buyer.revenue.toString()) : 0
   })
 
   // 세그먼트별 집계
   const segmentMap = new Map<string, {
     customerCount: number
     totalPurchases: number
+    totalRevenue: number
   }>()
 
-  customerPurchases.forEach((data, hash) => {
+  customerPurchases.forEach((data) => {
     let behavior = ''
     if (data.count === 1) behavior = '1회'
     else if (data.count <= 3) behavior = '2-3회'
@@ -421,24 +479,29 @@ function calculateLTVByAgeGenderBehavior(buyers: any[]) {
     if (!segmentMap.has(segment)) {
       segmentMap.set(segment, {
         customerCount: 0,
-        totalPurchases: 0
+        totalPurchases: 0,
+        totalRevenue: 0
       })
     }
 
     const segData = segmentMap.get(segment)!
     segData.customerCount++
     segData.totalPurchases += data.count
+    segData.totalRevenue += data.totalRevenue
   })
 
   const result = Array.from(segmentMap.entries()).map(([segment, data]) => {
     const avgPurchasePerCustomer = data.totalPurchases / data.customerCount
-    const estimatedLTV = avgPurchasePerCustomer * 50000
+    const avgRevenuePerCustomer = data.totalRevenue / data.customerCount
+    const avgRevenuePerPurchase = data.totalPurchases > 0 ? data.totalRevenue / data.totalPurchases : 0
 
     return {
       segment,
       customerCount: data.customerCount,
       avgPurchasePerCustomer: Math.round(avgPurchasePerCustomer * 10) / 10,
-      estimatedLTV: Math.round(estimatedLTV)
+      avgRevenuePerPurchase: Math.round(avgRevenuePerPurchase),
+      totalRevenue: Math.round(data.totalRevenue),
+      estimatedLTV: Math.round(avgRevenuePerCustomer)
     }
   })
 
