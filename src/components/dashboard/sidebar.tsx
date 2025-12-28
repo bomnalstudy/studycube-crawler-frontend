@@ -22,6 +22,7 @@ export function Sidebar() {
 
   // 어드민 전용 메뉴
   const adminMenuItems = [
+    { name: '고객 생애가치 분석', href: '/analytics/customers', icon: '👥' },
     { name: '광고 성과 분석', href: '/analytics/campaigns', icon: '📈' },
     { name: '지점 전략 성과 분석', href: '/analytics/strategies', icon: '🎯' },
     { name: '광고 + 전략 성과 분석', href: '/analytics/combined', icon: '📉' }

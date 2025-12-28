@@ -211,16 +211,40 @@ model HourlyUsage {
 }
 
 model ticket_revenue {
-  id          String   @id
-  branchId    String
-  date        DateTime @db.Date
-  ticketName  String
-  revenue     Decimal  @db.Decimal(10, 2)
-  collectedAt DateTime @default(now())
-  branches    Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  id           String         @id
+  branchId     String
+  date         DateTime       @db.Date
+  ticketName   String
+  revenue      Decimal        @db.Decimal(10, 2)
+  collectedAt  DateTime       @default(now())
+  branches     Branch         @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  ticketBuyers TicketBuyer[]
 
   @@unique([branchId, date, ticketName])
   @@index([branchId, date])
   @@index([date])
   @@index([ticketName])
+}
+
+model TicketBuyer {
+  id              String         @id @default(cuid())
+  ticketRevenueId String
+  branchId        String
+  date            DateTime       @db.Date
+  ticketName      String
+  gender          String?
+  birthdate       String?
+  age             Int?
+  ageGroup        String?
+  customerHash    String?
+  paymentTime     String?
+  collectedAt     DateTime       @default(now())
+  ticketRevenue   ticket_revenue @relation(fields: [ticketRevenueId], references: [id], onDelete: Cascade)
+
+  @@index([branchId, date])
+  @@index([customerHash])
+  @@index([date])
+  @@index([ageGroup])
+  @@index([gender])
+  @@map("ticket_buyers")
 }

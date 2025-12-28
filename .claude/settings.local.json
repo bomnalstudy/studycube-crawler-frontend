@@ -16,7 +16,14 @@
       "Bash(npm run db:seed:*)",
       "Bash(npx next build)",
       "Bash(del /f \"c:\\Users\\ghpjj\\OneDrive\\Desktop\\project\\bomnal-customer-data-studycube-frontend\\node_modules\\.prisma\\client\\query_engine-windows.dll.node\")",
-      "Bash(git commit:*)"
+      "Bash(netstat:*)",
+      "Bash(findstr:*)",
+      "Bash(powershell -Command:*)",
+      "Bash(timeout /t 3 /nobreak)",
+      "Bash(git pull:*)",
+      "Bash(git commit:*)",
+      "Bash(git add:*)",
+      "Bash(git push)"
     ],
     "deny": [],
     "ask": []
