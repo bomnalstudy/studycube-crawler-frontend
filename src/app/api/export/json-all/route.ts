@@ -51,7 +51,8 @@ export async function GET(request: NextRequest) {
         previousMetrics,
         latestMetric,
         hourlyUsageRecords,
-        ticketRevenueRecords
+        ticketRevenueRecords,
+        ticketBuyersRecords
       ] = await Promise.all([
         prisma.dailyMetric.findMany({
           where: { ...branchFilter, date: { gte: start, lte: end } }
@@ -68,6 +69,10 @@ export async function GET(request: NextRequest) {
         }),
         prisma.ticket_revenue.findMany({
           where: { ...branchFilter, date: { gte: start, lte: end } }
+        }),
+        prisma.ticketBuyer.findMany({
+          where: { ...branchFilter, date: { gte: start, lte: end } },
+          orderBy: { date: 'asc' }
         })
       ])
 
@@ -179,6 +184,16 @@ export async function GET(request: NextRequest) {
         .sort((a, b) => b.revenue - a.revenue)
         .slice(0, 10)
 
+      // ticket_buyers 데이터 포맷팅
+      const ticketBuyersData = ticketBuyersRecords.map(record => ({
+        customerHash: record.customerHash,
+        gender: record.gender,
+        ageGroup: record.ageGroup,
+        ticketName: record.ticketName,
+        date: record.date.toISOString().split('T')[0],
+        branchId: record.branchId
+      }))
+
       allBranchData.push({
         branch: { id: branch.id, name: branch.name },
         period: { startDate, endDate },
@@ -198,7 +213,8 @@ export async function GET(request: NextRequest) {
           customerDemographics,
           ticketRevenueTop10,
           hourlyUsageData
-        }
+        },
+        ticketBuyers: ticketBuyersData
       })
     }
 
