@@ -180,14 +180,14 @@ export async function GET(request: NextRequest) {
       }
     })
 
-    // phoneHash별로 서로 다른 방문 날짜를 Set으로 관리
+    // phone별로 서로 다른 방문 날짜를 Set으로 관리
     const phoneVisitDates = new Map<string, Set<string>>()
     periodVisitors.forEach(visitor => {
       const dateStr = visitor.visitDate.toISOString().split('T')[0] // YYYY-MM-DD
-      if (!phoneVisitDates.has(visitor.phoneHash)) {
-        phoneVisitDates.set(visitor.phoneHash, new Set())
+      if (!phoneVisitDates.has(visitor.phone)) {
+        phoneVisitDates.set(visitor.phone, new Set())
       }
-      phoneVisitDates.get(visitor.phoneHash)!.add(dateStr)
+      phoneVisitDates.get(visitor.phone)!.add(dateStr)
     })
 
     // 방문 횟수별 집계 (실제 횟수 그대로 표시)

@@ -80,17 +80,17 @@ model DailyVisitor {
   id          String   @id @default(cuid())
   branchId    String
   visitDate   DateTime @db.Date
-  phoneHash   String
-  phoneLast4  String?
-  gender      String?
+  phone       String
+  visitTime   String?
   age         Int?
   ageGroup    String?
+  gender      String?
   isNewUser   Boolean  @default(false)
   collectedAt DateTime @default(now())
   branch      Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
 
   @@index([branchId, visitDate])
-  @@index([phoneHash])
+  @@index([phone])
   @@index([visitDate])
   @@map("daily_visitors")
 }
@@ -239,6 +239,7 @@ model TicketBuyer {
   ageGroup        String?
   customerHash    String?
   paymentTime     String?
+  phone           String?
   collectedAt     DateTime       @default(now())
   ticketRevenue   ticket_revenue @relation(fields: [ticketRevenueId], references: [id], onDelete: Cascade)
 
