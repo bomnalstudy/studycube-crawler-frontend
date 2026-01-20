@@ -5,10 +5,12 @@ const globalForPrisma = globalThis as unknown as {
 }
 
 // Vercel 환경변수에 channel_binding이 없을 경우 자동 추가
-function getDatabaseUrl() {
+function getDatabaseUrl(): string | undefined {
   const url = process.env.POSTGRES_URL || process.env.DATABASE_URL
+
+  // URL이 없으면 undefined 반환 (Prisma가 기본 동작)
   if (!url) {
-    throw new Error('Database URL not found')
+    return undefined
   }
 
   // 이미 channel_binding이 있으면 그대로 반환
@@ -21,12 +23,16 @@ function getDatabaseUrl() {
   return `${url}${separator}channel_binding=require`
 }
 
-export const prisma = globalForPrisma.prisma ?? new PrismaClient({
-  datasources: {
-    db: {
-      url: getDatabaseUrl()
+const databaseUrl = getDatabaseUrl()
+
+export const prisma = globalForPrisma.prisma ?? new PrismaClient(
+  databaseUrl ? {
+    datasources: {
+      db: {
+        url: databaseUrl
+      }
     }
-  }
-})
+  } : undefined
+)
 
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma
