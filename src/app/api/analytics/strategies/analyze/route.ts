@@ -42,10 +42,10 @@ export async function POST(request: NextRequest) {
 
       visitors.forEach(visitor => {
         const dateStr = visitor.visitDate.toISOString().split('T')[0]
-        if (!phoneVisitDates.has(visitor.phoneHash)) {
-          phoneVisitDates.set(visitor.phoneHash, new Set())
+        if (!phoneVisitDates.has(visitor.phone)) {
+          phoneVisitDates.set(visitor.phone, new Set())
         }
-        phoneVisitDates.get(visitor.phoneHash)!.add(dateStr)
+        phoneVisitDates.get(visitor.phone)!.add(dateStr)
       })
 
       const revisitors = Array.from(phoneVisitDates.values()).filter(dates => dates.size > 1).length

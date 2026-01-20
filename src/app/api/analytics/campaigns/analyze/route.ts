@@ -85,14 +85,14 @@ export async function POST(request: NextRequest) {
         const afterAvgDailyUsers = afterSeatUsage / (afterMetrics.length || 1)
 
         // 재방문률 계산 (광고 전)
-        const beforeUniqueVisitors = new Set(beforeVisitors.map(v => v.phoneHash)).size
+        const beforeUniqueVisitors = new Set(beforeVisitors.map(v => v.phone)).size
         const beforeTotalVisits = beforeVisitors.length
         const beforeRevisitRate = beforeUniqueVisitors > 0
           ? ((beforeTotalVisits - beforeUniqueVisitors) / beforeUniqueVisitors) * 100
           : 0
 
         // 재방문률 계산 (광고 후)
-        const afterUniqueVisitors = new Set(afterVisitors.map(v => v.phoneHash)).size
+        const afterUniqueVisitors = new Set(afterVisitors.map(v => v.phone)).size
         const afterTotalVisits = afterVisitors.length
         const afterRevisitRate = afterUniqueVisitors > 0
           ? ((afterTotalVisits - afterUniqueVisitors) / afterUniqueVisitors) * 100
