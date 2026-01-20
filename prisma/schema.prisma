@@ -1,5 +1,6 @@
 generator client {
   provider = "prisma-client-js"
+  // Updated: 2026-01-20 - Force regeneration for TicketBuyer model
 }
 
 datasource db {
