@@ -170,7 +170,6 @@ export async function GET(request: NextRequest) {
         const bDate = b.lastVisitDate?.getTime() || 0
         return aDate - bDate // 오래된 순
       })
-      .slice(0, 10)
       .map(c => ({
         customerId: c.id,
         phone: c.phone,
@@ -180,11 +179,10 @@ export async function GET(request: NextRequest) {
         segment: segmentMap.get(c.id)!,
       }))
 
-    // 운영 큐: 신규가입자 (최근 10명)
+    // 운영 큐: 신규가입자
     const newSignupsList: OperationQueueItem[] = allCustomers
       .filter(c => segmentMap.get(c.id) === 'new_0_3')
       .sort((a, b) => b.firstVisitDate.getTime() - a.firstVisitDate.getTime())
-      .slice(0, 10)
       .map(c => ({
         customerId: c.id,
         phone: c.phone,
@@ -198,7 +196,6 @@ export async function GET(request: NextRequest) {
     const dayTicketRepeaters: OperationQueueItem[] = allCustomers
       .filter(c => segmentMap.get(c.id) === 'day_ticket')
       .sort((a, b) => decimalToNumber(b.totalSpent) - decimalToNumber(a.totalSpent))
-      .slice(0, 10)
       .map(c => ({
         customerId: c.id,
         phone: c.phone,

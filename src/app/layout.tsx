@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Sidebar } from "@/components/dashboard/sidebar";
+import { ContentWrapper } from "@/components/dashboard/content-wrapper";
 import { SessionProvider } from "@/components/providers/session-provider";
 import "./globals.css";
 
@@ -18,7 +19,9 @@ export default function RootLayout({
       <body className="antialiased">
         <SessionProvider>
           <Sidebar />
-          {children}
+          <ContentWrapper>
+            {children}
+          </ContentWrapper>
         </SessionProvider>
       </body>
     </html>

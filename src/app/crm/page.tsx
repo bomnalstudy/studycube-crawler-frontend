@@ -43,7 +43,7 @@ export default function CrmDashboardPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 pt-16 px-4">
+      <div className="min-h-screen bg-gray-50 p-6">
         <div className="max-w-7xl mx-auto">
           <div className="animate-pulse space-y-4">
             <div className="h-8 bg-gray-200 rounded w-48" />
@@ -64,7 +64,7 @@ export default function CrmDashboardPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-50 pt-16 px-4">
+      <div className="min-h-screen bg-gray-50 p-6">
         <div className="max-w-7xl mx-auto">
           <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center">
             <p className="text-red-600 text-sm">{error}</p>
@@ -83,7 +83,7 @@ export default function CrmDashboardPage() {
   if (!data) return null
 
   return (
-    <div className="min-h-screen bg-gray-50 pt-16 px-4 pb-8">
+    <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-7xl mx-auto space-y-6">
         {/* 헤더 */}
         <div>

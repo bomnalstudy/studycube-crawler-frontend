@@ -62,7 +62,7 @@ export default function CustomerListPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 pt-16 px-4 pb-8">
+    <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-7xl mx-auto space-y-6">
         {/* 헤더 */}
         <div>
