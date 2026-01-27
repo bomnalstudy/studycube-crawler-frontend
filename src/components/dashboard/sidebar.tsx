@@ -5,6 +5,17 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useRole } from '@/hooks/useRole'
 
+interface MenuItem {
+  name: string
+  href: string
+  icon: string
+}
+
+interface MenuGroup {
+  label: string
+  items: MenuItem[]
+}
+
 export function Sidebar() {
   const [isOpen, setIsOpen] = useState(false)
   const pathname = usePathname()
@@ -16,21 +27,40 @@ export function Sidebar() {
   }
 
   // 기본 메뉴 (모든 사용자)
-  const baseMenuItems = [
-    { name: '대시보드', href: '/', icon: '📊' }
+  const baseMenuItems: MenuItem[] = [
+    { name: '매출 대시보드', href: '/dashboard', icon: '📊' }
   ]
 
-  // 어드민 전용 메뉴
-  const adminMenuItems = [
-    { name: '고객 생애가치 분석', href: '/analytics/customers', icon: '👥' },
+  // CRM 메뉴
+  const crmMenuItems: MenuItem[] = [
+    { name: 'CRM 대시보드', href: '/crm', icon: '🎯' },
+    { name: '고객 리스트', href: '/crm/customers', icon: '👥' },
+    { name: '세그먼트 분석', href: '/crm/segments', icon: '📋' },
+    { name: '고객 타임라인', href: '/crm/timeline', icon: '📅' }
+  ]
+
+  // 비교 분석 메뉴
+  const analyticsMenuItems: MenuItem[] = [
+    { name: '고객 생애가치 분석', href: '/analytics/customers', icon: '💰' },
     { name: '광고 성과 분석', href: '/analytics/campaigns', icon: '📈' },
-    { name: '지점 전략 성과 분석', href: '/analytics/strategies', icon: '🎯' },
-    { name: '광고 + 전략 성과 분석', href: '/analytics/combined', icon: '📉' }
+    { name: '지점 전략 분석', href: '/analytics/strategies', icon: '🎯' },
+    { name: '통합 성과 분석', href: '/analytics/combined', icon: '📉' }
   ]
 
-  const menuItems = isAdmin
-    ? [...baseMenuItems, ...adminMenuItems]
-    : baseMenuItems
+  const menuGroups: MenuGroup[] = isAdmin
+    ? [
+        { label: '기본', items: baseMenuItems },
+        { label: '고객 관리 (CRM)', items: crmMenuItems },
+        { label: '비교 분석', items: analyticsMenuItems }
+      ]
+    : [
+        { label: '기본', items: baseMenuItems }
+      ]
+
+  const isActive = (href: string) => {
+    if (href === '/dashboard') return pathname === '/dashboard' || pathname === '/'
+    return pathname.startsWith(href)
+  }
 
   return (
     <>
@@ -68,10 +98,9 @@ export function Sidebar() {
           isOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <div className="p-6 h-full flex flex-col">
+        <div className="p-6 h-full flex flex-col overflow-y-auto">
           <div>
             <h2 className="text-xl font-bold text-gray-800">Studycube</h2>
-            {/* 지점 계정이면 지점명 표시 */}
             {branchName && (
               <p className="text-sm text-gray-500 mt-1">{branchName}</p>
             )}
@@ -80,25 +109,31 @@ export function Sidebar() {
             )}
           </div>
 
-          <nav className="space-y-2 mt-6 flex-1">
-            {menuItems.map((item) => {
-              const isActive = pathname === item.href
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={() => setIsOpen(false)}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                    isActive
-                      ? 'bg-blue-50 text-blue-700 font-medium'
-                      : 'text-gray-700 hover:bg-gray-100'
-                  }`}
-                >
-                  <span className="text-xl">{item.icon}</span>
-                  <span>{item.name}</span>
-                </Link>
-              )
-            })}
+          <nav className="mt-6 flex-1 space-y-6">
+            {menuGroups.map((group) => (
+              <div key={group.label}>
+                <p className="px-4 text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
+                  {group.label}
+                </p>
+                <div className="space-y-1">
+                  {group.items.map((item) => (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      onClick={() => setIsOpen(false)}
+                      className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+                        isActive(item.href)
+                          ? 'bg-blue-50 text-blue-700 font-medium'
+                          : 'text-gray-700 hover:bg-gray-100'
+                      }`}
+                    >
+                      <span className="text-xl">{item.icon}</span>
+                      <span className="text-sm">{item.name}</span>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            ))}
           </nav>
         </div>
       </aside>

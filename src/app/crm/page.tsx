@@ -1,0 +1,123 @@
+'use client'
+
+import { useState, useEffect, useCallback } from 'react'
+import { useRole } from '@/hooks/useRole'
+import { CrmDashboardData } from '@/types/crm'
+import { CrmKpiCards } from '@/components/crm/dashboard/CrmKpiCards'
+import { RevisitDonutGroup } from '@/components/crm/dashboard/RevisitDonutGroup'
+import { OperationQueue } from '@/components/crm/dashboard/OperationQueue'
+import { SegmentLtvChart } from '@/components/crm/dashboard/SegmentLtvChart'
+import { SegmentRevisitChart } from '@/components/crm/dashboard/SegmentRevisitChart'
+
+export default function CrmDashboardPage() {
+  const { branchId } = useRole()
+  const [data, setData] = useState<CrmDashboardData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const fetchData = useCallback(async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      const params = new URLSearchParams()
+      if (branchId) params.set('branchId', branchId)
+
+      const res = await fetch(`/api/crm/dashboard?${params}`)
+      const json = await res.json()
+
+      if (!json.success) {
+        setError(json.error || '데이터를 불러올 수 없습니다')
+        return
+      }
+      setData(json.data)
+    } catch {
+      setError('네트워크 오류가 발생했습니다')
+    } finally {
+      setLoading(false)
+    }
+  }, [branchId])
+
+  useEffect(() => {
+    fetchData()
+  }, [fetchData])
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 pt-16 px-4">
+        <div className="max-w-7xl mx-auto">
+          <div className="animate-pulse space-y-4">
+            <div className="h-8 bg-gray-200 rounded w-48" />
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="h-24 bg-gray-200 rounded-xl" />
+              ))}
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div className="h-64 bg-gray-200 rounded-xl" />
+              <div className="h-64 bg-gray-200 rounded-xl" />
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 pt-16 px-4">
+        <div className="max-w-7xl mx-auto">
+          <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center">
+            <p className="text-red-600 text-sm">{error}</p>
+            <button
+              onClick={fetchData}
+              className="mt-3 px-4 py-2 bg-red-100 text-red-700 rounded-lg text-sm hover:bg-red-200 transition-colors"
+            >
+              다시 시도
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (!data) return null
+
+  return (
+    <div className="min-h-screen bg-gray-50 pt-16 px-4 pb-8">
+      <div className="max-w-7xl mx-auto space-y-6">
+        {/* 헤더 */}
+        <div>
+          <h1 className="text-xl font-bold text-gray-800">CRM 대시보드</h1>
+          <p className="text-sm text-gray-500 mt-1">고객 세그먼트 현황 및 운영 큐</p>
+        </div>
+
+        {/* KPI 카드 */}
+        <CrmKpiCards
+          totalCustomers={data.kpi.totalCustomers}
+          newCustomers={data.kpi.newCustomers}
+          atRiskCustomers={data.kpi.atRiskCustomers}
+          claimCustomers={data.kpi.claimCustomers}
+        />
+
+        {/* 재방문 비율 + 운영 큐 */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <RevisitDonutGroup
+            generalRevisitRate={data.revisitRatios.generalRevisitRate}
+            newRevisitRate={data.revisitRatios.newRevisitRate}
+          />
+          <OperationQueue
+            atRisk={data.operationQueue.atRisk}
+            newSignups={data.operationQueue.newSignups}
+            dayTicketRepeaters={data.operationQueue.dayTicketRepeaters}
+          />
+        </div>
+
+        {/* 세그먼트 차트 */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <SegmentLtvChart data={data.segmentLtv} />
+          <SegmentRevisitChart data={data.segmentRevisitRate} />
+        </div>
+      </div>
+    </div>
+  )
+}
