@@ -14,7 +14,7 @@ interface SegmentInput {
  * 우선순위:
  * 1. 클레임 경험 -> claim
  * 2. 7일 미방문 -> at_risk_7
- * 3. 신규 0~3일 -> new_0_3
+ * 3. 신규 0~7일 -> new_0_7
  * 4. 당일권 유저 -> day_ticket
  * 5. 정기권 유저 -> term_ticket
  * 6. 30일 내 방문 20회+ -> visit_over20 (VIP)
@@ -39,12 +39,12 @@ export function calculateSegment(input: SegmentInput): CustomerSegment {
     }
   }
 
-  // 3. 신규 0~3일
+  // 3. 신규 0~7일
   const daysSinceFirstVisit = Math.floor(
     (now.getTime() - input.firstVisitDate.getTime()) / (1000 * 60 * 60 * 24)
   )
-  if (daysSinceFirstVisit <= 3) {
-    return 'new_0_3'
+  if (daysSinceFirstVisit <= 7) {
+    return 'new_0_7'
   }
 
   // 4. 당일권 유저

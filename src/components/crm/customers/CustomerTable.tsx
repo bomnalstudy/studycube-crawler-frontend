@@ -1,6 +1,5 @@
 'use client'
 
-import Link from 'next/link'
 import { CustomerListItem, SEGMENT_LABELS, SEGMENT_COLORS } from '@/types/crm'
 import { maskPhone } from '@/lib/crm/phone-masker'
 import { formatCurrency, formatNumber } from '@/lib/utils/formatters'
@@ -11,9 +10,11 @@ interface CustomerTableProps {
   page: number
   totalPages: number
   onPageChange: (page: number) => void
+  selectedId?: string | null
+  onRowClick: (customerId: string) => void
 }
 
-export function CustomerTable({ items, total, page, totalPages, onPageChange }: CustomerTableProps) {
+export function CustomerTable({ items, total, page, totalPages, onPageChange, selectedId, onRowClick }: CustomerTableProps) {
   if (items.length === 0) {
     return (
       <div className="bg-white rounded-xl border border-gray-200 p-10 text-center">
@@ -49,15 +50,17 @@ export function CustomerTable({ items, total, page, totalPages, onPageChange }: 
               {items.map((item) => (
                 <tr
                   key={item.id}
-                  className="border-b border-gray-100 hover:bg-gray-50 transition-colors"
+                  onClick={() => onRowClick(item.id)}
+                  className={`border-b border-gray-100 cursor-pointer transition-colors ${
+                    selectedId === item.id
+                      ? 'bg-blue-50 hover:bg-blue-50'
+                      : 'hover:bg-gray-50'
+                  }`}
                 >
                   <td className="px-4 py-3">
-                    <Link
-                      href={`/crm/customers/${item.id}`}
-                      className="text-blue-600 hover:text-blue-800 font-medium"
-                    >
+                    <span className="text-blue-600 font-medium">
                       {maskPhone(item.phone)}
-                    </Link>
+                    </span>
                   </td>
                   <td className="px-4 py-3">
                     <span

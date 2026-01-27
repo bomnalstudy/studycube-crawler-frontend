@@ -17,6 +17,14 @@ export async function GET(request: NextRequest) {
     const branchFilter = getBranchFilter(session, requestedBranchId)
 
     const now = new Date()
+
+    // 기간 파라미터 (없으면 최근 30일)
+    const startDateParam = searchParams.get('startDate')
+    const endDateParam = searchParams.get('endDate')
+    const rangeStart = startDateParam ? new Date(startDateParam) : new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+    const rangeEnd = endDateParam ? new Date(endDateParam + 'T23:59:59') : now
+
+    // 운영 큐용 30일 기준 (항상 고정)
     const thirtyDaysAgo = new Date(now)
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
 
@@ -39,11 +47,11 @@ export async function GET(request: NextRequest) {
           totalSpent: true,
         }
       }),
-      // 30일 내 방문자 (phone 기반으로 매칭)
+      // 기간 내 방문자 (phone 기반으로 매칭)
       prisma.dailyVisitor.findMany({
         where: {
           ...branchFilter,
-          visitDate: { gte: thirtyDaysAgo },
+          visitDate: { gte: rangeStart, lte: rangeEnd },
         },
         select: {
           phone: true,
@@ -57,11 +65,11 @@ export async function GET(request: NextRequest) {
         select: { customerId: true },
         distinct: ['customerId'],
       }),
-      // 30일 내 구매 (이용권 타입 분류용)
+      // 기간 내 구매 (이용권 타입 분류용)
       prisma.customerPurchase.findMany({
         where: {
           ...branchFilter,
-          purchaseDate: { gte: thirtyDaysAgo },
+          purchaseDate: { gte: rangeStart, lte: rangeEnd },
         },
         select: {
           customerId: true,
@@ -113,7 +121,7 @@ export async function GET(request: NextRequest) {
     // 세그먼트 분류
     const segmentMap = new Map<string, CustomerSegment>()
     const segmentCounts: Record<CustomerSegment, number> = {
-      claim: 0, at_risk_7: 0, new_0_3: 0, day_ticket: 0,
+      claim: 0, at_risk_7: 0, new_0_7: 0, day_ticket: 0,
       term_ticket: 0, visit_over20: 0, visit_10_20: 0, visit_under10: 0,
     }
 
@@ -138,7 +146,7 @@ export async function GET(request: NextRequest) {
     const totalCustomers = allCustomers.length
     const newCustomers = allCustomers.filter(c => {
       const days = Math.floor((now.getTime() - c.firstVisitDate.getTime()) / (1000 * 60 * 60 * 24))
-      return days <= 3
+      return days <= 7
     }).length
     const atRiskCustomers = segmentCounts.at_risk_7
     const claimCustomers = claimCustomerSet.size
@@ -147,7 +155,7 @@ export async function GET(request: NextRequest) {
     // 일반고객 재방문: 최근 30일 내 2회 이상 방문한 비신규 고객 / 전체 비신규 고객
     const nonNewCustomers = allCustomers.filter(c => {
       const days = Math.floor((now.getTime() - c.firstVisitDate.getTime()) / (1000 * 60 * 60 * 24))
-      return days > 3
+      return days > 7
     })
     const generalRevisitCount = nonNewCustomers.filter(c =>
       (customerRecentVisits.get(c.id) || 0) >= 2
@@ -155,10 +163,10 @@ export async function GET(request: NextRequest) {
     const generalRevisitRate = nonNewCustomers.length > 0
       ? (generalRevisitCount / nonNewCustomers.length) * 100 : 0
 
-    // 신규 재방문: 신규(0~3일) 중 2회 이상 방문
+    // 신규 재방문: 신규(0~7일) 중 2회 이상 방문
     const newCustomerList = allCustomers.filter(c => {
       const days = Math.floor((now.getTime() - c.firstVisitDate.getTime()) / (1000 * 60 * 60 * 24))
-      return days <= 3
+      return days <= 7
     })
     const newRevisitCount = newCustomerList.filter(c =>
       (customerRecentVisits.get(c.id) || 0) >= 2
@@ -192,7 +200,7 @@ export async function GET(request: NextRequest) {
     // 운영 큐: 신규가입자 (최근 30일 내 가입)
     const newSignupsList: OperationQueueItem[] = allCustomers
       .filter(c => {
-        if (segmentMap.get(c.id) !== 'new_0_3') return false
+        if (segmentMap.get(c.id) !== 'new_0_7') return false
         return c.firstVisitDate >= thirtyDaysAgo
       })
       .sort((a, b) => b.firstVisitDate.getTime() - a.firstVisitDate.getTime())
@@ -232,7 +240,7 @@ export async function GET(request: NextRequest) {
     // 세그먼트별 LTV (평균 총소비액)
     const segmentSpentTotals: Record<CustomerSegment, { total: number; count: number }> = {
       claim: { total: 0, count: 0 }, at_risk_7: { total: 0, count: 0 },
-      new_0_3: { total: 0, count: 0 }, day_ticket: { total: 0, count: 0 },
+      new_0_7: { total: 0, count: 0 }, day_ticket: { total: 0, count: 0 },
       term_ticket: { total: 0, count: 0 }, visit_over20: { total: 0, count: 0 },
       visit_10_20: { total: 0, count: 0 }, visit_under10: { total: 0, count: 0 },
     }
@@ -255,7 +263,7 @@ export async function GET(request: NextRequest) {
     // 세그먼트별 재방문률 (30일 내 2회+ 방문 비율)
     const segmentRevisitTotals: Record<CustomerSegment, { revisit: number; count: number }> = {
       claim: { revisit: 0, count: 0 }, at_risk_7: { revisit: 0, count: 0 },
-      new_0_3: { revisit: 0, count: 0 }, day_ticket: { revisit: 0, count: 0 },
+      new_0_7: { revisit: 0, count: 0 }, day_ticket: { revisit: 0, count: 0 },
       term_ticket: { revisit: 0, count: 0 }, visit_over20: { revisit: 0, count: 0 },
       visit_10_20: { revisit: 0, count: 0 }, visit_under10: { revisit: 0, count: 0 },
     }

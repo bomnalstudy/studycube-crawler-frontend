@@ -2,7 +2,7 @@
 export type CustomerSegment =
   | 'claim'         // 클레임 경험 고객
   | 'at_risk_7'     // 7일 미방문 (이탈위험)
-  | 'new_0_3'       // 신규 0~3일
+  | 'new_0_7'       // 신규 0~7일
   | 'day_ticket'    // 당일권 유저
   | 'term_ticket'   // 정기권 유저
   | 'visit_over20'  // VIP (30일 내 20회+)
@@ -12,7 +12,7 @@ export type CustomerSegment =
 export const SEGMENT_LABELS: Record<CustomerSegment, string> = {
   claim: '클레임',
   at_risk_7: '이탈위험',
-  new_0_3: '신규',
+  new_0_7: '신규',
   day_ticket: '당일권',
   term_ticket: '정기권',
   visit_over20: 'VIP',
@@ -23,12 +23,23 @@ export const SEGMENT_LABELS: Record<CustomerSegment, string> = {
 export const SEGMENT_COLORS: Record<CustomerSegment, string> = {
   claim: '#EF4444',
   at_risk_7: '#F97316',
-  new_0_3: '#22C55E',
+  new_0_7: '#22C55E',
   day_ticket: '#3B82F6',
   term_ticket: '#8B5CF6',
   visit_over20: '#F59E0B',
   visit_10_20: '#06B6D4',
   visit_under10: '#6B7280',
+}
+
+export const SEGMENT_DESCRIPTIONS: Record<CustomerSegment, string> = {
+  claim: '클레임 경험이 있는 고객',
+  at_risk_7: '마지막 방문 후 7일 이상 경과',
+  new_0_7: '첫 방문 후 7일 이내 신규 고객',
+  day_ticket: '당일권을 주로 이용하는 고객',
+  term_ticket: '정기권(기간권)을 주로 이용하는 고객',
+  visit_over20: '30일 내 방문 20회 이상 (VIP)',
+  visit_10_20: '30일 내 방문 10~20회 (단골)',
+  visit_under10: '30일 내 방문 10회 미만 (일반)',
 }
 
 // CRM 대시보드 데이터

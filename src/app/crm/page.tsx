@@ -1,14 +1,18 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { startOfMonth, endOfMonth, subMonths, addMonths } from 'date-fns'
 import { useRole } from '@/hooks/useRole'
 import { CrmDashboardData } from '@/types/crm'
 import { CrmKpiCards } from '@/components/crm/dashboard/CrmKpiCards'
+import { SegmentCriteria } from '@/components/crm/dashboard/SegmentCriteria'
 import { RevisitDonutGroup } from '@/components/crm/dashboard/RevisitDonutGroup'
 import { OperationQueue } from '@/components/crm/dashboard/OperationQueue'
 import { SegmentLtvChart } from '@/components/crm/dashboard/SegmentLtvChart'
 import { SegmentRevisitChart } from '@/components/crm/dashboard/SegmentRevisitChart'
 import { BranchSelector } from '@/components/dashboard/branch-selector'
+import { DateRangePicker } from '@/components/dashboard/date-range-picker'
+import { formatDate } from '@/lib/utils/date-helpers'
 
 interface Branch {
   id: string
@@ -23,6 +27,8 @@ export default function CrmDashboardPage() {
 
   const [branches, setBranches] = useState<Branch[]>([])
   const [selectedBranchId, setSelectedBranchId] = useState<string>('all')
+  const [startDate, setStartDate] = useState<Date>(startOfMonth(new Date()))
+  const [endDate, setEndDate] = useState<Date>(endOfMonth(new Date()))
 
   // 지점 목록 가져오기
   useEffect(() => {
@@ -43,12 +49,26 @@ export default function CrmDashboardPage() {
     fetchBranches()
   }, [isAdmin, userBranchId])
 
+  const handlePreviousMonth = () => {
+    const newDate = subMonths(startDate, 1)
+    setStartDate(startOfMonth(newDate))
+    setEndDate(endOfMonth(newDate))
+  }
+
+  const handleNextMonth = () => {
+    const newDate = addMonths(startDate, 1)
+    setStartDate(startOfMonth(newDate))
+    setEndDate(endOfMonth(newDate))
+  }
+
   const fetchData = useCallback(async () => {
     try {
       setLoading(true)
       setError(null)
       const params = new URLSearchParams()
       params.set('branchId', selectedBranchId)
+      params.set('startDate', formatDate(startDate))
+      params.set('endDate', formatDate(endDate))
 
       const res = await fetch(`/api/crm/dashboard?${params}`)
       const json = await res.json()
@@ -63,7 +83,7 @@ export default function CrmDashboardPage() {
     } finally {
       setLoading(false)
     }
-  }, [selectedBranchId])
+  }, [selectedBranchId, startDate, endDate])
 
   useEffect(() => {
     fetchData()
@@ -114,26 +134,38 @@ export default function CrmDashboardPage() {
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-7xl mx-auto space-y-6">
         {/* 헤더 + 필터 */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-xl font-bold text-gray-800">CRM 대시보드</h1>
-            <p className="text-sm text-gray-500 mt-1">고객 세그먼트 현황 및 운영 큐</p>
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <h1 className="text-xl font-bold text-gray-800">CRM 대시보드</h1>
+              <p className="text-sm text-gray-500 mt-1">고객 세그먼트 현황 및 운영 큐</p>
+            </div>
+            <div className="flex items-center gap-3">
+              {isAdmin ? (
+                <BranchSelector
+                  branches={branches}
+                  selectedBranchId={selectedBranchId}
+                  onBranchChange={setSelectedBranchId}
+                />
+              ) : (
+                <div className="flex items-center gap-2 px-3 py-2 bg-gray-100 rounded-lg">
+                  <span className="text-sm text-gray-600">지점:</span>
+                  <span className="text-sm font-medium">
+                    {branches.find(b => b.id === userBranchId)?.name || '내 지점'}
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
-          <div className="flex items-center gap-3">
-            {isAdmin ? (
-              <BranchSelector
-                branches={branches}
-                selectedBranchId={selectedBranchId}
-                onBranchChange={setSelectedBranchId}
-              />
-            ) : (
-              <div className="flex items-center gap-2 px-3 py-2 bg-gray-100 rounded-lg">
-                <span className="text-sm text-gray-600">지점:</span>
-                <span className="text-sm font-medium">
-                  {branches.find(b => b.id === userBranchId)?.name || '내 지점'}
-                </span>
-              </div>
-            )}
+          <div className="bg-white rounded-2xl shadow-sm p-3">
+            <DateRangePicker
+              startDate={startDate}
+              endDate={endDate}
+              onStartDateChange={setStartDate}
+              onEndDateChange={setEndDate}
+              onPreviousMonth={handlePreviousMonth}
+              onNextMonth={handleNextMonth}
+            />
           </div>
         </div>
 
@@ -144,6 +176,9 @@ export default function CrmDashboardPage() {
           atRiskCustomers={data.kpi.atRiskCustomers}
           claimCustomers={data.kpi.claimCustomers}
         />
+
+        {/* 세그먼트 분류 기준 */}
+        <SegmentCriteria />
 
         {/* 재방문 비율 + 운영 큐 */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

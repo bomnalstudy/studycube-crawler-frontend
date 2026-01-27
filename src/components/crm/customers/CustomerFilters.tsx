@@ -21,7 +21,7 @@ export interface FilterValues {
 const AGE_GROUPS = ['10대', '20대', '30대', '40대', '50대', '60대+']
 const GENDERS = ['남자', '여자']
 const SEGMENTS: CustomerSegment[] = [
-  'claim', 'at_risk_7', 'new_0_3', 'day_ticket',
+  'claim', 'at_risk_7', 'new_0_7', 'day_ticket',
   'term_ticket', 'visit_over20', 'visit_10_20', 'visit_under10',
 ]
 

@@ -1,18 +1,65 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { startOfMonth, endOfMonth, subMonths, addMonths } from 'date-fns'
 import { useRole } from '@/hooks/useRole'
 import { CustomerListItem, PaginatedResponse } from '@/types/crm'
 import { CustomerFilters, FilterValues } from '@/components/crm/customers/CustomerFilters'
 import { CustomerTable } from '@/components/crm/customers/CustomerTable'
+import { CustomerDetailPanel } from '@/components/crm/customers/CustomerDetailPanel'
+import { BranchSelector } from '@/components/dashboard/branch-selector'
+import { DateRangePicker } from '@/components/dashboard/date-range-picker'
+import { formatDate } from '@/lib/utils/date-helpers'
+
+interface Branch {
+  id: string
+  name: string
+}
 
 export default function CustomerListPage() {
-  const { branchId } = useRole()
+  const { isAdmin, branchId: userBranchId } = useRole()
   const [data, setData] = useState<PaginatedResponse<CustomerListItem> | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [filters, setFilters] = useState<FilterValues>({})
   const [page, setPage] = useState(1)
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null)
+
+  const [branches, setBranches] = useState<Branch[]>([])
+  const [selectedBranchId, setSelectedBranchId] = useState<string>('all')
+  const [startDate, setStartDate] = useState<Date>(startOfMonth(new Date()))
+  const [endDate, setEndDate] = useState<Date>(endOfMonth(new Date()))
+
+  // 지점 목록 가져오기
+  useEffect(() => {
+    async function fetchBranches() {
+      try {
+        const res = await fetch('/api/branches')
+        const json = await res.json()
+        if (json.success) {
+          setBranches(json.data)
+          if (!isAdmin && userBranchId) {
+            setSelectedBranchId(userBranchId)
+          }
+        }
+      } catch {
+        // 무시
+      }
+    }
+    fetchBranches()
+  }, [isAdmin, userBranchId])
+
+  const handlePreviousMonth = () => {
+    const newDate = subMonths(startDate, 1)
+    setStartDate(startOfMonth(newDate))
+    setEndDate(endOfMonth(newDate))
+  }
+
+  const handleNextMonth = () => {
+    const newDate = addMonths(startDate, 1)
+    setStartDate(startOfMonth(newDate))
+    setEndDate(endOfMonth(newDate))
+  }
 
   const fetchData = useCallback(async () => {
     try {
@@ -20,9 +67,11 @@ export default function CustomerListPage() {
       setError(null)
 
       const params = new URLSearchParams()
-      if (branchId) params.set('branchId', branchId)
+      params.set('branchId', selectedBranchId)
       params.set('page', String(page))
       params.set('limit', '20')
+      params.set('visitStartDate', formatDate(startDate))
+      params.set('visitEndDate', formatDate(endDate))
 
       if (filters.segment) params.set('segment', filters.segment)
       if (filters.ageGroup) params.set('ageGroup', filters.ageGroup)
@@ -45,7 +94,7 @@ export default function CustomerListPage() {
     } finally {
       setLoading(false)
     }
-  }, [branchId, page, filters])
+  }, [selectedBranchId, page, filters, startDate, endDate])
 
   useEffect(() => {
     fetchData()
@@ -61,13 +110,51 @@ export default function CustomerListPage() {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
+  const handleRowClick = (customerId: string) => {
+    setSelectedCustomerId(prev => prev === customerId ? null : customerId)
+  }
+
+  const handleClosePanel = () => {
+    setSelectedCustomerId(null)
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-7xl mx-auto space-y-6">
-        {/* 헤더 */}
-        <div>
-          <h1 className="text-xl font-bold text-gray-800">고객 리스트</h1>
-          <p className="text-sm text-gray-500 mt-1">전체 고객 데이터 조회 및 필터링</p>
+        {/* 헤더 + 지점/기간 선택 */}
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <h1 className="text-xl font-bold text-gray-800">고객 리스트</h1>
+              <p className="text-sm text-gray-500 mt-1">전체 고객 데이터 조회 및 필터링</p>
+            </div>
+            <div className="flex items-center gap-3">
+              {isAdmin ? (
+                <BranchSelector
+                  branches={branches}
+                  selectedBranchId={selectedBranchId}
+                  onBranchChange={setSelectedBranchId}
+                />
+              ) : (
+                <div className="flex items-center gap-2 px-3 py-2 bg-gray-100 rounded-lg">
+                  <span className="text-sm text-gray-600">지점:</span>
+                  <span className="text-sm font-medium">
+                    {branches.find(b => b.id === userBranchId)?.name || '내 지점'}
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="bg-white rounded-xl border border-gray-200 p-3">
+            <DateRangePicker
+              startDate={startDate}
+              endDate={endDate}
+              onStartDateChange={setStartDate}
+              onEndDateChange={setEndDate}
+              onPreviousMonth={handlePreviousMonth}
+              onNextMonth={handleNextMonth}
+            />
+          </div>
         </div>
 
         {/* 필터 */}
@@ -76,31 +163,49 @@ export default function CustomerListPage() {
           initialFilters={filters}
         />
 
-        {/* 테이블 */}
-        {loading ? (
-          <div className="bg-white rounded-xl border border-gray-200 p-10 text-center">
-            <div className="animate-spin w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full mx-auto" />
-            <p className="text-sm text-gray-400 mt-3">불러오는 중...</p>
+        {/* 테이블 + 사이드 패널 */}
+        <div className="flex gap-4">
+          {/* 테이블 영역 */}
+          <div className={`transition-all duration-300 ${selectedCustomerId ? 'flex-1 min-w-0' : 'w-full'}`}>
+            {loading ? (
+              <div className="bg-white rounded-xl border border-gray-200 p-10 text-center">
+                <div className="animate-spin w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full mx-auto" />
+                <p className="text-sm text-gray-400 mt-3">불러오는 중...</p>
+              </div>
+            ) : error ? (
+              <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center">
+                <p className="text-red-600 text-sm">{error}</p>
+                <button
+                  onClick={fetchData}
+                  className="mt-3 px-4 py-2 bg-red-100 text-red-700 rounded-lg text-sm hover:bg-red-200 transition-colors"
+                >
+                  다시 시도
+                </button>
+              </div>
+            ) : data ? (
+              <CustomerTable
+                items={data.items}
+                total={data.total}
+                page={data.page}
+                totalPages={data.totalPages}
+                onPageChange={handlePageChange}
+                selectedId={selectedCustomerId}
+                onRowClick={handleRowClick}
+              />
+            ) : null}
           </div>
-        ) : error ? (
-          <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center">
-            <p className="text-red-600 text-sm">{error}</p>
-            <button
-              onClick={fetchData}
-              className="mt-3 px-4 py-2 bg-red-100 text-red-700 rounded-lg text-sm hover:bg-red-200 transition-colors"
-            >
-              다시 시도
-            </button>
-          </div>
-        ) : data ? (
-          <CustomerTable
-            items={data.items}
-            total={data.total}
-            page={data.page}
-            totalPages={data.totalPages}
-            onPageChange={handlePageChange}
-          />
-        ) : null}
+
+          {/* 사이드 패널 */}
+          {selectedCustomerId && (
+            <div className="w-[420px] flex-shrink-0 bg-white rounded-xl border border-gray-200 overflow-hidden max-h-[calc(100vh-180px)] sticky top-6">
+              <CustomerDetailPanel
+                key={selectedCustomerId}
+                customerId={selectedCustomerId}
+                onClose={handleClosePanel}
+              />
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )
