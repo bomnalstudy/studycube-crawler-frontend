@@ -50,6 +50,14 @@ export interface DashboardMetrics {
   ticketRevenueTop10: {
     ticketName: string
     revenue: number
+    salesCount: number
+  }[]
+
+  // 이용권별 매출 전체 (자세히 보기용)
+  ticketRevenueAll: {
+    ticketName: string
+    revenue: number
+    salesCount: number
   }[]
 }
 

@@ -67,13 +67,25 @@ export async function GET(request: NextRequest) {
         prisma.hourlyUsage.findMany({
           where: { ...branchFilter, date: { gte: start, lte: end } }
         }),
-        prisma.ticket_revenue.findMany({
+        prisma.ticketRevenue.findMany({
           where: { ...branchFilter, date: { gte: start, lte: end } }
         }),
-        prisma.ticketBuyer.findMany({
-          where: { ...branchFilter, date: { gte: start, lte: end } },
-          orderBy: { date: 'asc' }
-        })
+        prisma.$queryRaw`
+          SELECT
+            tb."customerHash",
+            tb."ticketName",
+            tb."date",
+            tb."branchId",
+            tb."phone",
+            c."gender",
+            c."ageGroup"
+          FROM ticket_buyers tb
+          LEFT JOIN customers c ON tb."phone" = c."phone"
+          WHERE tb."branchId" = ${branch.id}
+            AND tb."date" >= ${start}
+            AND tb."date" <= ${end}
+          ORDER BY tb."date" ASC
+        ` as Promise<any[]>
       ])
 
       // 메트릭 계산
@@ -185,12 +197,12 @@ export async function GET(request: NextRequest) {
         .slice(0, 10)
 
       // ticket_buyers 데이터 포맷팅
-      const ticketBuyersData = ticketBuyersRecords.map(record => ({
+      const ticketBuyersData = ticketBuyersRecords.map((record: any) => ({
         customerHash: record.customerHash,
-        gender: record.gender,
-        ageGroup: record.ageGroup,
+        gender: record.gender || null,
+        ageGroup: record.ageGroup || null,
         ticketName: record.ticketName,
-        date: record.date.toISOString().split('T')[0],
+        date: record.date instanceof Date ? record.date.toISOString().split('T')[0] : String(record.date).split('T')[0],
         branchId: record.branchId
       }))
 

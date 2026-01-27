@@ -40,7 +40,8 @@ export async function GET(request: NextRequest) {
       previousMetrics,
       latestMetric,
       hourlyUsageRecords,
-      ticketRevenueRecords
+      ticketRevenueRecords,
+      ticketSalesCountRecords
     ] = await Promise.all([
       // 현재 기간 데이터 조회
       prisma.dailyMetric.findMany({
@@ -80,13 +81,27 @@ export async function GET(request: NextRequest) {
         }
       }),
       // 이용권별 매출 조회
-      prisma.ticket_revenue.findMany({
+      prisma.ticketRevenue.findMany({
         where: {
           ...branchFilter,
           date: {
             gte: startDate,
             lte: endDate
           }
+        }
+      }),
+      // 이용권별 판매 건수 조회
+      prisma.ticketBuyer.groupBy({
+        by: ['ticketName'],
+        where: {
+          ...branchFilter,
+          date: {
+            gte: startDate,
+            lte: endDate
+          }
+        },
+        _count: {
+          id: true
         }
       })
     ])
@@ -234,11 +249,23 @@ export async function GET(request: NextRequest) {
       ticketRevenueMap.set(record.ticketName, current + decimalToNumber(record.revenue))
     })
 
-    // Top 10 정렬
-    const ticketRevenueTop10 = Array.from(ticketRevenueMap.entries())
-      .map(([ticketName, revenue]) => ({ ticketName, revenue }))
+    // 이용권명별 판매 건수 맵
+    const ticketSalesCountMap = new Map<string, number>()
+    ticketSalesCountRecords.forEach(record => {
+      ticketSalesCountMap.set(record.ticketName, record._count.id)
+    })
+
+    // 전체 이용권 매출 (매출순 정렬)
+    const ticketRevenueAll = Array.from(ticketRevenueMap.entries())
+      .map(([ticketName, revenue]) => ({
+        ticketName,
+        revenue,
+        salesCount: ticketSalesCountMap.get(ticketName) || 0
+      }))
       .sort((a, b) => b.revenue - a.revenue)
-      .slice(0, 10)
+
+    // Top 10 정렬
+    const ticketRevenueTop10 = ticketRevenueAll.slice(0, 10)
 
     const metrics: DashboardMetrics = {
       newUsersThisMonth: totalNewUsers,
@@ -251,7 +278,8 @@ export async function GET(request: NextRequest) {
       weeklyRevisitData,
       customerDemographics,
       hourlyUsageData,
-      ticketRevenueTop10
+      ticketRevenueTop10,
+      ticketRevenueAll
     }
 
     return NextResponse.json({

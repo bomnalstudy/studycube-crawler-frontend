@@ -409,6 +409,7 @@ export default function DashboardPage() {
         <div className="mb-8">
           <TicketRevenueChart
             data={metrics.ticketRevenueTop10}
+            allData={metrics.ticketRevenueAll}
             title="이용권별 매출 Top 10"
           />
         </div>

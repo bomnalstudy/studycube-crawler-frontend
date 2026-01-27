@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
 
     const branchFilter = getBranchFilter(session, requestedBranchId)
 
-    // ticket_buyers 데이터 조회 (매출 정보 포함)
+    // ticket_buyers 데이터 조회 (매출 정보 + customers 테이블에서 성별/연령대 JOIN)
     let ticketBuyers: any[]
 
     if (branchFilter.branchId) {
@@ -30,14 +30,15 @@ export async function GET(request: NextRequest) {
       ticketBuyers = await prisma.$queryRaw`
         SELECT
           tb."customerHash",
-          tb."gender",
-          tb."ageGroup",
+          c."gender",
+          c."ageGroup",
           tb."ticketName",
           tb."date",
           tb."branchId",
           tr."revenue"
         FROM ticket_buyers tb
         LEFT JOIN ticket_revenue tr ON tb."ticketRevenueId" = tr."id"
+        LEFT JOIN customers c ON tb."phone" = c."phone"
         WHERE tb."branchId" = ${branchFilter.branchId}
           AND tb."date" >= ${startDate}
           AND tb."date" <= ${endDate}
@@ -48,14 +49,15 @@ export async function GET(request: NextRequest) {
       ticketBuyers = await prisma.$queryRaw`
         SELECT
           tb."customerHash",
-          tb."gender",
-          tb."ageGroup",
+          c."gender",
+          c."ageGroup",
           tb."ticketName",
           tb."date",
           tb."branchId",
           tr."revenue"
         FROM ticket_buyers tb
         LEFT JOIN ticket_revenue tr ON tb."ticketRevenueId" = tr."id"
+        LEFT JOIN customers c ON tb."phone" = c."phone"
         WHERE tb."date" >= ${startDate}
           AND tb."date" <= ${endDate}
         ORDER BY tb."date" ASC

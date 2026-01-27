@@ -1,6 +1,5 @@
 generator client {
   provider = "prisma-client-js"
-  // Updated: 2026-01-20 - Force regeneration for TicketBuyer model
 }
 
 datasource db {
@@ -8,110 +7,24 @@ datasource db {
   url      = env("POSTGRES_URL")
 }
 
-// 사용자 역할
-enum UserRole {
-  ADMIN   // 어드민: 모든 지점 데이터 + 성과지표 UI 접근
-  BRANCH  // 지점: 할당된 지점 데이터만 접근
-}
-
-// 사용자
-model User {
-  id        String    @id @default(cuid())
-  username  String    @unique  // 로그인 아이디
-  password  String    // bcrypt 해시
-  name      String    // 표시 이름
-  role      UserRole  @default(BRANCH)
-  branchId  String?   // BRANCH 역할일 경우 접근 가능한 지점
-  branch    Branch?   @relation(fields: [branchId], references: [id])
-  isActive  Boolean   @default(true)
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-
-  @@map("users")
-}
-
 model Branch {
-  id               String           @id @default(cuid())
-  name             String           @unique
-  index            Int
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
-  users            User[]
-  campaignBranches CampaignBranch[]
-  combinedBranches CombinedBranch[]
-  dailyMetrics     DailyMetric[]
-  dailyVisitors    DailyVisitor[]
-  hourlyUsages     HourlyUsage[]
-  strategyBranches StrategyBranch[]
-  ticket_revenue   ticket_revenue[]
+  id                 String               @id @default(cuid())
+  name               String               @unique
+  index              Int
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  campaignBranches   CampaignBranch[]
+  combinedBranches   CombinedBranch[]
+  customerPurchases  CustomerPurchase[]
+  customers          Customer[]
+  dailyMetrics       DailyMetric[]
+  dailyVisitors      DailyVisitor[]
+  hourlyUsages       HourlyUsage[]
+  strategyBranches   StrategyBranch[]
+  ticketRevenues     TicketRevenue[]
+  users              User[]
 
   @@map("branches")
-}
-
-model DailyMetric {
-  id                String   @id @default(cuid())
-  branchId          String
-  date              DateTime @db.Date
-  newUsers          Int?
-  seatUsage         Int?
-  totalRevenue      Decimal? @db.Decimal(10, 2)
-  dayTicketRevenue  Decimal? @db.Decimal(10, 2)
-  timeTicketRevenue Decimal? @db.Decimal(10, 2)
-  termTicketRevenue Decimal? @db.Decimal(10, 2)
-  collectedAt       DateTime @default(now())
-  newUsers10s       Int?
-  newUsers20s       Int?
-  newUsers30s       Int?
-  newUsers40s       Int?
-  newUsers50s       Int?
-  newUsers60plus    Int?
-  newUsersFemale    Int?
-  newUsersMale      Int?
-  pointUsed         Decimal? @db.Decimal(10, 2)
-  branch            Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
-
-  @@unique([branchId, date])
-  @@index([date])
-  @@index([branchId, date])
-  @@map("daily_metrics")
-}
-
-model DailyVisitor {
-  id          String   @id @default(cuid())
-  branchId    String
-  visitDate   DateTime @db.Date
-  phone       String
-  visitTime   String?
-  age         Int?
-  ageGroup    String?
-  gender      String?
-  isNewUser   Boolean  @default(false)
-  collectedAt DateTime @default(now())
-  branch      Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
-
-  @@index([branchId, visitDate])
-  @@index([phone])
-  @@index([visitDate])
-  @@map("daily_visitors")
-}
-
-model Campaign {
-  id          String           @id @default(cuid())
-  name        String
-  startDate   DateTime         @db.Date
-  endDate     DateTime         @db.Date
-  impressions Int?
-  clicks      Int?
-  cost        Decimal?         @db.Decimal(10, 2)
-  description String?
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
-  status      String           @default("ONGOING")
-  branches    CampaignBranch[]
-
-  @@index([startDate, endDate])
-  @@index([status])
-  @@map("campaigns")
 }
 
 model CampaignBranch {
@@ -123,59 +36,45 @@ model CampaignBranch {
   campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
 
   @@unique([campaignId, branchId])
-  @@index([campaignId])
   @@index([branchId])
+  @@index([campaignId])
   @@map("campaign_branches")
 }
 
-model Strategy {
-  id          String           @id @default(cuid())
-  name        String
-  type        String
-  startDate   DateTime         @db.Date
-  endDate     DateTime         @db.Date
-  description String?
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
-  reason      String?
-  status      String           @default("ONGOING")
-  branches    StrategyBranch[]
+model Campaign {
+  id               String           @id @default(cuid())
+  name             String
+  startDate        DateTime         @db.Date
+  endDate          DateTime         @db.Date
+  impressions      Int?
+  clicks           Int?
+  cost             Decimal?         @db.Decimal(10, 2)
+  description      String?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  status           String           @default("ONGOING")
+  branches         CampaignBranch[]
 
-  @@index([type])
   @@index([startDate, endDate])
   @@index([status])
-  @@map("strategies")
-}
-
-model StrategyBranch {
-  id         String   @id @default(cuid())
-  strategyId String
-  branchId   String
-  createdAt  DateTime @default(now())
-  branch     Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
-  strategy   Strategy @relation(fields: [strategyId], references: [id], onDelete: Cascade)
-
-  @@unique([strategyId, branchId])
-  @@index([strategyId])
-  @@index([branchId])
-  @@map("strategy_branches")
+  @@map("campaigns")
 }
 
 model CombinedAnalysis {
-  id           String           @id @default(cuid())
-  name         String
-  startDate    DateTime         @db.Date
-  endDate      DateTime         @db.Date
-  cost         Decimal?         @db.Decimal(10, 2)
-  impressions  Int?
-  clicks       Int?
-  strategyType String?
-  reason       String?
-  description  String?
-  status       String           @default("ONGOING")
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @updatedAt
-  branches     CombinedBranch[]
+  id              String           @id @default(cuid())
+  name            String
+  startDate       DateTime         @db.Date
+  endDate         DateTime         @db.Date
+  cost            Decimal?         @db.Decimal(10, 2)
+  impressions     Int?
+  clicks          Int?
+  strategyType    String?
+  reason          String?
+  description     String?
+  status          String           @default("ONGOING")
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  branches        CombinedBranch[]
 
   @@index([startDate, endDate])
   @@index([status])
@@ -191,9 +90,121 @@ model CombinedBranch {
   combined   CombinedAnalysis @relation(fields: [combinedId], references: [id], onDelete: Cascade)
 
   @@unique([combinedId, branchId])
-  @@index([combinedId])
   @@index([branchId])
+  @@index([combinedId])
   @@map("combined_branches")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model CustomerPurchase {
+  id           String   @id @default(cuid())
+  customerId   String
+  branchId     String
+  purchaseDate DateTime @db.Date
+  ticketName   String
+  amount       Decimal  @db.Decimal(10, 2)
+  paymentTime  String?
+  pointUsed    Decimal? @db.Decimal(10, 2)
+  branch       Branch   @relation(fields: [branchId], references: [id])
+  customer     Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([branchId, purchaseDate])
+  @@index([customerId])
+  @@index([purchaseDate])
+  @@index([ticketName])
+  @@index([customerId], map: "idx_customer_purchases_customerid")
+  @@index([purchaseDate], map: "idx_customer_purchases_purchasedate")
+  @@map("customer_purchases")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model Customer {
+  id                String             @id @default(cuid())
+  phone             String             @unique
+  gender            String?
+  birthdate         String?
+  age               Int?
+  ageGroup          String?
+  firstVisitDate    DateTime           @db.Date
+  lastVisitDate     DateTime?          @db.Date
+  lastPurchaseDate  DateTime?          @db.Date
+  mainBranchId      String?
+  totalVisits       Int                @default(0)
+  totalSpent        Decimal            @default(0) @db.Decimal(10, 2)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  purchases         CustomerPurchase[]
+  mainBranch        Branch?            @relation(fields: [mainBranchId], references: [id])
+  dailyVisitors     DailyVisitor[]
+
+  @@index([lastVisitDate])
+  @@index([mainBranchId])
+  @@index([phone])
+  @@index([totalSpent])
+  @@index([totalVisits])
+  @@index([mainBranchId], map: "idx_customers_mainbranchid")
+  @@index([phone], map: "idx_customers_phone")
+  @@map("customers")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model DailyMetric {
+  id                String   @id(map: "daily_metrics_new_pkey1") @default(cuid())
+  branchId          String
+  date              DateTime @db.Date
+  newUsers          Int?
+  seatUsage         Int?
+  totalRevenue      Decimal? @db.Decimal(10, 2)
+  dayTicketRevenue  Decimal? @db.Decimal(10, 2)
+  timeTicketRevenue Decimal? @db.Decimal(10, 2)
+  termTicketRevenue Decimal? @db.Decimal(10, 2)
+  lockerRevenue     Decimal? @db.Decimal(10, 2)
+  pointUsed         Decimal? @db.Decimal(10, 2)
+  collectedAt       DateTime @default(now()) @db.Timestamp(6)
+  newUsers10s       Int?
+  newUsers20s       Int?
+  newUsers30s       Int?
+  newUsers40s       Int?
+  newUsers50s       Int?
+  newUsers60plus    Int?
+  newUsersFemale    Int?
+  newUsersMale      Int?
+  branch            Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "daily_metrics_branchid_fkey")
+
+  @@unique([branchId, date], map: "daily_metrics_branchid_date_key")
+  @@index([branchId, date], map: "daily_metrics_branchid_date_idx")
+  @@index([date])
+  @@map("daily_metrics")
+}
+
+model DailyVisitor {
+  id                   String    @id @default(cuid())
+  branchId             String
+  visitDate            DateTime  @db.Date
+  phone                String
+  collectedAt          DateTime  @default(now())
+  visitTime            String?
+  age                  Int?
+  ageGroup             String?
+  gender               String?
+  birthdate            String?
+  duration             Int?
+  endTime              DateTime?
+  paymentMethod        String?
+  remainingTermTicket  String?
+  remainingTimePackage String?
+  seat                 String?
+  startTime            DateTime?
+  customerId           String?
+  remainingFixedSeat   String?
+  branch               Branch    @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  customer             Customer? @relation(fields: [customerId], references: [id])
+
+  @@index([branchId, visitDate])
+  @@index([customerId])
+  @@index([phone])
+  @@index([visitDate])
+  @@map("daily_visitors")
 }
 
 model HourlyUsage {
@@ -211,42 +222,93 @@ model HourlyUsage {
   @@map("hourly_usage")
 }
 
-model ticket_revenue {
-  id           String         @id
-  branchId     String
-  date         DateTime       @db.Date
-  ticketName   String
-  revenue      Decimal        @db.Decimal(10, 2)
-  collectedAt  DateTime       @default(now())
-  branches     Branch         @relation(fields: [branchId], references: [id], onDelete: Cascade)
-  ticketBuyers TicketBuyer[]
+model Strategy {
+  id               String           @id @default(cuid())
+  name             String
+  type             String
+  startDate        DateTime         @db.Date
+  endDate          DateTime         @db.Date
+  description      String?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  reason           String?
+  status           String           @default("ONGOING")
+  branches         StrategyBranch[]
+
+  @@index([startDate, endDate])
+  @@index([status])
+  @@index([type])
+  @@map("strategies")
+}
+
+model StrategyBranch {
+  id         String   @id @default(cuid())
+  strategyId String
+  branchId   String
+  createdAt  DateTime @default(now())
+  branch     Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  strategy   Strategy @relation(fields: [strategyId], references: [id], onDelete: Cascade)
+
+  @@unique([strategyId, branchId])
+  @@index([branchId])
+  @@index([strategyId])
+  @@map("strategy_branches")
+}
+
+model TicketBuyer {
+  id              String        @id @default(cuid())
+  ticketRevenueId String
+  branchId        String
+  date            DateTime      @db.Date
+  ticketName      String
+  collectedAt     DateTime      @default(now())
+  customerHash    String?
+  paymentTime     String?
+  phone           String?
+  amount          Decimal?      @db.Decimal(10, 2)
+  pointUsed       Decimal?      @db.Decimal(10, 2)
+  ticketRevenue   TicketRevenue @relation(fields: [ticketRevenueId], references: [id], onDelete: Cascade)
+
+  @@index([branchId, date])
+  @@index([customerHash])
+  @@index([phone])
+  @@index([ticketName])
+  @@map("ticket_buyers")
+}
+
+model TicketRevenue {
+  id            String        @id @default(cuid())
+  branchId      String
+  date          DateTime      @db.Date
+  ticketName    String
+  revenue       Decimal       @db.Decimal(10, 2)
+  collectedAt   DateTime      @default(now())
+  ticketBuyers  TicketBuyer[]
+  branch        Branch        @relation(fields: [branchId], references: [id], onDelete: Cascade)
 
   @@unique([branchId, date, ticketName])
   @@index([branchId, date])
   @@index([date])
   @@index([ticketName])
+  @@map("ticket_revenue")
 }
 
-model TicketBuyer {
-  id              String         @id @default(cuid())
-  ticketRevenueId String
-  branchId        String
-  date            DateTime       @db.Date
-  ticketName      String
-  gender          String?
-  birthdate       String?
-  age             Int?
-  ageGroup        String?
-  customerHash    String?
-  paymentTime     String?
-  phone           String?
-  collectedAt     DateTime       @default(now())
-  ticketRevenue   ticket_revenue @relation(fields: [ticketRevenueId], references: [id], onDelete: Cascade)
+model User {
+  id        String    @id @default(cuid())
+  username  String    @unique
+  password  String
+  name      String
+  role      UserRole  @default(BRANCH)
+  branchId  String?
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  branch    Branch?   @relation(fields: [branchId], references: [id])
 
-  @@index([branchId, date])
-  @@index([customerHash])
-  @@index([date])
-  @@index([ageGroup])
-  @@index([gender])
-  @@map("ticket_buyers")
+  @@map("users")
+}
+
+enum UserRole {
+  ADMIN
+  BRANCH
 }
