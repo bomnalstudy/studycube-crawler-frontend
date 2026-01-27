@@ -1,11 +1,13 @@
 import { CustomerSegment } from '@/types/crm'
 
+export type TicketSubType = 'day' | 'time' | 'term' | 'fixed'
+
 interface SegmentInput {
   hasClaim: boolean
   lastVisitDate: Date | null
   firstVisitDate: Date
   recentVisits: number      // 30일 내 방문 수
-  favoriteTicketType: 'day' | 'term' | 'time' | null
+  favoriteTicketType: TicketSubType | null
 }
 
 /**
@@ -13,13 +15,14 @@ interface SegmentInput {
  *
  * 우선순위:
  * 1. 클레임 경험 -> claim
- * 2. 7일 미방문 -> at_risk_7
- * 3. 신규 0~7일 -> new_0_7
- * 4. 당일권 유저 -> day_ticket
- * 5. 정기권 유저 -> term_ticket
- * 6. 30일 내 방문 20회+ -> visit_over20 (VIP)
- * 7. 30일 내 방문 10~20회 -> visit_10_20 (단골)
- * 8. 30일 내 방문 10회 미만 -> visit_under10 (일반)
+ * 2. 30일+ 미방문 -> churned (이탈)
+ * 3. 7~30일 미방문 -> at_risk_7 (이탈위험)
+ * 4. 신규 0~7일 -> new_0_7
+ * 5. 당일권 유저 -> day_ticket
+ * 6. 정기권 유저 (시간권/기간권/고정석) -> term_ticket
+ * 7. 30일 내 방문 20회+ -> visit_over20 (VIP)
+ * 8. 30일 내 방문 10~20회 -> visit_10_20 (단골)
+ * 9. 30일 내 방문 10회 미만 -> visit_under10 (일반)
  */
 export function calculateSegment(input: SegmentInput): CustomerSegment {
   const now = new Date()
@@ -29,17 +32,22 @@ export function calculateSegment(input: SegmentInput): CustomerSegment {
     return 'claim'
   }
 
-  // 2. 7일 미방문 (이탈위험)
+  // 2-3. 미방문 기간 기반
   if (input.lastVisitDate) {
     const daysSinceLastVisit = Math.floor(
       (now.getTime() - input.lastVisitDate.getTime()) / (1000 * 60 * 60 * 24)
     )
+    // 2. 30일+ 미방문 (이탈)
+    if (daysSinceLastVisit >= 30) {
+      return 'churned'
+    }
+    // 3. 7~30일 미방문 (이탈위험)
     if (daysSinceLastVisit >= 7) {
       return 'at_risk_7'
     }
   }
 
-  // 3. 신규 0~7일
+  // 4. 신규 0~7일
   const daysSinceFirstVisit = Math.floor(
     (now.getTime() - input.firstVisitDate.getTime()) / (1000 * 60 * 60 * 24)
   )
@@ -47,17 +55,21 @@ export function calculateSegment(input: SegmentInput): CustomerSegment {
     return 'new_0_7'
   }
 
-  // 4. 당일권 유저
+  // 5. 당일권 유저
   if (input.favoriteTicketType === 'day') {
     return 'day_ticket'
   }
 
-  // 5. 정기권 유저
-  if (input.favoriteTicketType === 'term') {
+  // 6. 정기권 유저 (시간권, 기간권, 고정석 모두 포함)
+  if (
+    input.favoriteTicketType === 'time' ||
+    input.favoriteTicketType === 'term' ||
+    input.favoriteTicketType === 'fixed'
+  ) {
     return 'term_ticket'
   }
 
-  // 6~8. 방문 빈도 기반 (30일 내 방문 수)
+  // 7~9. 방문 빈도 기반 (30일 내 방문 수)
   if (input.recentVisits >= 20) {
     return 'visit_over20'
   }
@@ -70,13 +82,17 @@ export function calculateSegment(input: SegmentInput): CustomerSegment {
 /**
  * 이용권 이름에서 타입을 추론
  * - 당일권: "당일", "일일", "1day" 등 포함
- * - 정기권: "기간", "정기", "주", "월" 등 포함
+ * - 고정석: "고정" 포함
+ * - 기간권: "기간", "정기", "주", "월" 등 포함
  * - 시간권: 나머지
  */
-export function inferTicketType(ticketName: string): 'day' | 'term' | 'time' {
+export function inferTicketType(ticketName: string): TicketSubType {
   const lower = ticketName.toLowerCase()
   if (lower.includes('당일') || lower.includes('일일') || lower.includes('1day') || lower.includes('1일')) {
     return 'day'
+  }
+  if (lower.includes('고정')) {
+    return 'fixed'
   }
   if (
     lower.includes('기간') ||
@@ -84,8 +100,7 @@ export function inferTicketType(ticketName: string): 'day' | 'term' | 'time' {
     lower.includes('주간') ||
     lower.includes('월간') ||
     lower.includes('4주') ||
-    lower.includes('2주') ||
-    lower.includes('고정')
+    lower.includes('2주')
   ) {
     return 'term'
   }
@@ -97,12 +112,11 @@ export function inferTicketType(ticketName: string): 'day' | 'term' | 'time' {
  */
 export function calculateFavoriteTicketType(
   purchases: { ticketName: string; amount: number }[]
-): 'day' | 'term' | 'time' | null {
+): TicketSubType | null {
   if (purchases.length === 0) return null
 
-  const typeCount: Record<string, number> = { day: 0, term: 0, time: 0 }
+  const typeCount: Record<string, number> = { day: 0, time: 0, term: 0, fixed: 0 }
   for (const p of purchases) {
-    // amount가 0인 경우 (시간권 당일 이용 등)는 제외
     if (p.amount <= 0) continue
     const type = inferTicketType(p.ticketName)
     typeCount[type]++
@@ -110,5 +124,5 @@ export function calculateFavoriteTicketType(
 
   const entries = Object.entries(typeCount).sort((a, b) => b[1] - a[1])
   if (entries[0][1] === 0) return null
-  return entries[0][0] as 'day' | 'term' | 'time'
+  return entries[0][0] as TicketSubType
 }

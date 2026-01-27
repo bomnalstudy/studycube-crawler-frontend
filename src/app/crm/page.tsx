@@ -8,6 +8,7 @@ import { CrmKpiCards } from '@/components/crm/dashboard/CrmKpiCards'
 import { SegmentCriteria } from '@/components/crm/dashboard/SegmentCriteria'
 import { RevisitDonutGroup } from '@/components/crm/dashboard/RevisitDonutGroup'
 import { OperationQueue } from '@/components/crm/dashboard/OperationQueue'
+import { SegmentDistributionChart } from '@/components/crm/dashboard/SegmentDistributionChart'
 import { SegmentLtvChart } from '@/components/crm/dashboard/SegmentLtvChart'
 import { SegmentRevisitChart } from '@/components/crm/dashboard/SegmentRevisitChart'
 import { BranchSelector } from '@/components/dashboard/branch-selector'
@@ -174,11 +175,15 @@ export default function CrmDashboardPage() {
           totalCustomers={data.kpi.totalCustomers}
           newCustomers={data.kpi.newCustomers}
           atRiskCustomers={data.kpi.atRiskCustomers}
+          churnedCustomers={data.kpi.churnedCustomers}
           claimCustomers={data.kpi.claimCustomers}
         />
 
         {/* 세그먼트 분류 기준 */}
         <SegmentCriteria />
+
+        {/* 세그먼트 분포 도넛 */}
+        <SegmentDistributionChart data={data.segmentCounts} />
 
         {/* 재방문 비율 + 운영 큐 */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

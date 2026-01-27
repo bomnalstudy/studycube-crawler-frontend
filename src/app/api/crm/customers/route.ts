@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getAuthSession, getBranchFilter } from '@/lib/auth-helpers'
 import { decimalToNumber } from '@/lib/utils/formatters'
-import { calculateSegment, calculateFavoriteTicketType } from '@/lib/crm/segment-calculator'
+import { calculateSegment, calculateFavoriteTicketType, TicketSubType } from '@/lib/crm/segment-calculator'
 import { CustomerListItem, CustomerSegment, PaginatedResponse } from '@/types/crm'
 
 export async function GET(request: NextRequest) {
@@ -25,6 +25,7 @@ export async function GET(request: NextRequest) {
     const minSpent = searchParams.get('minSpent') ? Number(searchParams.get('minSpent')) : undefined
     const maxSpent = searchParams.get('maxSpent') ? Number(searchParams.get('maxSpent')) : undefined
     const hasClaim = searchParams.get('hasClaim')
+    const ticketSubType = searchParams.get('ticketSubType') as TicketSubType | null
     const search = searchParams.get('search')
     const sortBy = searchParams.get('sortBy') || 'lastVisitDate'
     const sortOrder = (searchParams.get('sortOrder') || 'desc') as 'asc' | 'desc'
@@ -96,6 +97,38 @@ export async function GET(request: NextRequest) {
       }),
     ])
 
+    // 고객별 최근 방문의 잔여 정기권 정보
+    const customerIds = customers.map(c => c.id)
+    const latestVisitsWithTickets = await prisma.dailyVisitor.findMany({
+      where: {
+        customerId: { in: customerIds },
+        OR: [
+          { remainingTermTicket: { not: null } },
+          { remainingTimePackage: { not: null } },
+          { remainingFixedSeat: { not: null } },
+        ],
+      },
+      select: {
+        customerId: true,
+        visitDate: true,
+        remainingTermTicket: true,
+        remainingTimePackage: true,
+        remainingFixedSeat: true,
+      },
+      orderBy: { visitDate: 'desc' },
+    })
+
+    // 고객별 가장 최근 잔여 정기권 정보만 저장
+    const remainingTicketMap = new Map<string, { termTicket: string | null; timePackage: string | null; fixedSeat: string | null }>()
+    latestVisitsWithTickets.forEach(v => {
+      if (!v.customerId || remainingTicketMap.has(v.customerId)) return
+      remainingTicketMap.set(v.customerId, {
+        termTicket: v.remainingTermTicket,
+        timePackage: v.remainingTimePackage,
+        fixedSeat: v.remainingFixedSeat,
+      })
+    })
+
     // 최근 구매 데이터 (세그먼트 분류용)
     const recentPurchases = await prisma.customerPurchase.findMany({
       where: {
@@ -154,6 +187,8 @@ export async function GET(request: NextRequest) {
         favoriteTicketType,
       })
 
+      const remaining = remainingTicketMap.get(c.id)
+
       return {
         id: c.id,
         phone: c.phone,
@@ -166,6 +201,8 @@ export async function GET(request: NextRequest) {
         segment: seg,
         claimCount,
         recentVisits,
+        favoriteTicketType,
+        remainingTickets: remaining || null,
       }
     })
 
@@ -179,6 +216,11 @@ export async function GET(request: NextRequest) {
       items = items.filter(i => i.claimCount > 0)
     } else if (hasClaim === 'false') {
       items = items.filter(i => i.claimCount === 0)
+    }
+
+    // 이용권 세부 타입 필터 (시간권/기간권/고정석)
+    if (ticketSubType) {
+      items = items.filter(i => i.favoriteTicketType === ticketSubType)
     }
 
     // 정렬

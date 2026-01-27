@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { CustomerSegment, SEGMENT_LABELS } from '@/types/crm'
+import { CustomerSegment, SEGMENT_LABELS, TicketSubType, TICKET_SUB_TYPE_LABELS } from '@/types/crm'
 
 interface CustomerFiltersProps {
   onFilterChange: (filters: FilterValues) => void
@@ -10,6 +10,7 @@ interface CustomerFiltersProps {
 
 export interface FilterValues {
   segment?: CustomerSegment
+  ticketSubType?: TicketSubType
   ageGroup?: string
   gender?: string
   hasClaim?: string
@@ -18,10 +19,12 @@ export interface FilterValues {
   sortOrder?: 'asc' | 'desc'
 }
 
+const TERM_SUB_TYPES: TicketSubType[] = ['time', 'term', 'fixed']
+
 const AGE_GROUPS = ['10대', '20대', '30대', '40대', '50대', '60대+']
 const GENDERS = ['남자', '여자']
 const SEGMENTS: CustomerSegment[] = [
-  'claim', 'at_risk_7', 'new_0_7', 'day_ticket',
+  'claim', 'churned', 'at_risk_7', 'new_0_7', 'day_ticket',
   'term_ticket', 'visit_over20', 'visit_10_20', 'visit_under10',
 ]
 
@@ -41,7 +44,7 @@ export function CustomerFilters({ onFilterChange, initialFilters = {} }: Custome
     onFilterChange(empty)
   }
 
-  const hasActiveFilters = filters.segment || filters.ageGroup || filters.gender || filters.hasClaim
+  const hasActiveFilters = filters.segment || filters.ticketSubType || filters.ageGroup || filters.gender || filters.hasClaim
 
   return (
     <div className="space-y-3">
@@ -81,7 +84,12 @@ export function CustomerFilters({ onFilterChange, initialFilters = {} }: Custome
               {SEGMENTS.map(seg => (
                 <button
                   key={seg}
-                  onClick={() => updateFilter('segment', filters.segment === seg ? undefined : seg)}
+                  onClick={() => {
+                    const newSeg = filters.segment === seg ? undefined : seg
+                    const newFilters = { ...filters, segment: newSeg, ticketSubType: undefined }
+                    setFilters(newFilters)
+                    onFilterChange(newFilters)
+                  }}
                   className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
                     filters.segment === seg
                       ? 'bg-blue-100 text-blue-700'
@@ -93,6 +101,28 @@ export function CustomerFilters({ onFilterChange, initialFilters = {} }: Custome
               ))}
             </div>
           </div>
+
+          {/* 정기권 세부 필터 (정기권 세그먼트 선택 시) */}
+          {filters.segment === 'term_ticket' && (
+            <div>
+              <label className="text-xs font-medium text-gray-500 mb-1.5 block">정기권 세부 타입</label>
+              <div className="flex flex-wrap gap-1.5">
+                {TERM_SUB_TYPES.map(type => (
+                  <button
+                    key={type}
+                    onClick={() => updateFilter('ticketSubType', filters.ticketSubType === type ? undefined : type)}
+                    className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                      filters.ticketSubType === type
+                        ? 'bg-purple-100 text-purple-700'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    {TICKET_SUB_TYPE_LABELS[type]}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* 연령대 */}
           <div>

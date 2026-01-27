@@ -42,6 +42,7 @@ export function CustomerTable({ items, total, page, totalPages, onPageChange, se
                 <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">연령대</th>
                 <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">최근 방문수</th>
                 <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">총 소비</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">잔여 정기권</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">마지막 방문</th>
                 <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">클레임</th>
               </tr>
@@ -77,6 +78,23 @@ export function CustomerTable({ items, total, page, totalPages, onPageChange, se
                   <td className="px-4 py-3 text-gray-600">{item.ageGroup || '-'}</td>
                   <td className="px-4 py-3 text-right text-gray-700 font-medium">{item.recentVisits}회</td>
                   <td className="px-4 py-3 text-right text-gray-700">{formatCurrency(item.totalSpent)}</td>
+                  <td className="px-4 py-3">
+                    {item.remainingTickets ? (
+                      <div className="space-y-0.5">
+                        {item.remainingTickets.termTicket && (
+                          <p className="text-[11px] text-purple-600">기간권 : {item.remainingTickets.termTicket}</p>
+                        )}
+                        {item.remainingTickets.timePackage && (
+                          <p className="text-[11px] text-blue-600">시간패키지 : {item.remainingTickets.timePackage}</p>
+                        )}
+                        {item.remainingTickets.fixedSeat && (
+                          <p className="text-[11px] text-amber-600">고정석 : {item.remainingTickets.fixedSeat}</p>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-gray-300 text-xs">-</span>
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-gray-500">{item.lastVisitDate || '-'}</td>
                   <td className="px-4 py-3 text-right">
                     {item.claimCount > 0 ? (

@@ -74,6 +74,7 @@ export default function CustomerListPage() {
       params.set('visitEndDate', formatDate(endDate))
 
       if (filters.segment) params.set('segment', filters.segment)
+      if (filters.ticketSubType) params.set('ticketSubType', filters.ticketSubType)
       if (filters.ageGroup) params.set('ageGroup', filters.ageGroup)
       if (filters.gender) params.set('gender', filters.gender)
       if (filters.hasClaim) params.set('hasClaim', filters.hasClaim)
@@ -163,49 +164,50 @@ export default function CustomerListPage() {
           initialFilters={filters}
         />
 
-        {/* 테이블 + 사이드 패널 */}
-        <div className="flex gap-4">
-          {/* 테이블 영역 */}
-          <div className={`transition-all duration-300 ${selectedCustomerId ? 'flex-1 min-w-0' : 'w-full'}`}>
-            {loading ? (
-              <div className="bg-white rounded-xl border border-gray-200 p-10 text-center">
-                <div className="animate-spin w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full mx-auto" />
-                <p className="text-sm text-gray-400 mt-3">불러오는 중...</p>
-              </div>
-            ) : error ? (
-              <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center">
-                <p className="text-red-600 text-sm">{error}</p>
-                <button
-                  onClick={fetchData}
-                  className="mt-3 px-4 py-2 bg-red-100 text-red-700 rounded-lg text-sm hover:bg-red-200 transition-colors"
-                >
-                  다시 시도
-                </button>
-              </div>
-            ) : data ? (
-              <CustomerTable
-                items={data.items}
-                total={data.total}
-                page={data.page}
-                totalPages={data.totalPages}
-                onPageChange={handlePageChange}
-                selectedId={selectedCustomerId}
-                onRowClick={handleRowClick}
-              />
-            ) : null}
+        {/* 테이블 */}
+        {loading ? (
+          <div className="bg-white rounded-xl border border-gray-200 p-10 text-center">
+            <div className="animate-spin w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full mx-auto" />
+            <p className="text-sm text-gray-400 mt-3">불러오는 중...</p>
           </div>
+        ) : error ? (
+          <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center">
+            <p className="text-red-600 text-sm">{error}</p>
+            <button
+              onClick={fetchData}
+              className="mt-3 px-4 py-2 bg-red-100 text-red-700 rounded-lg text-sm hover:bg-red-200 transition-colors"
+            >
+              다시 시도
+            </button>
+          </div>
+        ) : data ? (
+          <CustomerTable
+            items={data.items}
+            total={data.total}
+            page={data.page}
+            totalPages={data.totalPages}
+            onPageChange={handlePageChange}
+            selectedId={selectedCustomerId}
+            onRowClick={handleRowClick}
+          />
+        ) : null}
 
-          {/* 사이드 패널 */}
-          {selectedCustomerId && (
-            <div className="w-[420px] flex-shrink-0 bg-white rounded-xl border border-gray-200 overflow-hidden max-h-[calc(100vh-180px)] sticky top-6">
+        {/* 오버레이 패널 */}
+        {selectedCustomerId && (
+          <>
+            <div
+              className="fixed inset-0 bg-black/30 z-40"
+              onClick={handleClosePanel}
+            />
+            <div className="fixed right-0 top-0 h-full w-[480px] bg-white shadow-2xl z-50 overflow-y-auto animate-slide-in-right">
               <CustomerDetailPanel
                 key={selectedCustomerId}
                 customerId={selectedCustomerId}
                 onClose={handleClosePanel}
               />
             </div>
-          )}
-        </div>
+          </>
+        )}
       </div>
     </div>
   )

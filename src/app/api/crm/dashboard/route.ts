@@ -121,7 +121,7 @@ export async function GET(request: NextRequest) {
     // 세그먼트 분류
     const segmentMap = new Map<string, CustomerSegment>()
     const segmentCounts: Record<CustomerSegment, number> = {
-      claim: 0, at_risk_7: 0, new_0_7: 0, day_ticket: 0,
+      claim: 0, churned: 0, at_risk_7: 0, new_0_7: 0, day_ticket: 0,
       term_ticket: 0, visit_over20: 0, visit_10_20: 0, visit_under10: 0,
     }
 
@@ -149,6 +149,7 @@ export async function GET(request: NextRequest) {
       return days <= 7
     }).length
     const atRiskCustomers = segmentCounts.at_risk_7
+    const churnedCustomers = segmentCounts.churned
     const claimCustomers = claimCustomerSet.size
 
     // 재방문 비율 계산
@@ -239,7 +240,7 @@ export async function GET(request: NextRequest) {
 
     // 세그먼트별 LTV (평균 총소비액)
     const segmentSpentTotals: Record<CustomerSegment, { total: number; count: number }> = {
-      claim: { total: 0, count: 0 }, at_risk_7: { total: 0, count: 0 },
+      claim: { total: 0, count: 0 }, churned: { total: 0, count: 0 }, at_risk_7: { total: 0, count: 0 },
       new_0_7: { total: 0, count: 0 }, day_ticket: { total: 0, count: 0 },
       term_ticket: { total: 0, count: 0 }, visit_over20: { total: 0, count: 0 },
       visit_10_20: { total: 0, count: 0 }, visit_under10: { total: 0, count: 0 },
@@ -262,7 +263,7 @@ export async function GET(request: NextRequest) {
 
     // 세그먼트별 재방문률 (30일 내 2회+ 방문 비율)
     const segmentRevisitTotals: Record<CustomerSegment, { revisit: number; count: number }> = {
-      claim: { revisit: 0, count: 0 }, at_risk_7: { revisit: 0, count: 0 },
+      claim: { revisit: 0, count: 0 }, churned: { revisit: 0, count: 0 }, at_risk_7: { revisit: 0, count: 0 },
       new_0_7: { revisit: 0, count: 0 }, day_ticket: { revisit: 0, count: 0 },
       term_ticket: { revisit: 0, count: 0 }, visit_over20: { revisit: 0, count: 0 },
       visit_10_20: { revisit: 0, count: 0 }, visit_under10: { revisit: 0, count: 0 },
@@ -285,11 +286,22 @@ export async function GET(request: NextRequest) {
       }))
       .sort((a, b) => b.value - a.value)
 
+    // 세그먼트별 고객 수 (도넛차트용)
+    const segmentCountsChart: SegmentChartItem[] = (Object.entries(segmentCounts) as [CustomerSegment, number][])
+      .filter(([, count]) => count > 0)
+      .map(([seg, count]) => ({
+        segment: seg,
+        label: SEGMENT_LABELS[seg],
+        value: count,
+      }))
+      .sort((a, b) => b.value - a.value)
+
     const data: CrmDashboardData = {
       kpi: {
         totalCustomers,
         newCustomers,
         atRiskCustomers,
+        churnedCustomers,
         claimCustomers,
       },
       revisitRatios: {
@@ -301,6 +313,7 @@ export async function GET(request: NextRequest) {
         newSignups: newSignupsList,
         dayTicketRepeaters,
       },
+      segmentCounts: segmentCountsChart,
       segmentLtv,
       segmentRevisitRate,
     }

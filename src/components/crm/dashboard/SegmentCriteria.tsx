@@ -4,12 +4,12 @@ import { useState } from 'react'
 import { SEGMENT_LABELS, SEGMENT_COLORS, SEGMENT_DESCRIPTIONS, CustomerSegment } from '@/types/crm'
 
 const SEGMENTS: CustomerSegment[] = [
-  'claim', 'at_risk_7', 'new_0_7', 'day_ticket',
+  'claim', 'churned', 'at_risk_7', 'new_0_7', 'day_ticket',
   'term_ticket', 'visit_over20', 'visit_10_20', 'visit_under10',
 ]
 
 export function SegmentCriteria() {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(true)
 
   return (
     <div className="bg-white rounded-2xl shadow-sm">

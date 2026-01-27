@@ -1,6 +1,7 @@
 // CRM 세그먼트 타입
 export type CustomerSegment =
   | 'claim'         // 클레임 경험 고객
+  | 'churned'       // 이탈 고객 (30일+ 미방문)
   | 'at_risk_7'     // 7일 미방문 (이탈위험)
   | 'new_0_7'       // 신규 0~7일
   | 'day_ticket'    // 당일권 유저
@@ -11,6 +12,7 @@ export type CustomerSegment =
 
 export const SEGMENT_LABELS: Record<CustomerSegment, string> = {
   claim: '클레임',
+  churned: '이탈',
   at_risk_7: '이탈위험',
   new_0_7: '신규',
   day_ticket: '당일권',
@@ -22,6 +24,7 @@ export const SEGMENT_LABELS: Record<CustomerSegment, string> = {
 
 export const SEGMENT_COLORS: Record<CustomerSegment, string> = {
   claim: '#EF4444',
+  churned: '#991B1B',
   at_risk_7: '#F97316',
   new_0_7: '#22C55E',
   day_ticket: '#3B82F6',
@@ -33,10 +36,11 @@ export const SEGMENT_COLORS: Record<CustomerSegment, string> = {
 
 export const SEGMENT_DESCRIPTIONS: Record<CustomerSegment, string> = {
   claim: '클레임 경험이 있는 고객',
-  at_risk_7: '마지막 방문 후 7일 이상 경과',
+  churned: '마지막 방문 후 30일 이상 경과 (이탈)',
+  at_risk_7: '마지막 방문 후 7~30일 경과 (이탈위험)',
   new_0_7: '첫 방문 후 7일 이내 신규 고객',
   day_ticket: '당일권을 주로 이용하는 고객',
-  term_ticket: '정기권(기간권)을 주로 이용하는 고객',
+  term_ticket: '정기권(시간권/기간권/고정석)을 주로 이용하는 고객',
   visit_over20: '30일 내 방문 20회 이상 (VIP)',
   visit_10_20: '30일 내 방문 10~20회 (단골)',
   visit_under10: '30일 내 방문 10회 미만 (일반)',
@@ -48,6 +52,7 @@ export interface CrmDashboardData {
     totalCustomers: number
     newCustomers: number
     atRiskCustomers: number
+    churnedCustomers: number
     claimCustomers: number
   }
   revisitRatios: {
@@ -59,6 +64,7 @@ export interface CrmDashboardData {
     newSignups: OperationQueueItem[]
     dayTicketRepeaters: OperationQueueItem[]
   }
+  segmentCounts: SegmentChartItem[]
   segmentLtv: SegmentChartItem[]
   segmentRevisitRate: SegmentChartItem[]
 }
@@ -78,6 +84,23 @@ export interface SegmentChartItem {
   value: number
 }
 
+// 이용권 세부 타입
+export type TicketSubType = 'day' | 'time' | 'term' | 'fixed'
+
+export const TICKET_SUB_TYPE_LABELS: Record<TicketSubType, string> = {
+  day: '당일권',
+  time: '시간권',
+  term: '기간권',
+  fixed: '고정석',
+}
+
+// 잔여 정기권 정보
+export interface RemainingTicketInfo {
+  termTicket: string | null    // 잔여 기간권
+  timePackage: string | null   // 잔여 시간패키지
+  fixedSeat: string | null     // 잔여 고정석
+}
+
 // 고객 리스트 아이템
 export interface CustomerListItem {
   id: string
@@ -91,6 +114,8 @@ export interface CustomerListItem {
   segment: CustomerSegment
   claimCount: number
   recentVisits: number  // 30일 내 방문 수
+  favoriteTicketType: TicketSubType | null
+  remainingTickets: RemainingTicketInfo | null
 }
 
 // 고객 리스트 필터

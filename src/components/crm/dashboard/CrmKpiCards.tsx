@@ -6,6 +6,7 @@ interface CrmKpiCardsProps {
   totalCustomers: number
   newCustomers: number
   atRiskCustomers: number
+  churnedCustomers: number
   claimCustomers: number
 }
 
@@ -13,6 +14,7 @@ export function CrmKpiCards({
   totalCustomers,
   newCustomers,
   atRiskCustomers,
+  churnedCustomers,
   claimCustomers,
 }: CrmKpiCardsProps) {
   const cards = [
@@ -43,7 +45,7 @@ export function CrmKpiCards({
       ),
     },
     {
-      label: '이탈위험 (7일 미방문)',
+      label: '이탈위험 (7~30일 미방문)',
       value: atRiskCustomers,
       accentColor: '#F97316',
       barColor: 'bg-orange-500',
@@ -52,6 +54,19 @@ export function CrmKpiCards({
       icon: (
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" />
+        </svg>
+      ),
+    },
+    {
+      label: '이탈 (30일+ 미방문)',
+      value: churnedCustomers,
+      accentColor: '#991B1B',
+      barColor: 'bg-red-800',
+      barBg: 'bg-red-100',
+      barPercent: totalCustomers > 0 ? Math.min(100, (churnedCustomers / totalCustomers) * 100) : 0,
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 7a4 4 0 11-8 0 4 4 0 018 0zM9 14a6 6 0 00-6 6v1h12v-1a6 6 0 00-6-6zM21 12h-6" />
         </svg>
       ),
     },
@@ -71,7 +86,7 @@ export function CrmKpiCards({
   ]
 
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
+    <div className="grid grid-cols-2 lg:grid-cols-5 gap-5">
       {cards.map((card) => (
         <div
           key={card.label}
