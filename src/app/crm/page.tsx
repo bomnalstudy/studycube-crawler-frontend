@@ -8,19 +8,47 @@ import { RevisitDonutGroup } from '@/components/crm/dashboard/RevisitDonutGroup'
 import { OperationQueue } from '@/components/crm/dashboard/OperationQueue'
 import { SegmentLtvChart } from '@/components/crm/dashboard/SegmentLtvChart'
 import { SegmentRevisitChart } from '@/components/crm/dashboard/SegmentRevisitChart'
+import { BranchSelector } from '@/components/dashboard/branch-selector'
+
+interface Branch {
+  id: string
+  name: string
+}
 
 export default function CrmDashboardPage() {
-  const { branchId } = useRole()
+  const { isAdmin, branchId: userBranchId } = useRole()
   const [data, setData] = useState<CrmDashboardData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  const [branches, setBranches] = useState<Branch[]>([])
+  const [selectedBranchId, setSelectedBranchId] = useState<string>('all')
+
+  // 지점 목록 가져오기
+  useEffect(() => {
+    async function fetchBranches() {
+      try {
+        const res = await fetch('/api/branches')
+        const json = await res.json()
+        if (json.success) {
+          setBranches(json.data)
+          if (!isAdmin && userBranchId) {
+            setSelectedBranchId(userBranchId)
+          }
+        }
+      } catch {
+        // 무시
+      }
+    }
+    fetchBranches()
+  }, [isAdmin, userBranchId])
 
   const fetchData = useCallback(async () => {
     try {
       setLoading(true)
       setError(null)
       const params = new URLSearchParams()
-      if (branchId) params.set('branchId', branchId)
+      params.set('branchId', selectedBranchId)
 
       const res = await fetch(`/api/crm/dashboard?${params}`)
       const json = await res.json()
@@ -35,7 +63,7 @@ export default function CrmDashboardPage() {
     } finally {
       setLoading(false)
     }
-  }, [branchId])
+  }, [selectedBranchId])
 
   useEffect(() => {
     fetchData()
@@ -85,10 +113,28 @@ export default function CrmDashboardPage() {
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-7xl mx-auto space-y-6">
-        {/* 헤더 */}
-        <div>
-          <h1 className="text-xl font-bold text-gray-800">CRM 대시보드</h1>
-          <p className="text-sm text-gray-500 mt-1">고객 세그먼트 현황 및 운영 큐</p>
+        {/* 헤더 + 필터 */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-xl font-bold text-gray-800">CRM 대시보드</h1>
+            <p className="text-sm text-gray-500 mt-1">고객 세그먼트 현황 및 운영 큐</p>
+          </div>
+          <div className="flex items-center gap-3">
+            {isAdmin ? (
+              <BranchSelector
+                branches={branches}
+                selectedBranchId={selectedBranchId}
+                onBranchChange={setSelectedBranchId}
+              />
+            ) : (
+              <div className="flex items-center gap-2 px-3 py-2 bg-gray-100 rounded-lg">
+                <span className="text-sm text-gray-600">지점:</span>
+                <span className="text-sm font-medium">
+                  {branches.find(b => b.id === userBranchId)?.name || '내 지점'}
+                </span>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* KPI 카드 */}
