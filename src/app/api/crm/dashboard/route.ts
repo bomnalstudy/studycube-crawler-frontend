@@ -405,21 +405,7 @@ export async function GET(request: NextRequest) {
       ticketSegmentRevisitRate,
     }
 
-    // 임시 디버그 정보 (문제 해결 후 제거)
-    const _debug = {
-      serverTime: new Date().toISOString(),
-      kstYesterday: yesterdayStr,
-      rangeStart: rangeStart.toISOString(),
-      rangeEnd: rangeEnd.toISOString(),
-      totalCustomersFromDB: allCustomers.length,
-      recentVisitorsFromDB: recentVisitors.length,
-      recentPurchasesFromDB: recentPurchases.length,
-      preRangeVisitorsFromDB: preRangeVisitors.length,
-      branchFilter: JSON.stringify(branchFilter),
-      nodeEnv: process.env.NODE_ENV,
-    }
-
-    return NextResponse.json({ success: true, data, _debug })
+    return NextResponse.json({ success: true, data })
   } catch (error) {
     console.error('Failed to fetch CRM dashboard:', error)
     return NextResponse.json(
