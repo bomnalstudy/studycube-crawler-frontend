@@ -1,7 +1,8 @@
 // CRM 방문 세그먼트 타입
 export type VisitSegment =
   | 'churned'       // 이탈 (30일+ 미방문)
-  | 'at_risk_7'     // 이탈위험 (7~30일 미방문)
+  | 'at_risk_14'    // 이탈위험 (14~30일 미방문)
+  | 'returned'      // 복귀 (30일+ 미방문 후 기간 내 재방문)
   | 'new_0_7'       // 신규 (선택 기간 내 첫 방문)
   | 'visit_under10' // 일반 (30일 내 10회 미만)
   | 'visit_10_20'   // 단골 (30일 내 10~20회)
@@ -9,7 +10,8 @@ export type VisitSegment =
 
 export const VISIT_SEGMENT_LABELS: Record<VisitSegment, string> = {
   churned: '이탈',
-  at_risk_7: '이탈위험',
+  at_risk_14: '이탈위험',
+  returned: '복귀',
   new_0_7: '신규',
   visit_under10: '일반',
   visit_10_20: '단골',
@@ -18,7 +20,8 @@ export const VISIT_SEGMENT_LABELS: Record<VisitSegment, string> = {
 
 export const VISIT_SEGMENT_COLORS: Record<VisitSegment, string> = {
   churned: '#991B1B',
-  at_risk_7: '#F97316',
+  at_risk_14: '#F97316',
+  returned: '#8B5CF6',
   new_0_7: '#22C55E',
   visit_under10: '#6B7280',
   visit_10_20: '#06B6D4',
@@ -27,7 +30,8 @@ export const VISIT_SEGMENT_COLORS: Record<VisitSegment, string> = {
 
 export const VISIT_SEGMENT_DESCRIPTIONS: Record<VisitSegment, string> = {
   churned: '마지막 방문 후 30일 이상 경과',
-  at_risk_7: '마지막 방문 후 7~30일 경과',
+  at_risk_14: '마지막 방문 후 14~30일 경과',
+  returned: '30일+ 미방문 후 기간 내 재방문',
   new_0_7: '선택 기간 내 첫 방문 고객',
   visit_under10: '30일 내 방문 10회 미만',
   visit_10_20: '30일 내 방문 10~20회',
@@ -79,6 +83,7 @@ export interface CrmDashboardData {
   }
   operationQueue: {
     atRisk: OperationQueueItem[]
+    returned: OperationQueueItem[]
     newSignups: OperationQueueItem[]
     dayTicketRepeaters: OperationQueueItem[]
   }

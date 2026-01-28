@@ -105,10 +105,15 @@ export async function GET(
     // 가장 최근 방문의 잔여 이용권 확인
     const latestVisit = visits[0]
 
+    // 30일 전 마지막 방문일 (복귀 판별용)
+    const preThirtyDayVisits = visits.filter(v => v.visitDate < thirtyDaysAgo)
+    const previousLastVisitDate = preThirtyDayVisits.length > 0 ? preThirtyDayVisits[0].visitDate : null
+
     const visitSeg = calculateVisitSegment({
       lastVisitDate: customer.lastVisitDate,
       firstVisitDate: customer.firstVisitDate,
       recentVisits,
+      previousLastVisitDate,
     })
     const ticketSeg = calculateTicketSegment({
       hasRemainingTermTicket: !!(latestVisit?.remainingTermTicket && latestVisit.remainingTermTicket.trim() !== ''),

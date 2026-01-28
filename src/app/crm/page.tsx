@@ -93,7 +93,7 @@ export default function CrmDashboardPage() {
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 p-6">
-        <div className="max-w-7xl mx-auto">
+        <div className="mx-auto max-w-[1600px]">
           <div className="animate-pulse space-y-4">
             <div className="h-8 bg-gray-200 rounded w-48" />
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -114,7 +114,7 @@ export default function CrmDashboardPage() {
   if (error) {
     return (
       <div className="min-h-screen bg-gray-50 p-6">
-        <div className="max-w-7xl mx-auto">
+        <div className="mx-auto max-w-[1600px]">
           <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center">
             <p className="text-red-600 text-sm">{error}</p>
             <button
@@ -133,9 +133,9 @@ export default function CrmDashboardPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
+      <div className="mx-auto max-w-[1600px]">
         {/* 헤더 + 필터 */}
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-4 mb-6">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
               <h1 className="text-xl font-bold text-gray-800">CRM 대시보드</h1>
@@ -170,42 +170,51 @@ export default function CrmDashboardPage() {
           </div>
         </div>
 
-        {/* KPI 카드 */}
-        <CrmKpiCards
-          totalCustomers={data.kpi.totalCustomers}
-          newCustomers={data.kpi.newCustomers}
-          atRiskCustomers={data.kpi.atRiskCustomers}
-          churnedCustomers={data.kpi.churnedCustomers}
-          timeTicketCustomers={data.kpi.timeTicketCustomers}
-          termTicketCustomers={data.kpi.termTicketCustomers}
-          fixedTicketCustomers={data.kpi.fixedTicketCustomers}
-        />
-
-        {/* 세그먼트 분류 기준 */}
-        <SegmentCriteria />
-
-        {/* 세그먼트 분포 도넛 */}
-        <SegmentDistributionChart visitData={data.visitSegmentCounts} ticketData={data.ticketSegmentCounts} />
-
-        {/* 운영 큐 + 재방문 비율 */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <div className="lg:col-span-2">
-            <OperationQueue
-              atRisk={data.operationQueue.atRisk}
-              newSignups={data.operationQueue.newSignups}
-              dayTicketRepeaters={data.operationQueue.dayTicketRepeaters}
+        {/* 메인 2-column 레이아웃 */}
+        <div className="flex flex-col xl:flex-row gap-6">
+          {/* 왼쪽: 차트 영역 */}
+          <div className="flex-1 min-w-0 space-y-6">
+            {/* KPI 카드 */}
+            <CrmKpiCards
+              totalCustomers={data.kpi.totalCustomers}
+              newCustomers={data.kpi.newCustomers}
+              atRiskCustomers={data.kpi.atRiskCustomers}
+              churnedCustomers={data.kpi.churnedCustomers}
+              timeTicketCustomers={data.kpi.timeTicketCustomers}
+              termTicketCustomers={data.kpi.termTicketCustomers}
+              fixedTicketCustomers={data.kpi.fixedTicketCustomers}
             />
-          </div>
-          <RevisitDonutGroup
-            generalRevisitRate={data.revisitRatios.generalRevisitRate}
-            newRevisitRate={data.revisitRatios.newRevisitRate}
-          />
-        </div>
 
-        {/* 세그먼트 차트 */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <SegmentLtvChart visitData={data.visitSegmentLtv} ticketData={data.ticketSegmentLtv} />
-          <SegmentRevisitChart visitData={data.visitSegmentRevisitRate} ticketData={data.ticketSegmentRevisitRate} />
+            {/* 세그먼트 분류 기준 */}
+            <SegmentCriteria />
+
+            {/* 세그먼트 분포 도넛 */}
+            <SegmentDistributionChart visitData={data.visitSegmentCounts} ticketData={data.ticketSegmentCounts} />
+
+            {/* 세그먼트 차트 */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <SegmentLtvChart visitData={data.visitSegmentLtv} ticketData={data.ticketSegmentLtv} />
+              <SegmentRevisitChart visitData={data.visitSegmentRevisitRate} ticketData={data.ticketSegmentRevisitRate} />
+            </div>
+          </div>
+
+          {/* 오른쪽: 운영 큐 + 재방문 비율 */}
+          <div className="xl:w-[380px] flex-shrink-0 space-y-4">
+            <div className="xl:sticky xl:top-6">
+              <div className="space-y-4">
+                <OperationQueue
+                  atRisk={data.operationQueue.atRisk}
+                  returned={data.operationQueue.returned}
+                  newSignups={data.operationQueue.newSignups}
+                  dayTicketRepeaters={data.operationQueue.dayTicketRepeaters}
+                />
+                <RevisitDonutGroup
+                  generalRevisitRate={data.revisitRatios.generalRevisitRate}
+                  newRevisitRate={data.revisitRatios.newRevisitRate}
+                />
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>

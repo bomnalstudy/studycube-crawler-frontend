@@ -8,7 +8,7 @@ import {
 } from '@/types/crm'
 
 const VISIT_SEGMENTS: VisitSegment[] = [
-  'churned', 'at_risk_7', 'new_0_7', 'visit_under10', 'visit_10_20', 'visit_over20',
+  'churned', 'at_risk_14', 'returned', 'new_0_7', 'visit_under10', 'visit_10_20', 'visit_over20',
 ]
 
 const TICKET_SEGMENTS: TicketSegment[] = ['day_ticket', 'time_ticket', 'term_ticket', 'fixed_ticket']

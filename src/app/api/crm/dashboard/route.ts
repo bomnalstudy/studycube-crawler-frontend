@@ -38,6 +38,7 @@ export async function GET(request: NextRequest) {
       allCustomers,
       recentVisitors,
       recentPurchases,
+      preRangeVisitors,
     ] = await Promise.all([
       // 전체 고객
       prisma.customer.findMany({
@@ -77,6 +78,19 @@ export async function GET(request: NextRequest) {
           ticketName: true,
           amount: true,
         }
+      }),
+      // 기간 시작 전 마지막 방문 (복귀 고객 판별용)
+      prisma.dailyVisitor.findMany({
+        where: {
+          ...branchFilter,
+          visitDate: { lt: rangeStart },
+          customerId: { not: null },
+        },
+        select: {
+          customerId: true,
+          visitDate: true,
+        },
+        orderBy: { visitDate: 'desc' },
       }),
     ])
 
@@ -133,6 +147,13 @@ export async function GET(request: NextRequest) {
       })
     })
 
+    // 기간 시작 전 고객별 마지막 방문일 (복귀 판별용)
+    const preRangeLastVisit = new Map<string, Date>()
+    preRangeVisitors.forEach(v => {
+      if (!v.customerId || preRangeLastVisit.has(v.customerId)) return
+      preRangeLastVisit.set(v.customerId, v.visitDate)
+    })
+
     // 고객별 구매 데이터
     const customerPurchases = new Map<string, { ticketName: string; amount: number }[]>()
     const customerPeriodSpent = new Map<string, number>()
@@ -153,7 +174,7 @@ export async function GET(request: NextRequest) {
     const ticketSegmentMap = new Map<string, TicketSegment>()
 
     const visitSegmentCounts: Record<VisitSegment, number> = {
-      churned: 0, at_risk_7: 0, new_0_7: 0,
+      churned: 0, at_risk_14: 0, returned: 0, new_0_7: 0,
       visit_under10: 0, visit_10_20: 0, visit_over20: 0,
     }
     const ticketSegmentCounts: Record<TicketSegment, number> = {
@@ -170,6 +191,7 @@ export async function GET(request: NextRequest) {
         recentVisits,
         referenceDate: rangeEnd,
         rangeStart,
+        previousLastVisitDate: preRangeLastVisit.get(customer.id) || null,
       })
       const ticketSeg = calculateTicketSegment({
         hasRemainingTermTicket: remaining?.hasTermTicket || false,
@@ -188,33 +210,42 @@ export async function GET(request: NextRequest) {
     const newCustomers = allCustomers.filter(c =>
       c.firstVisitDate >= rangeStart && c.firstVisitDate <= rangeEnd
     ).length
-    const atRiskCustomers = visitSegmentCounts.at_risk_7
+    const atRiskCustomers = visitSegmentCounts.at_risk_14
     const churnedCustomers = visitSegmentCounts.churned
     const timeTicketCustomers = ticketSegmentCounts.time_ticket
     const termTicketCustomers = ticketSegmentCounts.term_ticket
     const fixedTicketCustomers = ticketSegmentCounts.fixed_ticket
 
-    // 재방문 비율 계산
+    // 재방문률 계산: 방문일 수 / 기간 전체 일수
+    // 날짜편집기 종료일이 오늘 이후면 30일 기준, 아니면 실제 기간 일수
+    const dayMs = 24 * 60 * 60 * 1000
+    const periodDays = rangeEndRaw > yesterday
+      ? 30
+      : Math.floor((rangeEnd.getTime() - rangeStart.getTime()) / dayMs) + 1
+
+    // 고객별 재방문률 = visitDays / periodDays
+    const getCustomerRevisitRate = (customerId: string): number => {
+      const visitDays = customerRecentVisits.get(customerId) || 0
+      return visitDays / periodDays
+    }
+
+    // 일반(비신규) 고객 평균 재방문률
     const nonNewCustomers = allCustomers.filter(c =>
       c.firstVisitDate < rangeStart
     )
-    const generalRevisitCount = nonNewCustomers.filter(c =>
-      (customerRecentVisits.get(c.id) || 0) >= 2
-    ).length
     const generalRevisitRate = nonNewCustomers.length > 0
-      ? (generalRevisitCount / nonNewCustomers.length) * 100 : 0
+      ? (nonNewCustomers.reduce((sum, c) => sum + getCustomerRevisitRate(c.id), 0) / nonNewCustomers.length) * 100
+      : 0
 
-    // 신규 재방문
+    // 신규 고객 평균 재방문률
     const newCustomerList = allCustomers.filter(c =>
       c.firstVisitDate >= rangeStart && c.firstVisitDate <= rangeEnd
     )
-    const newRevisitCount = newCustomerList.filter(c =>
-      (customerRecentVisits.get(c.id) || 0) >= 2
-    ).length
     const newRevisitRate = newCustomerList.length > 0
-      ? (newRevisitCount / newCustomerList.length) * 100 : 0
+      ? (newCustomerList.reduce((sum, c) => sum + getCustomerRevisitRate(c.id), 0) / newCustomerList.length) * 100
+      : 0
 
-    // 운영 큐 공통: 기간 내 방문/구매 기반 매핑 함수
+    // 운영 큐: 기간 내 방문/구매 기반 매핑 (신규/당일권용)
     const toQueueItem = (c: typeof allCustomers[number]): OperationQueueItem => ({
       customerId: c.id,
       phone: c.phone,
@@ -225,21 +256,38 @@ export async function GET(request: NextRequest) {
       ticketSegment: ticketSegmentMap.get(c.id)!,
     })
 
-    // 운영 큐: 이탈위험 고객 (세그먼트 분류 결과 그대로 사용)
-    const atRiskList: OperationQueueItem[] = allCustomers
-      .filter(c => visitSegmentMap.get(c.id) === 'at_risk_7')
-      .sort((a, b) => {
-        const aDate = a.lastVisitDate?.getTime() || 0
-        const bDate = b.lastVisitDate?.getTime() || 0
-        return aDate - bDate
-      })
-      .map(toQueueItem)
+    // 운영 큐: 전체 누적 기반 매핑 (이탈위험용)
+    const toQueueItemAllTime = (c: typeof allCustomers[number]): OperationQueueItem => ({
+      customerId: c.id,
+      phone: c.phone,
+      lastVisitDate: c.lastVisitDate?.toISOString().split('T')[0] || null,
+      totalVisits: c.totalVisits,
+      totalSpent: decimalToNumber(c.totalSpent),
+      visitSegment: visitSegmentMap.get(c.id)!,
+      ticketSegment: ticketSegmentMap.get(c.id)!,
+    })
 
-    // 운영 큐: 신규가입자 (세그먼트 분류 결과 그대로 사용)
+    // 정렬: 소비금액 높은 순 → 방문횟수 높은 순
+    const sortBySpentAndVisits = (a: OperationQueueItem, b: OperationQueueItem) =>
+      b.totalSpent - a.totalSpent || b.totalVisits - a.totalVisits
+
+    // 운영 큐: 이탈위험 고객 (전체 누적 방문/소비 기준)
+    const atRiskList: OperationQueueItem[] = allCustomers
+      .filter(c => visitSegmentMap.get(c.id) === 'at_risk_14')
+      .map(toQueueItemAllTime)
+      .sort(sortBySpentAndVisits)
+
+    // 운영 큐: 복귀고객 (전체 누적 방문/소비 기준)
+    const returnedList: OperationQueueItem[] = allCustomers
+      .filter(c => visitSegmentMap.get(c.id) === 'returned')
+      .map(toQueueItemAllTime)
+      .sort(sortBySpentAndVisits)
+
+    // 운영 큐: 신규가입자 (기간 내 방문/소비 기준)
     const newSignupsList: OperationQueueItem[] = allCustomers
       .filter(c => visitSegmentMap.get(c.id) === 'new_0_7')
-      .sort((a, b) => b.firstVisitDate.getTime() - a.firstVisitDate.getTime())
       .map(toQueueItem)
+      .sort(sortBySpentAndVisits)
 
     // 운영 큐: 당일권 반복구매자 (amount > 0인 실제 구매만, 시간패키지 사용이력 제외)
     const dayTicketCustomerIds = new Set(
@@ -255,19 +303,21 @@ export async function GET(request: NextRequest) {
         if (ticketSegmentMap.get(c.id) !== 'day_ticket') return false
         return dayTicketCustomerIds.has(c.id)
       })
-      .sort((a, b) => (customerPeriodSpent.get(b.id) || 0) - (customerPeriodSpent.get(a.id) || 0))
       .map(toQueueItem)
+      .sort(sortBySpentAndVisits)
 
     // 방문 세그먼트별 LTV / 재방문률
     const visitSpentTotals: Record<VisitSegment, { total: number; count: number }> = {
-      churned: { total: 0, count: 0 }, at_risk_7: { total: 0, count: 0 },
-      new_0_7: { total: 0, count: 0 }, visit_under10: { total: 0, count: 0 },
-      visit_10_20: { total: 0, count: 0 }, visit_over20: { total: 0, count: 0 },
+      churned: { total: 0, count: 0 }, at_risk_14: { total: 0, count: 0 },
+      returned: { total: 0, count: 0 }, new_0_7: { total: 0, count: 0 },
+      visit_under10: { total: 0, count: 0 }, visit_10_20: { total: 0, count: 0 },
+      visit_over20: { total: 0, count: 0 },
     }
-    const visitRevisitTotals: Record<VisitSegment, { revisit: number; count: number }> = {
-      churned: { revisit: 0, count: 0 }, at_risk_7: { revisit: 0, count: 0 },
-      new_0_7: { revisit: 0, count: 0 }, visit_under10: { revisit: 0, count: 0 },
-      visit_10_20: { revisit: 0, count: 0 }, visit_over20: { revisit: 0, count: 0 },
+    const visitRevisitTotals: Record<VisitSegment, { totalRate: number; count: number }> = {
+      churned: { totalRate: 0, count: 0 }, at_risk_14: { totalRate: 0, count: 0 },
+      returned: { totalRate: 0, count: 0 }, new_0_7: { totalRate: 0, count: 0 },
+      visit_under10: { totalRate: 0, count: 0 }, visit_10_20: { totalRate: 0, count: 0 },
+      visit_over20: { totalRate: 0, count: 0 },
     }
 
     // 이용권 세그먼트별 LTV / 재방문률
@@ -275,26 +325,26 @@ export async function GET(request: NextRequest) {
       day_ticket: { total: 0, count: 0 }, time_ticket: { total: 0, count: 0 },
       term_ticket: { total: 0, count: 0 }, fixed_ticket: { total: 0, count: 0 },
     }
-    const ticketRevisitTotals: Record<TicketSegment, { revisit: number; count: number }> = {
-      day_ticket: { revisit: 0, count: 0 }, time_ticket: { revisit: 0, count: 0 },
-      term_ticket: { revisit: 0, count: 0 }, fixed_ticket: { revisit: 0, count: 0 },
+    const ticketRevisitTotals: Record<TicketSegment, { totalRate: number; count: number }> = {
+      day_ticket: { totalRate: 0, count: 0 }, time_ticket: { totalRate: 0, count: 0 },
+      term_ticket: { totalRate: 0, count: 0 }, fixed_ticket: { totalRate: 0, count: 0 },
     }
 
     allCustomers.forEach(c => {
       const vSeg = visitSegmentMap.get(c.id)!
       const tSeg = ticketSegmentMap.get(c.id)!
       const spent = decimalToNumber(c.totalSpent)
-      const hasRevisit = (customerRecentVisits.get(c.id) || 0) >= 2
+      const customerRate = getCustomerRevisitRate(c.id)
 
       visitSpentTotals[vSeg].total += spent
       visitSpentTotals[vSeg].count++
       visitRevisitTotals[vSeg].count++
-      if (hasRevisit) visitRevisitTotals[vSeg].revisit++
+      visitRevisitTotals[vSeg].totalRate += customerRate
 
       ticketSpentTotals[tSeg].total += spent
       ticketSpentTotals[tSeg].count++
       ticketRevisitTotals[tSeg].count++
-      if (hasRevisit) ticketRevisitTotals[tSeg].revisit++
+      ticketRevisitTotals[tSeg].totalRate += customerRate
     })
 
     const visitSegmentLtv: SegmentChartItem[] = (Object.entries(visitSpentTotals) as [VisitSegment, { total: number; count: number }][])
@@ -302,9 +352,9 @@ export async function GET(request: NextRequest) {
       .map(([seg, v]) => ({ segment: seg, label: VISIT_SEGMENT_LABELS[seg], value: Math.round(v.total / v.count) }))
       .sort((a, b) => b.value - a.value)
 
-    const visitSegmentRevisitRate: SegmentChartItem[] = (Object.entries(visitRevisitTotals) as [VisitSegment, { revisit: number; count: number }][])
+    const visitSegmentRevisitRate: SegmentChartItem[] = (Object.entries(visitRevisitTotals) as [VisitSegment, { totalRate: number; count: number }][])
       .filter(([, v]) => v.count > 0)
-      .map(([seg, v]) => ({ segment: seg, label: VISIT_SEGMENT_LABELS[seg], value: Math.round((v.revisit / v.count) * 100) }))
+      .map(([seg, v]) => ({ segment: seg, label: VISIT_SEGMENT_LABELS[seg], value: Math.round((v.totalRate / v.count) * 100) }))
       .sort((a, b) => b.value - a.value)
 
     const ticketSegmentLtv: SegmentChartItem[] = (Object.entries(ticketSpentTotals) as [TicketSegment, { total: number; count: number }][])
@@ -312,9 +362,9 @@ export async function GET(request: NextRequest) {
       .map(([seg, v]) => ({ segment: seg, label: TICKET_SEGMENT_LABELS[seg], value: Math.round(v.total / v.count) }))
       .sort((a, b) => b.value - a.value)
 
-    const ticketSegmentRevisitRate: SegmentChartItem[] = (Object.entries(ticketRevisitTotals) as [TicketSegment, { revisit: number; count: number }][])
+    const ticketSegmentRevisitRate: SegmentChartItem[] = (Object.entries(ticketRevisitTotals) as [TicketSegment, { totalRate: number; count: number }][])
       .filter(([, v]) => v.count > 0)
-      .map(([seg, v]) => ({ segment: seg, label: TICKET_SEGMENT_LABELS[seg], value: Math.round((v.revisit / v.count) * 100) }))
+      .map(([seg, v]) => ({ segment: seg, label: TICKET_SEGMENT_LABELS[seg], value: Math.round((v.totalRate / v.count) * 100) }))
       .sort((a, b) => b.value - a.value)
 
     // 세그먼트별 고객 수 (차트용)
@@ -344,6 +394,7 @@ export async function GET(request: NextRequest) {
       },
       operationQueue: {
         atRisk: atRiskList,
+        returned: returnedList,
         newSignups: newSignupsList,
         dayTicketRepeaters,
       },

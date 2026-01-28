@@ -8,23 +8,26 @@ import { formatCurrency } from '@/lib/utils/formatters'
 
 interface OperationQueueProps {
   atRisk: OperationQueueItem[]
+  returned: OperationQueueItem[]
   newSignups: OperationQueueItem[]
   dayTicketRepeaters: OperationQueueItem[]
 }
 
-type TabKey = 'atRisk' | 'newSignups' | 'dayTicketRepeaters'
+type TabKey = 'atRisk' | 'returned' | 'newSignups' | 'dayTicketRepeaters'
 
 const TABS: { key: TabKey; label: string; emptyText: string; color: string }[] = [
   { key: 'atRisk', label: '이탈위험', emptyText: '이탈위험 고객이 없습니다', color: '#F97316' },
+  { key: 'returned', label: '복귀', emptyText: '복귀 고객이 없습니다', color: '#8B5CF6' },
   { key: 'newSignups', label: '신규가입', emptyText: '신규가입 고객이 없습니다', color: '#22C55E' },
   { key: 'dayTicketRepeaters', label: '당일권 반복', emptyText: '당일권 반복구매 고객이 없습니다', color: '#3B82F6' },
 ]
 
-export function OperationQueue({ atRisk, newSignups, dayTicketRepeaters }: OperationQueueProps) {
+export function OperationQueue({ atRisk, returned, newSignups, dayTicketRepeaters }: OperationQueueProps) {
   const [activeTab, setActiveTab] = useState<TabKey>('atRisk')
 
   const dataMap: Record<TabKey, OperationQueueItem[]> = {
     atRisk,
+    returned,
     newSignups,
     dayTicketRepeaters,
   }

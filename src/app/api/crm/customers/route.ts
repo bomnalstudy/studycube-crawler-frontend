@@ -102,26 +102,52 @@ export async function GET(request: NextRequest) {
       }),
     ])
 
-    // 고객별 최근 방문의 잔여 정기권 정보
+    // 고객별 잔여 정기권 + 최근 구매 + 기간 전 방문 병렬 조회
     const customerIds = customers.map(c => c.id)
-    const latestVisitsWithTickets = await prisma.dailyVisitor.findMany({
-      where: {
-        customerId: { in: customerIds },
-        OR: [
-          { remainingTermTicket: { not: null } },
-          { remainingTimePackage: { not: null } },
-          { remainingFixedSeat: { not: null } },
-        ],
-      },
-      select: {
-        customerId: true,
-        visitDate: true,
-        remainingTermTicket: true,
-        remainingTimePackage: true,
-        remainingFixedSeat: true,
-      },
-      orderBy: { visitDate: 'desc' },
-    })
+    const [latestVisitsWithTickets, recentPurchases, preRangeVisitors] = await Promise.all([
+      prisma.dailyVisitor.findMany({
+        where: {
+          customerId: { in: customerIds },
+          OR: [
+            { remainingTermTicket: { not: null } },
+            { remainingTimePackage: { not: null } },
+            { remainingFixedSeat: { not: null } },
+          ],
+        },
+        select: {
+          customerId: true,
+          visitDate: true,
+          remainingTermTicket: true,
+          remainingTimePackage: true,
+          remainingFixedSeat: true,
+        },
+        orderBy: { visitDate: 'desc' },
+      }),
+      prisma.customerPurchase.findMany({
+        where: {
+          ...branchFilter,
+          purchaseDate: { gte: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000) },
+          customerId: { in: customerIds },
+        },
+        select: {
+          customerId: true,
+          ticketName: true,
+          amount: true,
+        }
+      }),
+      // 기간 시작 전 마지막 방문 (복귀 고객 판별용)
+      prisma.dailyVisitor.findMany({
+        where: {
+          customerId: { in: customerIds },
+          visitDate: { lt: visitRangeStart },
+        },
+        select: {
+          customerId: true,
+          visitDate: true,
+        },
+        orderBy: { visitDate: 'desc' },
+      }),
+    ])
 
     // 고객별 가장 최근 잔여 정기권 정보만 저장
     const remainingTicketMap = new Map<string, { termTicket: string | null; timePackage: string | null; fixedSeat: string | null }>()
@@ -132,20 +158,6 @@ export async function GET(request: NextRequest) {
         timePackage: v.remainingTimePackage,
         fixedSeat: v.remainingFixedSeat,
       })
-    })
-
-    // 최근 구매 데이터 (세그먼트 분류용)
-    const recentPurchases = await prisma.customerPurchase.findMany({
-      where: {
-        ...branchFilter,
-        purchaseDate: { gte: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000) },
-        customerId: { in: customers.map(c => c.id) },
-      },
-      select: {
-        customerId: true,
-        ticketName: true,
-        amount: true,
-      }
     })
 
     // 방문 수 계산
@@ -163,6 +175,13 @@ export async function GET(request: NextRequest) {
     const claimCountMap = new Map<string, number>()
     claimCounts.forEach(c => {
       claimCountMap.set(c.customerId, c._count.id)
+    })
+
+    // 기간 시작 전 고객별 마지막 방문일 (복귀 판별용)
+    const preRangeLastVisit = new Map<string, Date>()
+    preRangeVisitors.forEach(v => {
+      if (!v.customerId || preRangeLastVisit.has(v.customerId)) return
+      preRangeLastVisit.set(v.customerId, v.visitDate)
     })
 
     // 구매 데이터 맵
@@ -191,6 +210,7 @@ export async function GET(request: NextRequest) {
         recentVisits,
         referenceDate: visitRangeEnd,
         rangeStart: visitRangeStart,
+        previousLastVisitDate: preRangeLastVisit.get(c.id) || null,
       })
       const tSeg = calculateTicketSegment({
         hasRemainingTermTicket: !!(remaining?.termTicket && remaining.termTicket.trim() !== ''),

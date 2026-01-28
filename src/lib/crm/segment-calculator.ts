@@ -8,6 +8,7 @@ interface VisitSegmentInput {
   recentVisits: number      // 선택 기간 내 방문 수
   referenceDate?: Date      // 기준 날짜 = rangeEnd (기본: 현재)
   rangeStart?: Date         // 기간 시작일 (신규 판단용)
+  previousLastVisitDate?: Date | null  // 기간 시작 이전 마지막 방문일 (복귀 판단용)
 }
 
 interface TicketSegmentInput {
@@ -20,12 +21,13 @@ interface TicketSegmentInput {
  * 방문 세그먼트 분류
  *
  * 분류 기준:
- * 1. 30일+ 미방문 -> churned (이탈)
- * 2. 7~30일 미방문 -> at_risk_7 (이탈위험)
- * 3. 첫 방문일이 선택 기간 내 -> new_0_7
- * 4. 30일 내 방문 20회+ -> visit_over20 (VIP)
- * 5. 30일 내 방문 10~20회 -> visit_10_20 (단골)
- * 6. 30일 내 방문 10회 미만 -> visit_under10 (일반)
+ * 1. 30일+ 미방문 & 기간 내 방문 없음 -> churned (이탈)
+ * 2. 14~30일 미방문 -> at_risk_14 (이탈위험)
+ * 3. 30일+ 미방문이었으나 기간 내 재방문 -> returned (복귀)
+ * 4. 첫 방문일이 선택 기간 내 -> new_0_7 (신규)
+ * 5. 30일 내 방문 20회+ -> visit_over20 (VIP)
+ * 6. 30일 내 방문 10~20회 -> visit_10_20 (단골)
+ * 7. 30일 내 방문 10회 미만 -> visit_under10 (일반)
  */
 export function calculateVisitSegment(input: VisitSegmentInput): VisitSegment {
   const refDate = input.referenceDate || new Date()
@@ -38,12 +40,22 @@ export function calculateVisitSegment(input: VisitSegmentInput): VisitSegment {
     if (daysSinceLastVisit >= 30) {
       return 'churned'
     }
-    if (daysSinceLastVisit >= 7) {
-      return 'at_risk_7'
+    if (daysSinceLastVisit >= 14) {
+      return 'at_risk_14'
     }
   }
 
-  // 3. 신규: 첫 방문일이 선택 기간 내
+  // 3. 복귀: 기간 내 방문이 있지만, 이전 마지막 방문이 30일+ 전
+  if (input.previousLastVisitDate && input.rangeStart && input.recentVisits > 0) {
+    const daysBetween = Math.floor(
+      (input.rangeStart.getTime() - input.previousLastVisitDate.getTime()) / (1000 * 60 * 60 * 24)
+    )
+    if (daysBetween >= 30) {
+      return 'returned'
+    }
+  }
+
+  // 4. 신규: 첫 방문일이 선택 기간 내
   if (input.rangeStart) {
     if (input.firstVisitDate >= input.rangeStart && input.firstVisitDate <= refDate) {
       return 'new_0_7'
@@ -58,7 +70,7 @@ export function calculateVisitSegment(input: VisitSegmentInput): VisitSegment {
     }
   }
 
-  // 4~6. 방문 빈도 기반 (30일 내 방문 수)
+  // 5~7. 방문 빈도 기반 (30일 내 방문 수)
   if (input.recentVisits >= 20) {
     return 'visit_over20'
   }
