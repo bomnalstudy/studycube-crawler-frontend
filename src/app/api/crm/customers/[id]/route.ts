@@ -7,6 +7,8 @@ import { calculateVisitSegment, calculateTicketSegment, calculateFavoriteTicketT
 import { calculateCustomerStats } from '@/lib/crm/customer-stats-calculator'
 import { CustomerDetail } from '@/types/crm'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

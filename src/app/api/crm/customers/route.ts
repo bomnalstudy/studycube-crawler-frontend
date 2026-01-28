@@ -6,6 +6,8 @@ import { kstStartOfDay, kstEndOfDay, getKSTYesterdayStr, getKSTDaysAgoStr } from
 import { calculateVisitSegment, calculateTicketSegment, calculateFavoriteTicketType } from '@/lib/crm/segment-calculator'
 import { CustomerListItem, VisitSegment, TicketSegment, PaginatedResponse } from '@/types/crm'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(request: NextRequest) {
   try {
     const session = await getAuthSession()

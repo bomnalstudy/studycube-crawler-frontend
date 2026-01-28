@@ -56,8 +56,6 @@ export function Sidebar() {
       items: [
         { name: '대시보드', href: '/crm', icon: '🎯' },
         { name: '고객 리스트', href: '/crm/customers', icon: '👥' },
-        { name: '세그먼트 분석', href: '/crm/segments', icon: '📋' },
-        { name: '고객 타임라인', href: '/crm/timeline', icon: '📅' },
       ]
     }
   ]
