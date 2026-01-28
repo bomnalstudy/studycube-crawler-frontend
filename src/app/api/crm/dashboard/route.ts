@@ -191,6 +191,7 @@ export async function GET(request: NextRequest) {
         referenceDate: rangeEnd,
         rangeStart,
         previousLastVisitDate: preRangeLastVisit.get(customer.id) || null,
+        hasRemainingFixedSeat: remaining?.hasFixedSeat || false,
       })
       const ticketSeg = calculateTicketSegment({
         hasRemainingTermTicket: remaining?.hasTermTicket || false,

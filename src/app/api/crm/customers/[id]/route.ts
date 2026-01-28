@@ -111,11 +111,13 @@ export async function GET(
     const preThirtyDayVisits = visits.filter(v => v.visitDate < thirtyDaysAgo)
     const previousLastVisitDate = preThirtyDayVisits.length > 0 ? preThirtyDayVisits[0].visitDate : null
 
+    const hasFixedSeat = !!(latestVisit?.remainingFixedSeat && latestVisit.remainingFixedSeat.trim() !== '')
     const visitSeg = calculateVisitSegment({
       lastVisitDate: customer.lastVisitDate,
       firstVisitDate: customer.firstVisitDate,
       recentVisits,
       previousLastVisitDate,
+      hasRemainingFixedSeat: hasFixedSeat,
     })
     const ticketSeg = calculateTicketSegment({
       hasRemainingTermTicket: !!(latestVisit?.remainingTermTicket && latestVisit.remainingTermTicket.trim() !== ''),

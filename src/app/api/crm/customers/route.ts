@@ -205,6 +205,7 @@ export async function GET(request: NextRequest) {
       const favoriteTicketType = calculateFavoriteTicketType(purchases)
       const remaining = remainingTicketMap.get(c.id)
 
+      const hasFixedSeat = !!(remaining?.fixedSeat && remaining.fixedSeat.trim() !== '')
       const vSeg = calculateVisitSegment({
         lastVisitDate: c.lastVisitDate,
         firstVisitDate: c.firstVisitDate,
@@ -212,6 +213,7 @@ export async function GET(request: NextRequest) {
         referenceDate: visitRangeEnd,
         rangeStart: visitRangeStart,
         previousLastVisitDate: preRangeLastVisit.get(c.id) || null,
+        hasRemainingFixedSeat: hasFixedSeat,
       })
       const tSeg = calculateTicketSegment({
         hasRemainingTermTicket: !!(remaining?.termTicket && remaining.termTicket.trim() !== ''),
