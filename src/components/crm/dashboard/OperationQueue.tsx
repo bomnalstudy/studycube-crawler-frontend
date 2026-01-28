@@ -11,6 +11,7 @@ interface OperationQueueProps {
   returned: OperationQueueItem[]
   newSignups: OperationQueueItem[]
   dayTicketRepeaters: OperationQueueItem[]
+  onCustomerClick?: (customerId: string) => void
 }
 
 type TabKey = 'atRisk' | 'returned' | 'newSignups' | 'dayTicketRepeaters'
@@ -22,7 +23,14 @@ const TABS: { key: TabKey; label: string; emptyText: string; color: string }[] =
   { key: 'dayTicketRepeaters', label: '당일권 반복', emptyText: '당일권 반복구매 고객이 없습니다', color: '#3B82F6' },
 ]
 
-export function OperationQueue({ atRisk, returned, newSignups, dayTicketRepeaters }: OperationQueueProps) {
+const TAB_SEGMENT_PARAMS: Record<TabKey, string> = {
+  atRisk: 'visitSegment=at_risk_14',
+  returned: 'visitSegment=returned',
+  newSignups: 'visitSegment=new_0_7',
+  dayTicketRepeaters: 'ticketSegment=day_ticket',
+}
+
+export function OperationQueue({ atRisk, returned, newSignups, dayTicketRepeaters, onCustomerClick }: OperationQueueProps) {
   const [activeTab, setActiveTab] = useState<TabKey>('atRisk')
 
   const dataMap: Record<TabKey, OperationQueueItem[]> = {
@@ -75,10 +83,10 @@ export function OperationQueue({ atRisk, returned, newSignups, dayTicketRepeater
           </div>
         ) : (
           currentData.map(item => (
-            <Link
+            <div
               key={item.customerId}
-              href={`/crm/customers/${item.customerId}`}
-              className="flex items-center justify-between p-3 rounded-xl hover:bg-gray-50 transition-colors group"
+              onClick={() => onCustomerClick?.(item.customerId)}
+              className="flex items-center justify-between p-3 rounded-xl hover:bg-gray-50 transition-colors group cursor-pointer"
             >
               <div className="flex items-center gap-3">
                 <div
@@ -104,10 +112,25 @@ export function OperationQueue({ atRisk, returned, newSignups, dayTicketRepeater
                   {formatCurrency(item.totalSpent)}
                 </p>
               </div>
-            </Link>
+            </div>
           ))
         )}
       </div>
+
+      {/* 리스트로 이동 버튼 */}
+      {currentData.length > 0 && (
+        <div className="mt-3 pt-3 border-t border-gray-100">
+          <Link
+            href={`/crm/customers?${TAB_SEGMENT_PARAMS[activeTab]}`}
+            className="flex items-center justify-center gap-1.5 w-full py-2 text-xs font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
+          >
+            {currentTab.label} 리스트로 이동
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </Link>
+        </div>
+      )}
     </div>
   )
 }

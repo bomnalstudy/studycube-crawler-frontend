@@ -11,6 +11,7 @@ import { OperationQueue } from '@/components/crm/dashboard/OperationQueue'
 import { SegmentDistributionChart } from '@/components/crm/dashboard/SegmentDistributionChart'
 import { SegmentLtvChart } from '@/components/crm/dashboard/SegmentLtvChart'
 import { SegmentRevisitChart } from '@/components/crm/dashboard/SegmentRevisitChart'
+import { CustomerDetailPanel } from '@/components/crm/customers/CustomerDetailPanel'
 import { BranchSelector } from '@/components/dashboard/branch-selector'
 import { DateRangePicker } from '@/components/dashboard/date-range-picker'
 import { formatDate } from '@/lib/utils/date-helpers'
@@ -30,6 +31,7 @@ export default function CrmDashboardPage() {
   const [selectedBranchId, setSelectedBranchId] = useState<string>('all')
   const [startDate, setStartDate] = useState<Date>(startOfMonth(new Date()))
   const [endDate, setEndDate] = useState<Date>(endOfMonth(new Date()))
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null)
 
   // 지점 목록 가져오기
   useEffect(() => {
@@ -207,6 +209,7 @@ export default function CrmDashboardPage() {
                   returned={data.operationQueue.returned}
                   newSignups={data.operationQueue.newSignups}
                   dayTicketRepeaters={data.operationQueue.dayTicketRepeaters}
+                  onCustomerClick={setSelectedCustomerId}
                 />
                 <RevisitDonutGroup
                   generalRevisitRate={data.revisitRatios.generalRevisitRate}
@@ -217,6 +220,23 @@ export default function CrmDashboardPage() {
           </div>
         </div>
       </div>
+
+      {/* 고객 상세 오버레이 패널 */}
+      {selectedCustomerId && (
+        <>
+          <div
+            className="fixed inset-0 bg-black/30 z-40"
+            onClick={() => setSelectedCustomerId(null)}
+          />
+          <div className="fixed right-0 top-0 h-full w-[480px] bg-white shadow-2xl z-50 overflow-y-auto animate-slide-in-right">
+            <CustomerDetailPanel
+              key={selectedCustomerId}
+              customerId={selectedCustomerId}
+              onClose={() => setSelectedCustomerId(null)}
+            />
+          </div>
+        </>
+      )}
     </div>
   )
 }

@@ -7,16 +7,20 @@ import { CustomerStatsCard } from '@/components/crm/detail/CustomerStats'
 import { PurchaseTimeline } from '@/components/crm/detail/PurchaseTimeline'
 import { MemoSection } from '@/components/crm/detail/MemoSection'
 import { ClaimSection } from '@/components/crm/detail/ClaimSection'
+import { CustomerTimeline } from '@/components/crm/detail/CustomerTimeline'
 
 interface CustomerDetailPanelProps {
   customerId: string
   onClose: () => void
 }
 
+type TabKey = 'detail' | 'timeline'
+
 export function CustomerDetailPanel({ customerId, onClose }: CustomerDetailPanelProps) {
   const [data, setData] = useState<CustomerDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<TabKey>('detail')
 
   const fetchData = useCallback(async () => {
     try {
@@ -79,6 +83,30 @@ export function CustomerDetailPanel({ customerId, onClose }: CustomerDetailPanel
         </button>
       </div>
 
+      {/* 탭 */}
+      <div className="flex border-b border-gray-200 flex-shrink-0">
+        <button
+          onClick={() => setActiveTab('detail')}
+          className={`flex-1 py-2.5 text-xs font-semibold text-center transition-colors ${
+            activeTab === 'detail'
+              ? 'text-blue-600 border-b-2 border-blue-600'
+              : 'text-gray-400 hover:text-gray-600'
+          }`}
+        >
+          상세 정보
+        </button>
+        <button
+          onClick={() => setActiveTab('timeline')}
+          className={`flex-1 py-2.5 text-xs font-semibold text-center transition-colors ${
+            activeTab === 'timeline'
+              ? 'text-blue-600 border-b-2 border-blue-600'
+              : 'text-gray-400 hover:text-gray-600'
+          }`}
+        >
+          이용 타임라인
+        </button>
+      </div>
+
       {/* 콘텐츠 */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {loading ? (
@@ -100,23 +128,27 @@ export function CustomerDetailPanel({ customerId, onClose }: CustomerDetailPanel
             </button>
           </div>
         ) : data ? (
-          <>
-            <CustomerProfile customer={data} />
-            <CustomerStatsCard stats={data.stats} />
-            <PurchaseTimeline purchases={data.purchases} visits={data.visits} />
-            <MemoSection
-              customerId={data.id}
-              memos={data.memos}
-              onMemoCreated={handleMemoCreated}
-              onMemoDeleted={handleMemoDeleted}
-            />
-            <ClaimSection
-              customerId={data.id}
-              claims={data.claims}
-              onClaimCreated={handleClaimCreated}
-              onClaimUpdated={handleClaimUpdated}
-            />
-          </>
+          activeTab === 'detail' ? (
+            <>
+              <CustomerProfile customer={data} />
+              <CustomerStatsCard stats={data.stats} />
+              <PurchaseTimeline purchases={data.purchases} visits={data.visits} />
+              <MemoSection
+                customerId={data.id}
+                memos={data.memos}
+                onMemoCreated={handleMemoCreated}
+                onMemoDeleted={handleMemoDeleted}
+              />
+              <ClaimSection
+                customerId={data.id}
+                claims={data.claims}
+                onClaimCreated={handleClaimCreated}
+                onClaimUpdated={handleClaimUpdated}
+              />
+            </>
+          ) : (
+            <CustomerTimeline visits={data.visits} />
+          )
         ) : null}
       </div>
     </div>

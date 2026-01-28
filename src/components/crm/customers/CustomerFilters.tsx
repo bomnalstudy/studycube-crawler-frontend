@@ -20,6 +20,8 @@ export interface FilterValues {
   search?: string
   sortBy?: string
   sortOrder?: 'asc' | 'desc'
+  minSegmentDays?: string
+  maxSegmentDays?: string
 }
 
 const VISIT_SEGMENTS: VisitSegment[] = [
@@ -45,7 +47,7 @@ export function CustomerFilters({ onFilterChange, initialFilters = {} }: Custome
     onFilterChange(empty)
   }
 
-  const hasActiveFilters = filters.visitSegment || filters.ticketSegment || filters.ageGroup || filters.gender || filters.hasClaim
+  const hasActiveFilters = filters.visitSegment || filters.ticketSegment || filters.ageGroup || filters.gender || filters.hasClaim || filters.minSegmentDays || filters.maxSegmentDays
 
   return (
     <div className="space-y-3">
@@ -185,6 +187,33 @@ export function CustomerFilters({ onFilterChange, initialFilters = {} }: Custome
             </div>
           </div>
 
+          {/* 세그먼트 경과일 (방문 세그먼트 선택 시만 표시) */}
+          {filters.visitSegment && ['new_0_7', 'at_risk_14', 'churned', 'returned'].includes(filters.visitSegment) && (
+            <div>
+              <label className="text-xs font-medium text-gray-500 mb-1.5 block">세그먼트 경과일</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min="1"
+                  placeholder="최소"
+                  value={filters.minSegmentDays || ''}
+                  onChange={(e) => updateFilter('minSegmentDays', e.target.value)}
+                  className="w-20 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <span className="text-xs text-gray-400">~</span>
+                <input
+                  type="number"
+                  min="1"
+                  placeholder="최대"
+                  value={filters.maxSegmentDays || ''}
+                  onChange={(e) => updateFilter('maxSegmentDays', e.target.value)}
+                  className="w-20 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <span className="text-xs text-gray-400">일차</span>
+              </div>
+            </div>
+          )}
+
           {/* 초기화 */}
           {hasActiveFilters && (
             <button
@@ -196,26 +225,6 @@ export function CustomerFilters({ onFilterChange, initialFilters = {} }: Custome
           )}
         </div>
       )}
-
-      {/* 정렬 */}
-      <div className="flex gap-2 items-center">
-        <select
-          value={filters.sortBy || 'lastVisitDate'}
-          onChange={(e) => updateFilter('sortBy', e.target.value)}
-          className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs text-gray-600"
-        >
-          <option value="lastVisitDate">최근 방문순</option>
-          <option value="totalVisits">총 방문순</option>
-          <option value="totalSpent">총 소비순</option>
-          <option value="recentVisits">최근 방문수</option>
-        </select>
-        <button
-          onClick={() => updateFilter('sortOrder', filters.sortOrder === 'asc' ? 'desc' : 'asc')}
-          className="px-2 py-1.5 bg-white border border-gray-200 rounded-lg text-xs text-gray-600 hover:bg-gray-50"
-        >
-          {filters.sortOrder === 'asc' ? '오름차순 ↑' : '내림차순 ↓'}
-        </button>
-      </div>
     </div>
   )
 }

@@ -30,6 +30,8 @@ export async function GET(request: NextRequest) {
     const maxSpent = searchParams.get('maxSpent') ? Number(searchParams.get('maxSpent')) : undefined
     const hasClaim = searchParams.get('hasClaim')
     const search = searchParams.get('search')
+    const minSegmentDays = searchParams.get('minSegmentDays') ? Number(searchParams.get('minSegmentDays')) : undefined
+    const maxSegmentDays = searchParams.get('maxSegmentDays') ? Number(searchParams.get('maxSegmentDays')) : undefined
     const sortBy = searchParams.get('sortBy') || 'lastVisitDate'
     const sortOrder = (searchParams.get('sortOrder') || 'desc') as 'asc' | 'desc'
     const page = Math.max(1, Number(searchParams.get('page') || '1'))
@@ -106,15 +108,12 @@ export async function GET(request: NextRequest) {
     // 고객별 잔여 정기권 + 최근 구매 + 기간 전 방문 병렬 조회
     const customerIds = customers.map(c => c.id)
     const [latestVisitsWithTickets, recentPurchases, preRangeVisitors] = await Promise.all([
+      // 고객별 가장 최근 방문의 잔여 정기권 정보 (null 포함)
       prisma.dailyVisitor.findMany({
         where: {
           customerId: { in: customerIds },
-          OR: [
-            { remainingTermTicket: { not: null } },
-            { remainingTimePackage: { not: null } },
-            { remainingFixedSeat: { not: null } },
-          ],
         },
+        distinct: ['customerId'],
         select: {
           customerId: true,
           visitDate: true,
@@ -221,6 +220,34 @@ export async function GET(request: NextRequest) {
         hasRemainingFixedSeat: !!(remaining?.fixedSeat && remaining.fixedSeat.trim() !== ''),
       })
 
+      // 세그먼트 경과일 계산
+      let segmentDays: number | null = null
+      if (vSeg === 'new_0_7') {
+        segmentDays = Math.floor(
+          (visitRangeEnd.getTime() - c.firstVisitDate.getTime()) / (1000 * 60 * 60 * 24)
+        ) + 1
+      } else if (vSeg === 'at_risk_14' && c.lastVisitDate) {
+        const daysSince = Math.floor(
+          (visitRangeEnd.getTime() - c.lastVisitDate.getTime()) / (1000 * 60 * 60 * 24)
+        )
+        segmentDays = daysSince - 13
+      } else if (vSeg === 'churned' && c.lastVisitDate) {
+        const daysSince = Math.floor(
+          (visitRangeEnd.getTime() - c.lastVisitDate.getTime()) / (1000 * 60 * 60 * 24)
+        )
+        segmentDays = daysSince - 29
+      } else if (vSeg === 'returned') {
+        // 기간 내 첫 재방문일 기준
+        const visitDates = customerVisitDates.get(c.id)
+        if (visitDates && visitDates.size > 0) {
+          const sorted = [...visitDates].sort()
+          const firstRevisit = new Date(sorted[0] + 'T00:00:00+09:00')
+          segmentDays = Math.floor(
+            (visitRangeEnd.getTime() - firstRevisit.getTime()) / (1000 * 60 * 60 * 24)
+          ) + 1
+        }
+      }
+
       return {
         id: c.id,
         phone: c.phone,
@@ -234,6 +261,7 @@ export async function GET(request: NextRequest) {
         ticketSegment: tSeg,
         claimCount,
         recentVisits,
+        segmentDays,
         favoriteTicketType,
         remainingTickets: remaining || null,
       }
@@ -254,6 +282,16 @@ export async function GET(request: NextRequest) {
       items = items.filter(i => i.claimCount === 0)
     }
 
+    // 세그먼트 경과일 필터
+    if (minSegmentDays !== undefined || maxSegmentDays !== undefined) {
+      items = items.filter(i => {
+        if (i.segmentDays === null) return false
+        if (minSegmentDays !== undefined && i.segmentDays < minSegmentDays) return false
+        if (maxSegmentDays !== undefined && i.segmentDays > maxSegmentDays) return false
+        return true
+      })
+    }
+
     // 정렬
     items.sort((a, b) => {
       let aVal: number | string | null
@@ -266,6 +304,8 @@ export async function GET(request: NextRequest) {
           aVal = a.totalSpent; bVal = b.totalSpent; break
         case 'recentVisits':
           aVal = a.recentVisits; bVal = b.recentVisits; break
+        case 'segmentDays':
+          aVal = a.segmentDays ?? -1; bVal = b.segmentDays ?? -1; break
         case 'lastVisitDate':
         default:
           aVal = a.lastVisitDate || ''; bVal = b.lastVisitDate || ''; break

@@ -142,6 +142,7 @@ export interface CustomerListItem {
   ticketSegment: TicketSegment
   claimCount: number
   recentVisits: number  // 30일 내 방문 수
+  segmentDays: number | null  // 세그먼트 경과일 (일차)
   favoriteTicketType: TicketSubType | null
   remainingTickets: RemainingTicketInfo | null
 }
@@ -162,6 +163,9 @@ export interface CustomerListFilter {
   sortOrder?: 'asc' | 'desc'
   page?: number
   limit?: number
+  // 세그먼트 경과일 필터
+  minSegmentDays?: number
+  maxSegmentDays?: number
   // 커스텀 날짜 범위 (방문수 계산 기준)
   visitStartDate?: string
   visitEndDate?: string
@@ -246,4 +250,30 @@ export interface PaginatedResponse<T> {
   page: number
   limit: number
   totalPages: number
+}
+
+// 타임라인 - 시간대별 이용자 요약
+export interface TimelineHourData {
+  hour: number              // 0~23
+  usageCount: number        // 이용자 수
+  visitors: TimelineVisitor[]
+}
+
+// 타임라인 - 개별 이용자
+export interface TimelineVisitor {
+  phone: string
+  seat: string | null
+  startTime: string | null  // "HH:mm" 형식
+  duration: number | null
+  ageGroup: string | null
+  gender: string | null
+  customerId: string | null
+}
+
+// 타임라인 API 응답
+export interface TimelineData {
+  date: string
+  branchId: string
+  branchName: string | null
+  hours: TimelineHourData[]  // 24개 (0~23시)
 }

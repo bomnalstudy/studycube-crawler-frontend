@@ -1,9 +1,10 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { startOfMonth, endOfMonth, subMonths, addMonths } from 'date-fns'
 import { useRole } from '@/hooks/useRole'
-import { CustomerListItem, PaginatedResponse } from '@/types/crm'
+import { CustomerListItem, PaginatedResponse, VisitSegment, TicketSegment } from '@/types/crm'
 import { CustomerFilters, FilterValues } from '@/components/crm/customers/CustomerFilters'
 import { CustomerTable } from '@/components/crm/customers/CustomerTable'
 import { CustomerDetailPanel } from '@/components/crm/customers/CustomerDetailPanel'
@@ -18,10 +19,18 @@ interface Branch {
 
 export default function CustomerListPage() {
   const { isAdmin, branchId: userBranchId } = useRole()
+  const searchParams = useSearchParams()
+
+  const initialFilters: FilterValues = {}
+  const urlVisitSegment = searchParams.get('visitSegment')
+  const urlTicketSegment = searchParams.get('ticketSegment')
+  if (urlVisitSegment) initialFilters.visitSegment = urlVisitSegment as VisitSegment
+  if (urlTicketSegment) initialFilters.ticketSegment = urlTicketSegment as TicketSegment
+
   const [data, setData] = useState<PaginatedResponse<CustomerListItem> | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [filters, setFilters] = useState<FilterValues>({})
+  const [filters, setFilters] = useState<FilterValues>(initialFilters)
   const [page, setPage] = useState(1)
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null)
 
@@ -81,6 +90,8 @@ export default function CustomerListPage() {
       if (filters.search) params.set('search', filters.search)
       if (filters.sortBy) params.set('sortBy', filters.sortBy)
       if (filters.sortOrder) params.set('sortOrder', filters.sortOrder)
+      if (filters.minSegmentDays) params.set('minSegmentDays', filters.minSegmentDays)
+      if (filters.maxSegmentDays) params.set('maxSegmentDays', filters.maxSegmentDays)
 
       const res = await fetch(`/api/crm/customers?${params}`)
       const json = await res.json()
@@ -113,6 +124,13 @@ export default function CustomerListPage() {
 
   const handleRowClick = (customerId: string) => {
     setSelectedCustomerId(prev => prev === customerId ? null : customerId)
+  }
+
+  const handleSortChange = (field: string) => {
+    const newOrder = filters.sortBy === field && filters.sortOrder !== 'asc' ? 'asc' : (filters.sortBy === field && filters.sortOrder === 'asc' ? 'desc' : 'desc')
+    const newFilters = { ...filters, sortBy: field, sortOrder: newOrder as 'asc' | 'desc' }
+    setFilters(newFilters)
+    setPage(1)
   }
 
   const handleClosePanel = () => {
@@ -189,26 +207,30 @@ export default function CustomerListPage() {
             onPageChange={handlePageChange}
             selectedId={selectedCustomerId}
             onRowClick={handleRowClick}
+            sortBy={filters.sortBy || 'lastVisitDate'}
+            sortOrder={filters.sortOrder || 'desc'}
+            onSortChange={handleSortChange}
           />
         ) : null}
 
-        {/* 오버레이 패널 */}
-        {selectedCustomerId && (
-          <>
-            <div
-              className="fixed inset-0 bg-black/30 z-40"
-              onClick={handleClosePanel}
-            />
-            <div className="fixed right-0 top-0 h-full w-[480px] bg-white shadow-2xl z-50 overflow-y-auto animate-slide-in-right">
-              <CustomerDetailPanel
-                key={selectedCustomerId}
-                customerId={selectedCustomerId}
-                onClose={handleClosePanel}
-              />
-            </div>
-          </>
-        )}
       </div>
+
+      {/* 오버레이 패널 */}
+      {selectedCustomerId && (
+        <>
+          <div
+            className="fixed inset-0 bg-black/30 z-40"
+            onClick={handleClosePanel}
+          />
+          <div className="fixed right-0 top-0 h-full w-[480px] bg-white shadow-2xl z-50 overflow-y-auto animate-slide-in-right">
+            <CustomerDetailPanel
+              key={selectedCustomerId}
+              customerId={selectedCustomerId}
+              onClose={handleClosePanel}
+            />
+          </div>
+        </>
+      )}
     </div>
   )
 }

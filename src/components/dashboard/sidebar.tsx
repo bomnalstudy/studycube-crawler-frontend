@@ -56,6 +56,7 @@ export function Sidebar() {
       items: [
         { name: '대시보드', href: '/crm', icon: '🎯' },
         { name: '고객 리스트', href: '/crm/customers', icon: '👥' },
+        { name: '타임라인', href: '/crm/timeline', icon: '🕐' },
       ]
     }
   ]
