@@ -7,7 +7,9 @@ interface CrmKpiCardsProps {
   newCustomers: number
   atRiskCustomers: number
   churnedCustomers: number
-  claimCustomers: number
+  timeTicketCustomers: number
+  termTicketCustomers: number
+  fixedTicketCustomers: number
 }
 
 export function CrmKpiCards({
@@ -15,8 +17,16 @@ export function CrmKpiCards({
   newCustomers,
   atRiskCustomers,
   churnedCustomers,
-  claimCustomers,
+  timeTicketCustomers,
+  termTicketCustomers,
+  fixedTicketCustomers,
 }: CrmKpiCardsProps) {
+  const ticketIcon = (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" />
+    </svg>
+  )
+
   const cards = [
     {
       label: '전체 고객',
@@ -32,7 +42,7 @@ export function CrmKpiCards({
       ),
     },
     {
-      label: '신규 고객 (7일 이내)',
+      label: '신규 고객',
       value: newCustomers,
       accentColor: '#22C55E',
       barColor: 'bg-green-500',
@@ -45,7 +55,7 @@ export function CrmKpiCards({
       ),
     },
     {
-      label: '이탈위험 (7~30일 미방문)',
+      label: '이탈위험',
       value: atRiskCustomers,
       accentColor: '#F97316',
       barColor: 'bg-orange-500',
@@ -58,7 +68,7 @@ export function CrmKpiCards({
       ),
     },
     {
-      label: '이탈 (30일+ 미방문)',
+      label: '이탈',
       value: churnedCustomers,
       accentColor: '#991B1B',
       barColor: 'bg-red-800',
@@ -71,22 +81,36 @@ export function CrmKpiCards({
       ),
     },
     {
-      label: '클레임 고객',
-      value: claimCustomers,
-      accentColor: '#EF4444',
-      barColor: 'bg-red-500',
-      barBg: 'bg-red-100',
-      barPercent: totalCustomers > 0 ? Math.min(100, (claimCustomers / totalCustomers) * 100) : 0,
-      icon: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20.618 5.984A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016zM12 9v2m0 4h.01" />
-        </svg>
-      ),
+      label: '시간권',
+      value: timeTicketCustomers,
+      accentColor: '#06B6D4',
+      barColor: 'bg-cyan-500',
+      barBg: 'bg-cyan-100',
+      barPercent: totalCustomers > 0 ? Math.min(100, (timeTicketCustomers / totalCustomers) * 100) : 0,
+      icon: ticketIcon,
+    },
+    {
+      label: '기간권',
+      value: termTicketCustomers,
+      accentColor: '#8B5CF6',
+      barColor: 'bg-purple-500',
+      barBg: 'bg-purple-100',
+      barPercent: totalCustomers > 0 ? Math.min(100, (termTicketCustomers / totalCustomers) * 100) : 0,
+      icon: ticketIcon,
+    },
+    {
+      label: '고정석',
+      value: fixedTicketCustomers,
+      accentColor: '#10B981',
+      barColor: 'bg-emerald-500',
+      barBg: 'bg-emerald-100',
+      barPercent: totalCustomers > 0 ? Math.min(100, (fixedTicketCustomers / totalCustomers) * 100) : 0,
+      icon: ticketIcon,
     },
   ]
 
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-5 gap-5">
+    <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-4">
       {cards.map((card) => (
         <div
           key={card.label}

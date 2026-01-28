@@ -1,6 +1,11 @@
 'use client'
 
-import { CustomerDetail, SEGMENT_LABELS, SEGMENT_COLORS } from '@/types/crm'
+import {
+  CustomerDetail,
+  VISIT_SEGMENT_LABELS, VISIT_SEGMENT_COLORS,
+  TICKET_SEGMENT_LABELS, TICKET_SEGMENT_COLORS,
+  VisitSegment, TicketSegment,
+} from '@/types/crm'
 import { maskPhone, formatPhone } from '@/lib/crm/phone-masker'
 import { formatCurrency } from '@/lib/utils/formatters'
 
@@ -16,15 +21,26 @@ export function CustomerProfile({ customer }: CustomerProfileProps) {
           <h2 className="text-lg font-bold text-gray-800">
             {maskPhone(formatPhone(customer.phone))}
           </h2>
-          <span
-            className="inline-block mt-1 px-2.5 py-0.5 rounded-full text-xs font-medium"
-            style={{
-              backgroundColor: `${SEGMENT_COLORS[customer.segment]}20`,
-              color: SEGMENT_COLORS[customer.segment],
-            }}
-          >
-            {SEGMENT_LABELS[customer.segment]}
-          </span>
+          <div className="flex gap-1.5 mt-1">
+            <span
+              className="inline-block px-2.5 py-0.5 rounded-full text-xs font-medium"
+              style={{
+                backgroundColor: `${VISIT_SEGMENT_COLORS[customer.visitSegment as VisitSegment]}20`,
+                color: VISIT_SEGMENT_COLORS[customer.visitSegment as VisitSegment],
+              }}
+            >
+              {VISIT_SEGMENT_LABELS[customer.visitSegment as VisitSegment]}
+            </span>
+            <span
+              className="inline-block px-2.5 py-0.5 rounded-full text-xs font-medium"
+              style={{
+                backgroundColor: `${TICKET_SEGMENT_COLORS[customer.ticketSegment as TicketSegment]}20`,
+                color: TICKET_SEGMENT_COLORS[customer.ticketSegment as TicketSegment],
+              }}
+            >
+              {TICKET_SEGMENT_LABELS[customer.ticketSegment as TicketSegment]}
+            </span>
+          </div>
         </div>
         <div className="text-right">
           <p className="text-xs text-gray-400">총 소비</p>

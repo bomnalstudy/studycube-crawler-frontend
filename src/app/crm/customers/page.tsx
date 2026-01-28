@@ -73,8 +73,8 @@ export default function CustomerListPage() {
       params.set('visitStartDate', formatDate(startDate))
       params.set('visitEndDate', formatDate(endDate))
 
-      if (filters.segment) params.set('segment', filters.segment)
-      if (filters.ticketSubType) params.set('ticketSubType', filters.ticketSubType)
+      if (filters.visitSegment) params.set('visitSegment', filters.visitSegment)
+      if (filters.ticketSegment) params.set('ticketSegment', filters.ticketSegment)
       if (filters.ageGroup) params.set('ageGroup', filters.ageGroup)
       if (filters.gender) params.set('gender', filters.gender)
       if (filters.hasClaim) params.set('hasClaim', filters.hasClaim)

@@ -1,49 +1,65 @@
-// CRM 세그먼트 타입
-export type CustomerSegment =
-  | 'claim'         // 클레임 경험 고객
-  | 'churned'       // 이탈 고객 (30일+ 미방문)
-  | 'at_risk_7'     // 7일 미방문 (이탈위험)
-  | 'new_0_7'       // 신규 0~7일
-  | 'day_ticket'    // 당일권 유저
-  | 'term_ticket'   // 정기권 유저
-  | 'visit_over20'  // VIP (30일 내 20회+)
-  | 'visit_10_20'   // 단골 (30일 내 10~20회)
+// CRM 방문 세그먼트 타입
+export type VisitSegment =
+  | 'churned'       // 이탈 (30일+ 미방문)
+  | 'at_risk_7'     // 이탈위험 (7~30일 미방문)
+  | 'new_0_7'       // 신규 (선택 기간 내 첫 방문)
   | 'visit_under10' // 일반 (30일 내 10회 미만)
+  | 'visit_10_20'   // 단골 (30일 내 10~20회)
+  | 'visit_over20'  // VIP (30일 내 20회+)
 
-export const SEGMENT_LABELS: Record<CustomerSegment, string> = {
-  claim: '클레임',
+export const VISIT_SEGMENT_LABELS: Record<VisitSegment, string> = {
   churned: '이탈',
   at_risk_7: '이탈위험',
   new_0_7: '신규',
-  day_ticket: '당일권',
-  term_ticket: '정기권',
-  visit_over20: 'VIP',
-  visit_10_20: '단골',
   visit_under10: '일반',
+  visit_10_20: '단골',
+  visit_over20: 'VIP',
 }
 
-export const SEGMENT_COLORS: Record<CustomerSegment, string> = {
-  claim: '#EF4444',
+export const VISIT_SEGMENT_COLORS: Record<VisitSegment, string> = {
   churned: '#991B1B',
   at_risk_7: '#F97316',
   new_0_7: '#22C55E',
-  day_ticket: '#3B82F6',
-  term_ticket: '#8B5CF6',
-  visit_over20: '#F59E0B',
-  visit_10_20: '#06B6D4',
   visit_under10: '#6B7280',
+  visit_10_20: '#06B6D4',
+  visit_over20: '#F59E0B',
 }
 
-export const SEGMENT_DESCRIPTIONS: Record<CustomerSegment, string> = {
-  claim: '클레임 경험이 있는 고객',
-  churned: '마지막 방문 후 30일 이상 경과 (이탈)',
-  at_risk_7: '마지막 방문 후 7~30일 경과 (이탈위험)',
-  new_0_7: '첫 방문 후 7일 이내 신규 고객',
-  day_ticket: '당일권을 주로 이용하는 고객',
-  term_ticket: '정기권(시간권/기간권/고정석)을 주로 이용하는 고객',
-  visit_over20: '30일 내 방문 20회 이상 (VIP)',
-  visit_10_20: '30일 내 방문 10~20회 (단골)',
-  visit_under10: '30일 내 방문 10회 미만 (일반)',
+export const VISIT_SEGMENT_DESCRIPTIONS: Record<VisitSegment, string> = {
+  churned: '마지막 방문 후 30일 이상 경과',
+  at_risk_7: '마지막 방문 후 7~30일 경과',
+  new_0_7: '선택 기간 내 첫 방문 고객',
+  visit_under10: '30일 내 방문 10회 미만',
+  visit_10_20: '30일 내 방문 10~20회',
+  visit_over20: '30일 내 방문 20회 이상',
+}
+
+// CRM 이용권 세그먼트 타입
+export type TicketSegment =
+  | 'day_ticket'    // 당일권 (잔여 정기권 없음)
+  | 'time_ticket'   // 시간권 (잔여 시간패키지 보유)
+  | 'term_ticket'   // 기간권 (잔여 기간권 보유)
+  | 'fixed_ticket'  // 고정석 (잔여 고정석 보유)
+
+export const TICKET_SEGMENT_LABELS: Record<TicketSegment, string> = {
+  day_ticket: '당일권',
+  time_ticket: '시간권',
+  term_ticket: '기간권',
+  fixed_ticket: '고정석',
+}
+
+export const TICKET_SEGMENT_COLORS: Record<TicketSegment, string> = {
+  day_ticket: '#3B82F6',
+  time_ticket: '#06B6D4',
+  term_ticket: '#8B5CF6',
+  fixed_ticket: '#10B981',
+}
+
+export const TICKET_SEGMENT_DESCRIPTIONS: Record<TicketSegment, string> = {
+  day_ticket: '잔여 정기권이 없는 고객',
+  time_ticket: '잔여 시간패키지를 보유한 고객',
+  term_ticket: '잔여 기간권을 보유한 고객',
+  fixed_ticket: '잔여 고정석을 보유한 고객',
 }
 
 // CRM 대시보드 데이터
@@ -53,7 +69,9 @@ export interface CrmDashboardData {
     newCustomers: number
     atRiskCustomers: number
     churnedCustomers: number
-    claimCustomers: number
+    timeTicketCustomers: number
+    termTicketCustomers: number
+    fixedTicketCustomers: number
   }
   revisitRatios: {
     generalRevisitRate: number  // 일반고객 재방문 비율
@@ -64,9 +82,12 @@ export interface CrmDashboardData {
     newSignups: OperationQueueItem[]
     dayTicketRepeaters: OperationQueueItem[]
   }
-  segmentCounts: SegmentChartItem[]
-  segmentLtv: SegmentChartItem[]
-  segmentRevisitRate: SegmentChartItem[]
+  visitSegmentCounts: SegmentChartItem[]
+  visitSegmentLtv: SegmentChartItem[]
+  visitSegmentRevisitRate: SegmentChartItem[]
+  ticketSegmentCounts: SegmentChartItem[]
+  ticketSegmentLtv: SegmentChartItem[]
+  ticketSegmentRevisitRate: SegmentChartItem[]
 }
 
 export interface OperationQueueItem {
@@ -75,11 +96,12 @@ export interface OperationQueueItem {
   lastVisitDate: string | null
   totalVisits: number
   totalSpent: number
-  segment: CustomerSegment
+  visitSegment: VisitSegment
+  ticketSegment: TicketSegment
 }
 
 export interface SegmentChartItem {
-  segment: CustomerSegment
+  segment: VisitSegment | TicketSegment
   label: string
   value: number
 }
@@ -111,7 +133,8 @@ export interface CustomerListItem {
   lastVisitDate: string | null
   totalVisits: number
   totalSpent: number
-  segment: CustomerSegment
+  visitSegment: VisitSegment
+  ticketSegment: TicketSegment
   claimCount: number
   recentVisits: number  // 30일 내 방문 수
   favoriteTicketType: TicketSubType | null
@@ -120,7 +143,8 @@ export interface CustomerListItem {
 
 // 고객 리스트 필터
 export interface CustomerListFilter {
-  segment?: CustomerSegment
+  visitSegment?: VisitSegment
+  ticketSegment?: TicketSegment
   ageGroup?: string
   gender?: string
   minVisits?: number
@@ -151,7 +175,8 @@ export interface CustomerDetail {
   lastPurchaseDate: string | null
   totalVisits: number
   totalSpent: number
-  segment: CustomerSegment
+  visitSegment: VisitSegment
+  ticketSegment: TicketSegment
   recentVisits: number
   stats: CustomerStats
   purchases: CustomerPurchaseItem[]

@@ -1,12 +1,17 @@
 'use client'
 
 import { useState } from 'react'
-import { SEGMENT_LABELS, SEGMENT_COLORS, SEGMENT_DESCRIPTIONS, CustomerSegment } from '@/types/crm'
+import {
+  VisitSegment, TicketSegment,
+  VISIT_SEGMENT_LABELS, VISIT_SEGMENT_COLORS, VISIT_SEGMENT_DESCRIPTIONS,
+  TICKET_SEGMENT_LABELS, TICKET_SEGMENT_COLORS, TICKET_SEGMENT_DESCRIPTIONS,
+} from '@/types/crm'
 
-const SEGMENTS: CustomerSegment[] = [
-  'claim', 'churned', 'at_risk_7', 'new_0_7', 'day_ticket',
-  'term_ticket', 'visit_over20', 'visit_10_20', 'visit_under10',
+const VISIT_SEGMENTS: VisitSegment[] = [
+  'churned', 'at_risk_7', 'new_0_7', 'visit_under10', 'visit_10_20', 'visit_over20',
 ]
+
+const TICKET_SEGMENTS: TicketSegment[] = ['day_ticket', 'time_ticket', 'term_ticket', 'fixed_ticket']
 
 export function SegmentCriteria() {
   const [open, setOpen] = useState(true)
@@ -34,23 +39,44 @@ export function SegmentCriteria() {
       {open && (
         <div className="px-5 pb-4 border-t border-gray-100">
           <p className="text-xs text-gray-400 mt-3 mb-3">
-            우선순위 순서대로 분류됩니다 (1번이 가장 높은 우선순위)
+            고객은 방문 세그먼트와 이용권 세그먼트 각각 하나씩 부여됩니다
           </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
-            {SEGMENTS.map((seg, i) => (
+
+          {/* 방문 세그먼트 */}
+          <p className="text-xs font-semibold text-gray-600 mb-2">방문 세그먼트</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 mb-4">
+            {VISIT_SEGMENTS.map((seg) => (
               <div
                 key={seg}
                 className="flex items-start gap-2 p-2.5 rounded-lg bg-gray-50"
               >
                 <span
-                  className="w-5 h-5 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0 mt-0.5"
-                  style={{ backgroundColor: SEGMENT_COLORS[seg] }}
-                >
-                  {i + 1}
-                </span>
+                  className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5"
+                  style={{ backgroundColor: VISIT_SEGMENT_COLORS[seg] }}
+                />
                 <div className="min-w-0">
-                  <p className="text-xs font-semibold text-gray-700">{SEGMENT_LABELS[seg]}</p>
-                  <p className="text-[11px] text-gray-500 leading-tight mt-0.5">{SEGMENT_DESCRIPTIONS[seg]}</p>
+                  <p className="text-xs font-semibold text-gray-700">{VISIT_SEGMENT_LABELS[seg]}</p>
+                  <p className="text-[11px] text-gray-500 leading-tight mt-0.5">{VISIT_SEGMENT_DESCRIPTIONS[seg]}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* 이용권 세그먼트 */}
+          <p className="text-xs font-semibold text-gray-600 mb-2">이용권 세그먼트</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+            {TICKET_SEGMENTS.map((seg) => (
+              <div
+                key={seg}
+                className="flex items-start gap-2 p-2.5 rounded-lg bg-gray-50"
+              >
+                <span
+                  className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5"
+                  style={{ backgroundColor: TICKET_SEGMENT_COLORS[seg] }}
+                />
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold text-gray-700">{TICKET_SEGMENT_LABELS[seg]}</p>
+                  <p className="text-[11px] text-gray-500 leading-tight mt-0.5">{TICKET_SEGMENT_DESCRIPTIONS[seg]}</p>
                 </div>
               </div>
             ))}

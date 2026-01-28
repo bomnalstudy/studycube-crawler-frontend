@@ -1,6 +1,11 @@
 'use client'
 
-import { CustomerListItem, SEGMENT_LABELS, SEGMENT_COLORS } from '@/types/crm'
+import {
+  CustomerListItem,
+  VISIT_SEGMENT_LABELS, VISIT_SEGMENT_COLORS,
+  TICKET_SEGMENT_LABELS, TICKET_SEGMENT_COLORS,
+  VisitSegment, TicketSegment,
+} from '@/types/crm'
 import { maskPhone } from '@/lib/crm/phone-masker'
 import { formatCurrency, formatNumber } from '@/lib/utils/formatters'
 
@@ -64,15 +69,26 @@ export function CustomerTable({ items, total, page, totalPages, onPageChange, se
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    <span
-                      className="px-2 py-0.5 rounded-full text-xs font-medium"
-                      style={{
-                        backgroundColor: `${SEGMENT_COLORS[item.segment]}20`,
-                        color: SEGMENT_COLORS[item.segment],
-                      }}
-                    >
-                      {SEGMENT_LABELS[item.segment]}
-                    </span>
+                    <div className="flex flex-wrap gap-1">
+                      <span
+                        className="px-2 py-0.5 rounded-full text-xs font-medium"
+                        style={{
+                          backgroundColor: `${VISIT_SEGMENT_COLORS[item.visitSegment as VisitSegment]}20`,
+                          color: VISIT_SEGMENT_COLORS[item.visitSegment as VisitSegment],
+                        }}
+                      >
+                        {VISIT_SEGMENT_LABELS[item.visitSegment as VisitSegment]}
+                      </span>
+                      <span
+                        className="px-2 py-0.5 rounded-full text-xs font-medium"
+                        style={{
+                          backgroundColor: `${TICKET_SEGMENT_COLORS[item.ticketSegment as TicketSegment]}20`,
+                          color: TICKET_SEGMENT_COLORS[item.ticketSegment as TicketSegment],
+                        }}
+                      >
+                        {TICKET_SEGMENT_LABELS[item.ticketSegment as TicketSegment]}
+                      </span>
+                    </div>
                   </td>
                   <td className="px-4 py-3 text-gray-600">{item.gender || '-'}</td>
                   <td className="px-4 py-3 text-gray-600">{item.ageGroup || '-'}</td>

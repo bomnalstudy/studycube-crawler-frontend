@@ -60,7 +60,7 @@ export function OperationQueue({ atRisk, newSignups, dayTicketRepeaters }: Opera
       </div>
 
       {/* 리스트 */}
-      <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
+      <div className="space-y-1.5 max-h-96 overflow-y-auto pr-1">
         {currentData.length === 0 ? (
           <div className="flex flex-col items-center py-8">
             <div className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center mb-2">

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getAuthSession, getBranchFilter } from '@/lib/auth-helpers'
 import { decimalToNumber } from '@/lib/utils/formatters'
-import { calculateSegment, calculateFavoriteTicketType } from '@/lib/crm/segment-calculator'
+import { calculateVisitSegment, calculateTicketSegment, calculateFavoriteTicketType } from '@/lib/crm/segment-calculator'
 import { calculateCustomerStats } from '@/lib/crm/customer-stats-calculator'
 import { CustomerDetail } from '@/types/crm'
 
@@ -45,7 +45,18 @@ export async function GET(
       // 방문 이력
       prisma.dailyVisitor.findMany({
         where: { customerId: id },
-        include: { branch: { select: { name: true } } },
+        select: {
+          id: true,
+          visitDate: true,
+          visitTime: true,
+          duration: true,
+          seat: true,
+          startTime: true,
+          remainingTermTicket: true,
+          remainingTimePackage: true,
+          remainingFixedSeat: true,
+          branch: { select: { name: true } },
+        },
         orderBy: { visitDate: 'desc' },
         take: 100,
       }),
@@ -91,12 +102,18 @@ export async function GET(
     }))
     const favoriteTicketType = calculateFavoriteTicketType(purchaseData)
 
-    const segment = calculateSegment({
-      hasClaim: claimCount > 0,
+    // 가장 최근 방문의 잔여 이용권 확인
+    const latestVisit = visits[0]
+
+    const visitSeg = calculateVisitSegment({
       lastVisitDate: customer.lastVisitDate,
       firstVisitDate: customer.firstVisitDate,
       recentVisits,
-      favoriteTicketType,
+    })
+    const ticketSeg = calculateTicketSegment({
+      hasRemainingTermTicket: !!(latestVisit?.remainingTermTicket && latestVisit.remainingTermTicket.trim() !== ''),
+      hasRemainingTimePackage: !!(latestVisit?.remainingTimePackage && latestVisit.remainingTimePackage.trim() !== ''),
+      hasRemainingFixedSeat: !!(latestVisit?.remainingFixedSeat && latestVisit.remainingFixedSeat.trim() !== ''),
     })
 
     // 상세 통계 계산
@@ -126,7 +143,8 @@ export async function GET(
       lastPurchaseDate: customer.lastPurchaseDate?.toISOString().split('T')[0] || null,
       totalVisits: customer.totalVisits,
       totalSpent: decimalToNumber(customer.totalSpent),
-      segment,
+      visitSegment: visitSeg,
+      ticketSegment: ticketSeg,
       recentVisits,
       stats,
       purchases: purchases.map(p => ({

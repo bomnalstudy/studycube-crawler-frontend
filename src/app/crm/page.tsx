@@ -176,32 +176,36 @@ export default function CrmDashboardPage() {
           newCustomers={data.kpi.newCustomers}
           atRiskCustomers={data.kpi.atRiskCustomers}
           churnedCustomers={data.kpi.churnedCustomers}
-          claimCustomers={data.kpi.claimCustomers}
+          timeTicketCustomers={data.kpi.timeTicketCustomers}
+          termTicketCustomers={data.kpi.termTicketCustomers}
+          fixedTicketCustomers={data.kpi.fixedTicketCustomers}
         />
 
         {/* 세그먼트 분류 기준 */}
         <SegmentCriteria />
 
         {/* 세그먼트 분포 도넛 */}
-        <SegmentDistributionChart data={data.segmentCounts} />
+        <SegmentDistributionChart visitData={data.visitSegmentCounts} ticketData={data.ticketSegmentCounts} />
 
-        {/* 재방문 비율 + 운영 큐 */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* 운영 큐 + 재방문 비율 */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="lg:col-span-2">
+            <OperationQueue
+              atRisk={data.operationQueue.atRisk}
+              newSignups={data.operationQueue.newSignups}
+              dayTicketRepeaters={data.operationQueue.dayTicketRepeaters}
+            />
+          </div>
           <RevisitDonutGroup
             generalRevisitRate={data.revisitRatios.generalRevisitRate}
             newRevisitRate={data.revisitRatios.newRevisitRate}
-          />
-          <OperationQueue
-            atRisk={data.operationQueue.atRisk}
-            newSignups={data.operationQueue.newSignups}
-            dayTicketRepeaters={data.operationQueue.dayTicketRepeaters}
           />
         </div>
 
         {/* 세그먼트 차트 */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <SegmentLtvChart data={data.segmentLtv} />
-          <SegmentRevisitChart data={data.segmentRevisitRate} />
+          <SegmentLtvChart visitData={data.visitSegmentLtv} ticketData={data.ticketSegmentLtv} />
+          <SegmentRevisitChart visitData={data.visitSegmentRevisitRate} ticketData={data.ticketSegmentRevisitRate} />
         </div>
       </div>
     </div>

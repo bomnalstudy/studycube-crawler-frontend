@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getAuthSession, getBranchFilter } from '@/lib/auth-helpers'
 import { decimalToNumber } from '@/lib/utils/formatters'
-import { calculateSegment, calculateFavoriteTicketType, TicketSubType } from '@/lib/crm/segment-calculator'
-import { CustomerListItem, CustomerSegment, PaginatedResponse } from '@/types/crm'
+import { calculateVisitSegment, calculateTicketSegment, calculateFavoriteTicketType } from '@/lib/crm/segment-calculator'
+import { CustomerListItem, VisitSegment, TicketSegment, PaginatedResponse } from '@/types/crm'
 
 export async function GET(request: NextRequest) {
   try {
@@ -17,7 +17,8 @@ export async function GET(request: NextRequest) {
     const branchFilter = getBranchFilter(session, requestedBranchId)
 
     // 필터 파라미터
-    const segment = searchParams.get('segment') as CustomerSegment | null
+    const visitSegment = searchParams.get('visitSegment') as VisitSegment | null
+    const ticketSegment = searchParams.get('ticketSegment') as TicketSegment | null
     const ageGroup = searchParams.get('ageGroup')
     const gender = searchParams.get('gender')
     const minVisits = searchParams.get('minVisits') ? Number(searchParams.get('minVisits')) : undefined
@@ -25,7 +26,6 @@ export async function GET(request: NextRequest) {
     const minSpent = searchParams.get('minSpent') ? Number(searchParams.get('minSpent')) : undefined
     const maxSpent = searchParams.get('maxSpent') ? Number(searchParams.get('maxSpent')) : undefined
     const hasClaim = searchParams.get('hasClaim')
-    const ticketSubType = searchParams.get('ticketSubType') as TicketSubType | null
     const search = searchParams.get('search')
     const sortBy = searchParams.get('sortBy') || 'lastVisitDate'
     const sortOrder = (searchParams.get('sortOrder') || 'desc') as 'asc' | 'desc'
@@ -38,7 +38,12 @@ export async function GET(request: NextRequest) {
 
     const now = new Date()
     const visitRangeStart = visitStartDate ? new Date(visitStartDate) : new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
-    const visitRangeEnd = visitEndDate ? new Date(visitEndDate) : now
+    // 데이터는 전날까지만 존재하므로 기준점은 어제
+    const yesterday = new Date(now)
+    yesterday.setDate(yesterday.getDate() - 1)
+    yesterday.setHours(23, 59, 59, 999)
+    const visitRangeEndRaw = visitEndDate ? new Date(visitEndDate) : yesterday
+    const visitRangeEnd = visitRangeEndRaw > yesterday ? yesterday : visitRangeEndRaw
 
     // Prisma where 조건
     const customerWhere: Record<string, unknown> = {}
@@ -178,16 +183,20 @@ export async function GET(request: NextRequest) {
       const claimCount = claimCountMap.get(c.id) || 0
       const purchases = purchaseMap.get(c.id) || []
       const favoriteTicketType = calculateFavoriteTicketType(purchases)
+      const remaining = remainingTicketMap.get(c.id)
 
-      const seg = calculateSegment({
-        hasClaim: claimCount > 0,
+      const vSeg = calculateVisitSegment({
         lastVisitDate: c.lastVisitDate,
         firstVisitDate: c.firstVisitDate,
         recentVisits,
-        favoriteTicketType,
+        referenceDate: visitRangeEnd,
+        rangeStart: visitRangeStart,
       })
-
-      const remaining = remainingTicketMap.get(c.id)
+      const tSeg = calculateTicketSegment({
+        hasRemainingTermTicket: !!(remaining?.termTicket && remaining.termTicket.trim() !== ''),
+        hasRemainingTimePackage: !!(remaining?.timePackage && remaining.timePackage.trim() !== ''),
+        hasRemainingFixedSeat: !!(remaining?.fixedSeat && remaining.fixedSeat.trim() !== ''),
+      })
 
       return {
         id: c.id,
@@ -198,7 +207,8 @@ export async function GET(request: NextRequest) {
         lastVisitDate: c.lastVisitDate?.toISOString().split('T')[0] || null,
         totalVisits: c.totalVisits,
         totalSpent: decimalToNumber(c.totalSpent),
-        segment: seg,
+        visitSegment: vSeg,
+        ticketSegment: tSeg,
         claimCount,
         recentVisits,
         favoriteTicketType,
@@ -207,8 +217,11 @@ export async function GET(request: NextRequest) {
     })
 
     // 세그먼트 필터
-    if (segment) {
-      items = items.filter(i => i.segment === segment)
+    if (visitSegment) {
+      items = items.filter(i => i.visitSegment === visitSegment)
+    }
+    if (ticketSegment) {
+      items = items.filter(i => i.ticketSegment === ticketSegment)
     }
 
     // 클레임 필터
@@ -216,11 +229,6 @@ export async function GET(request: NextRequest) {
       items = items.filter(i => i.claimCount > 0)
     } else if (hasClaim === 'false') {
       items = items.filter(i => i.claimCount === 0)
-    }
-
-    // 이용권 세부 타입 필터 (시간권/기간권/고정석)
-    if (ticketSubType) {
-      items = items.filter(i => i.favoriteTicketType === ticketSubType)
     }
 
     // 정렬
