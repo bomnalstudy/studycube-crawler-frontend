@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { Suspense, useState, useEffect, useCallback } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { startOfMonth, endOfMonth, subMonths, addMonths } from 'date-fns'
 import { useRole } from '@/hooks/useRole'
@@ -18,6 +18,18 @@ interface Branch {
 }
 
 export default function CustomerListPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-50 p-6 flex items-center justify-center">
+        <div className="animate-spin w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full" />
+      </div>
+    }>
+      <CustomerListContent />
+    </Suspense>
+  )
+}
+
+function CustomerListContent() {
   const { isAdmin, branchId: userBranchId } = useRole()
   const searchParams = useSearchParams()
 
