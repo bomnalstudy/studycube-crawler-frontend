@@ -24,6 +24,7 @@ model Branch {
   ticketRevenues     TicketRevenue[]
   users              User[]
   customerClaims     CustomerClaim[]
+  automationFlows    AutomationFlow[]
 
   @@map("branches")
 }
@@ -306,10 +307,11 @@ model User {
   isActive  Boolean   @default(true)
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
-  branch       Branch?         @relation(fields: [branchId], references: [id])
-  memos        CustomerMemo[]
-  claims       CustomerClaim[]
-  savedFilters SavedFilter[]
+  branch            Branch?            @relation(fields: [branchId], references: [id])
+  memos             CustomerMemo[]
+  claims            CustomerClaim[]
+  savedFilters      SavedFilter[]
+  automationFlows   AutomationFlow[]
 
   @@map("users")
 }
@@ -373,4 +375,90 @@ enum ClaimStatus {
 enum UserRole {
   ADMIN
   BRANCH
+}
+
+// ===== 자동화 모듈 =====
+
+model AutomationFlow {
+  id              String    @id @default(cuid())
+  name            String
+  flowType        FlowType  @default(SMS)
+  branchId        String
+  isActive        Boolean   @default(true)
+  triggerConfig   Json
+  filterConfig    Json
+  messageTemplate String?
+  messageType     String?
+  pointConfig     Json?
+  createdBy       String
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  lastExecutedAt  DateTime?
+
+  branch    Branch          @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  author    User            @relation(fields: [createdBy], references: [id])
+  sendLogs  SmsSendLog[]
+  pointLogs PointActionLog[]
+
+  @@index([branchId])
+  @@index([isActive])
+  @@index([flowType])
+  @@index([createdBy])
+  @@map("automation_flows")
+}
+
+model SmsSendLog {
+  id         String   @id @default(cuid())
+  flowId     String
+  customerId String
+  phone      String
+  message    String
+  byteCount  Int
+  pointUsed  Decimal  @db.Decimal(10, 2)
+  sentAt     DateTime @default(now())
+  status     String   @default("SUCCESS")
+
+  flow AutomationFlow @relation(fields: [flowId], references: [id], onDelete: Cascade)
+
+  @@index([flowId])
+  @@index([customerId])
+  @@index([sentAt])
+  @@map("sms_send_log")
+}
+
+model PointActionLog {
+  id         String    @id @default(cuid())
+  flowId     String
+  customerId String
+  phone      String
+  action     String
+  amount     Int
+  reason     String
+  expiryDate DateTime? @db.Date
+  executedAt DateTime  @default(now())
+  status     String    @default("SUCCESS")
+
+  flow AutomationFlow @relation(fields: [flowId], references: [id], onDelete: Cascade)
+
+  @@index([flowId])
+  @@index([customerId])
+  @@index([executedAt])
+  @@map("point_action_log")
+}
+
+model SmsPointHistory {
+  id        String   @id @default(cuid())
+  branchId  String
+  balance   Int
+  checkedAt DateTime @default(now())
+
+  @@index([branchId])
+  @@index([checkedAt])
+  @@map("sms_point_history")
+}
+
+enum FlowType {
+  SMS
+  POINT
+  SMS_POINT
 }

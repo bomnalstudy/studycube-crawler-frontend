@@ -23,7 +23,13 @@
       "Bash(git pull:*)",
       "Bash(git commit:*)",
       "Bash(git add:*)",
-      "Bash(git push)"
+      "Bash(git push)",
+      "Bash(powershell.exe -Command \"cd ''c:\\\\Users\\\\ghpjh\\\\Desktop\\\\project\\\\studycube-crawler-frontend''; npx next dev -p 3001\")",
+      "Bash(powershell.exe:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npx:*)",
+      "Bash(cmd /c \"cd /d c:\\\\Users\\\\ghpjh\\\\Desktop\\\\project\\\\studycube-crawler-frontend && npx tsc --noEmit\")",
+      "Bash(dir:*)"
     ],
     "deny": [],
     "ask": []

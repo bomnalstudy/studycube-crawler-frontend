@@ -1,0 +1,84 @@
+.flow-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.flow-th {
+  padding: 12px 16px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  color: #9CA3AF;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid #F3F4F6;
+  background: #FAFAFA;
+}
+
+.flow-row {
+  transition: background-color 0.15s;
+}
+
+.flow-row:hover {
+  background-color: #F9FAFB;
+}
+
+.flow-td {
+  padding: 12px 16px;
+  border-bottom: 1px solid #F3F4F6;
+  vertical-align: middle;
+}
+
+.flow-toggle {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  border-radius: 10px;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.flow-toggle-active {
+  background-color: #22C55E;
+}
+
+.flow-toggle-inactive {
+  background-color: #D1D5DB;
+}
+
+.flow-toggle-dot {
+  position: absolute;
+  top: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: white;
+  transition: left 0.2s;
+}
+
+.flow-toggle-active .flow-toggle-dot {
+  left: 18px;
+}
+
+.flow-toggle-inactive .flow-toggle-dot {
+  left: 2px;
+}
+
+.flow-name-link {
+  font-size: 14px;
+  font-weight: 500;
+  color: #1F2937;
+  text-decoration: none;
+}
+
+.flow-name-link:hover {
+  color: #7C3AED;
+}
+
+.flow-type-badge {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 9999px;
+}
