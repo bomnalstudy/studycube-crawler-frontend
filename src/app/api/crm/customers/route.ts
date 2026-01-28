@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getAuthSession, getBranchFilter } from '@/lib/auth-helpers'
 import { decimalToNumber } from '@/lib/utils/formatters'
+import { kstStartOfDay, kstEndOfDay, getKSTYesterdayStr, getKSTDaysAgoStr } from '@/lib/utils/kst-date'
 import { calculateVisitSegment, calculateTicketSegment, calculateFavoriteTicketType } from '@/lib/crm/segment-calculator'
 import { CustomerListItem, VisitSegment, TicketSegment, PaginatedResponse } from '@/types/crm'
 
@@ -36,13 +37,11 @@ export async function GET(request: NextRequest) {
     const visitStartDate = searchParams.get('visitStartDate')
     const visitEndDate = searchParams.get('visitEndDate')
 
-    const now = new Date()
-    const visitRangeStart = visitStartDate ? new Date(visitStartDate) : new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
-    // 데이터는 전날까지만 존재하므로 기준점은 어제
-    const yesterday = new Date(now)
-    yesterday.setDate(yesterday.getDate() - 1)
-    yesterday.setHours(23, 59, 59, 999)
-    const visitRangeEndRaw = visitEndDate ? new Date(visitEndDate) : yesterday
+    // KST 기준 날짜 계산
+    const yesterdayStr = getKSTYesterdayStr()
+    const yesterday = kstEndOfDay(yesterdayStr)
+    const visitRangeStart = visitStartDate ? kstStartOfDay(visitStartDate) : kstStartOfDay(getKSTDaysAgoStr(30))
+    const visitRangeEndRaw = visitEndDate ? kstEndOfDay(visitEndDate) : yesterday
     const visitRangeEnd = visitRangeEndRaw > yesterday ? yesterday : visitRangeEndRaw
 
     // Prisma where 조건
@@ -126,7 +125,7 @@ export async function GET(request: NextRequest) {
       prisma.customerPurchase.findMany({
         where: {
           ...branchFilter,
-          purchaseDate: { gte: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000) },
+          purchaseDate: { gte: kstStartOfDay(getKSTDaysAgoStr(30)) },
           customerId: { in: customerIds },
         },
         select: {

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getAuthSession, getBranchFilter } from '@/lib/auth-helpers'
 import { decimalToNumber } from '@/lib/utils/formatters'
+import { kstStartOfDay, kstEndOfDay, getKSTYesterdayStr, getKSTDaysAgoStr } from '@/lib/utils/kst-date'
 import { calculateVisitSegment, calculateTicketSegment, calculateFavoriteTicketType, inferTicketType } from '@/lib/crm/segment-calculator'
 import {
   CrmDashboardData, VisitSegment, TicketSegment,
@@ -20,17 +21,13 @@ export async function GET(request: NextRequest) {
     const requestedBranchId = searchParams.get('branchId') || 'all'
     const branchFilter = getBranchFilter(session, requestedBranchId)
 
-    const now = new Date()
-
-    // 기간 파라미터 (없으면 최근 30일)
+    // 기간 파라미터 (없으면 최근 30일) — KST 기준
     const startDateParam = searchParams.get('startDate')
     const endDateParam = searchParams.get('endDate')
-    const rangeStart = startDateParam ? new Date(startDateParam) : new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
-    // 데이터는 전날까지만 존재하므로 기준점은 어제
-    const yesterday = new Date(now)
-    yesterday.setDate(yesterday.getDate() - 1)
-    yesterday.setHours(23, 59, 59, 999)
-    const rangeEndRaw = endDateParam ? new Date(endDateParam + 'T23:59:59') : yesterday
+    const yesterdayStr = getKSTYesterdayStr()
+    const yesterday = kstEndOfDay(yesterdayStr)
+    const rangeStart = startDateParam ? kstStartOfDay(startDateParam) : kstStartOfDay(getKSTDaysAgoStr(30))
+    const rangeEndRaw = endDateParam ? kstEndOfDay(endDateParam) : yesterday
     const rangeEnd = rangeEndRaw > yesterday ? yesterday : rangeEndRaw
 
     // 병렬 쿼리
