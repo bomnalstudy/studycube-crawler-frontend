@@ -7,7 +7,7 @@ import {
   TICKET_SEGMENT_LABELS, TICKET_SEGMENT_COLORS,
   VisitSegment, TicketSegment,
 } from '@/types/crm'
-import { maskPhone } from '@/lib/crm/phone-masker'
+import { maskPhone, isValidPhone } from '@/lib/crm/phone-masker'
 import { formatCurrency, formatNumber } from '@/lib/utils/formatters'
 
 type SortField = 'lastVisitDate' | 'totalVisits' | 'totalSpent' | 'recentVisits' | 'segmentDays'
@@ -93,8 +93,8 @@ export const CustomerTable = memo(function CustomerTable({ items, total, page, t
                   }`}
                 >
                   <td className="px-4 py-3">
-                    <span className="text-blue-600 font-medium">
-                      {showPhone ? item.phone : maskPhone(item.phone)}
+                    <span className={isValidPhone(item.phone) ? "text-blue-600 font-medium" : "text-gray-400"}>
+                      {showPhone && isValidPhone(item.phone) ? item.phone : maskPhone(item.phone)}
                     </span>
                   </td>
                   <td className="px-4 py-3">

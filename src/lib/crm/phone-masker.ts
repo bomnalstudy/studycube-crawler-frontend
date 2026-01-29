@@ -1,9 +1,22 @@
 /**
+ * 유효한 전화번호인지 확인
+ * 010으로 시작하는 10-11자리 숫자 또는 하이픈 포함 형태
+ */
+export function isValidPhone(phone: string): boolean {
+  const digits = phone.replace(/\D/g, '')
+  return digits.length >= 10 && digits.length <= 11 && digits.startsWith('010')
+}
+
+/**
  * 전화번호 마스킹
  * 010-1234-5678 -> 010-****-5678
  * 01012345678 -> 010****5678
  */
 export function maskPhone(phone: string): string {
+  // 유효하지 않은 전화번호(해시 등)는 그대로 마스킹 표시
+  if (!isValidPhone(phone)) {
+    return '번호 없음'
+  }
   // 하이픈 포함 형태
   if (phone.includes('-')) {
     const parts = phone.split('-')

@@ -133,6 +133,9 @@ export async function GET(request: NextRequest) {
     })
 
     // 고객별 잔여 이용권 종류별 확인
+    // [대시보드용] 선택 기간 내 최신 방문 기록의 잔여 이용권 사용
+    // → 해당 기간 동안 어떤 이용권을 보유했는지 분석 (기간 기반)
+    // 고객 리스트/자동화에서는 전체 최신 방문 기준으로 현재 보유 이용권 확인
     const customerRemainingTickets = new Map<string, {
       hasTermTicket: boolean
       hasTimePackage: boolean
@@ -287,8 +290,8 @@ export async function GET(request: NextRequest) {
     const sortBySpentAndVisits = (a: OperationQueueItem, b: OperationQueueItem) =>
       b.totalSpent - a.totalSpent || b.totalVisits - a.totalVisits
 
-    // 운영 큐 크기 제한
-    const QUEUE_LIMIT = 50
+    // 운영 큐 크기 제한 없음
+    const QUEUE_LIMIT = Infinity
 
     // 당일권 구매자 ID Set (미리 계산)
     const dayTicketCustomerIds = new Set(

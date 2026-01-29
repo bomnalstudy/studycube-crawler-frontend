@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
@@ -133,22 +133,6 @@ export default function CustomerAnalyticsPage() {
     })
   }
 
-  useEffect(() => {
-    if (status === 'unauthenticated') {
-      router.push('/login')
-    }
-  }, [status, router])
-
-  useEffect(() => {
-    fetchBranches()
-  }, [])
-
-  useEffect(() => {
-    if (selectedBranch) {
-      fetchAnalytics()
-    }
-  }, [selectedBranch, dateRange])
-
   const fetchBranches = async () => {
     try {
       const res = await fetch('/api/branches')
@@ -161,7 +145,7 @@ export default function CustomerAnalyticsPage() {
     }
   }
 
-  const fetchAnalytics = async () => {
+  const fetchAnalytics = useCallback(async () => {
     try {
       setLoading(true)
       const params = new URLSearchParams({
@@ -181,7 +165,23 @@ export default function CustomerAnalyticsPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [selectedBranch, dateRange])
+
+  useEffect(() => {
+    if (status === 'unauthenticated') {
+      router.push('/login')
+    }
+  }, [status, router])
+
+  useEffect(() => {
+    fetchBranches()
+  }, [])
+
+  useEffect(() => {
+    if (selectedBranch) {
+      fetchAnalytics()
+    }
+  }, [selectedBranch, fetchAnalytics])
 
   if (status === 'loading' || loading) {
     return (

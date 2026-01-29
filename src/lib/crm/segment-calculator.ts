@@ -10,6 +10,7 @@ interface VisitSegmentInput {
   rangeStart?: Date         // 기간 시작일 (신규 판단용)
   previousLastVisitDate?: Date | null  // 기간 시작 이전 마지막 방문일 (복귀 판단용)
   hasRemainingFixedSeat?: boolean      // 잔여 고정석 (입퇴실 없으므로 이탈 판정 제외)
+  hasRemainingTermTicket?: boolean     // 잔여 기간권 (정기 이용자이므로 이탈 판정 제외)
 }
 
 interface TicketSegmentInput {
@@ -22,7 +23,7 @@ interface TicketSegmentInput {
  * 방문 세그먼트 분류
  *
  * 분류 기준:
- * 0. 잔여 고정석 보유 -> visit_10_20 (단골) — 입퇴실 기록 없으므로 이탈 판정 제외
+ * 0. 잔여 고정석/기간권 보유 -> visit_10_20 (단골) — 정기 이용자이므로 이탈 판정 제외
  * 1. 30일+ 미방문 & 기간 내 방문 없음 -> churned (이탈)
  * 2. 14~30일 미방문 -> at_risk_14 (이탈위험)
  * 3. 30일+ 미방문이었으나 기간 내 재방문 -> returned (복귀)
@@ -34,9 +35,9 @@ interface TicketSegmentInput {
 export function calculateVisitSegment(input: VisitSegmentInput): VisitSegment {
   const refDate = input.referenceDate || new Date()
 
-  // 0. 고정석 이용자: 입퇴실 기록이 없으므로 이탈/이탈위험 판정에서 제외
+  // 0. 고정석/기간권 이용자: 정기 이용자이므로 이탈/이탈위험 판정에서 제외
   //    기간 중 이용 중인 것으로 간주하여 단골로 분류
-  if (input.hasRemainingFixedSeat) {
+  if (input.hasRemainingFixedSeat || input.hasRemainingTermTicket) {
     return 'visit_10_20'
   }
 

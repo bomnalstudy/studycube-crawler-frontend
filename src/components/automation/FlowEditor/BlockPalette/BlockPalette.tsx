@@ -190,4 +190,3 @@ function BlockPaletteInner() {
 }
 
 export const BlockPalette = memo(BlockPaletteInner)
-export type { BlockDefinition }

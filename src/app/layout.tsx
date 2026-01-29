@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Sidebar } from "@/components/dashboard/sidebar";
 import { ContentWrapper } from "@/components/dashboard/content-wrapper";
 import { SessionProvider } from "@/components/providers/session-provider";
+import { AIChatWrapper } from "@/components/ai-chat";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -22,6 +23,7 @@ export default function RootLayout({
           <ContentWrapper>
             {children}
           </ContentWrapper>
+          <AIChatWrapper />
         </SessionProvider>
       </body>
     </html>

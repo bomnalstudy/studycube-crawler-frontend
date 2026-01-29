@@ -51,8 +51,8 @@ function FlowCanvasInner({ onNodesChange: onNodesChangeProp, onEdgesChange: onEd
   const reactFlowWrapper = useRef<HTMLDivElement>(null)
   const { screenToFlowPosition } = useReactFlow()
 
-  const [nodes, setNodes, onNodesChange] = useNodesState([])
-  const [edges, setEdges, onEdgesChange] = useEdgesState([])
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
 
   // 노드 삭제 함수
   const deleteNode = useCallback((nodeId: string) => {

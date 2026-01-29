@@ -462,3 +462,30 @@ enum FlowType {
   POINT
   SMS_POINT
 }
+
+// AI 대화 저장
+model AiConversation {
+  id        String      @id @default(cuid())
+  userId    String
+  branchId  String?
+  title     String      @default("새 대화")
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  messages  AiMessage[]
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("ai_conversations")
+}
+
+model AiMessage {
+  id             String         @id @default(cuid())
+  conversationId String
+  role           String         // 'user' | 'assistant'
+  content        String
+  createdAt      DateTime       @default(now())
+  conversation   AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@map("ai_messages")
+}

@@ -102,6 +102,38 @@ export default function DashboardPage() {
     setEndDate(endOfMonth(newDate))
   }
 
+  // 재방문자 수 차트 데이터 (메모이제이션) - 훅은 항상 호출되어야 함
+  const revisitChartData = useMemo<BarChartData[]>(() =>
+    metrics?.weeklyRevisitData?.map(item => ({
+      label: `${item.visitCount}회`,
+      value: item.count
+    })) || [], [metrics?.weeklyRevisitData])
+
+  // 이용권 타입별 매출 비율 차트 데이터 (메모이제이션)
+  const ticketTypeData = useMemo<DonutChartData[]>(() => [
+    { name: '당일권', value: metrics?.revenueByTicketType?.day || 0 },
+    { name: '시간권', value: metrics?.revenueByTicketType?.hour || 0 },
+    { name: '기간권', value: metrics?.revenueByTicketType?.period || 0 }
+  ], [metrics?.revenueByTicketType])
+
+  // 나이대별 고객 수 집계 (메모이제이션)
+  const ageGroupData = useMemo<DonutChartData[]>(() =>
+    metrics?.customerDemographics
+      ?.filter(item => item.gender === '전체')
+      .map(item => ({
+        name: item.ageGroup,
+        value: item.count
+      })) || [], [metrics?.customerDemographics])
+
+  // 성별 고객 수 집계 (메모이제이션)
+  const genderData = useMemo<DonutChartData[]>(() =>
+    metrics?.customerDemographics
+      ?.filter(item => item.ageGroup === '전체')
+      .map(item => ({
+        name: item.gender,
+        value: item.count
+      })) || [], [metrics?.customerDemographics])
+
   if (loading) {
     return (
       <main className="min-h-screen p-6 bg-gray-50">
@@ -127,38 +159,6 @@ export default function DashboardPage() {
       </main>
     )
   }
-
-  // 재방문자 수 차트 데이터 (메모이제이션)
-  const revisitChartData = useMemo<BarChartData[]>(() =>
-    metrics.weeklyRevisitData.map(item => ({
-      label: `${item.visitCount}회`,
-      value: item.count
-    })), [metrics.weeklyRevisitData])
-
-  // 이용권 타입별 매출 비율 차트 데이터 (메모이제이션)
-  const ticketTypeData = useMemo<DonutChartData[]>(() => [
-    { name: '당일권', value: metrics.revenueByTicketType.day },
-    { name: '시간권', value: metrics.revenueByTicketType.hour },
-    { name: '기간권', value: metrics.revenueByTicketType.period }
-  ], [metrics.revenueByTicketType])
-
-  // 나이대별 고객 수 집계 (메모이제이션)
-  const ageGroupData = useMemo<DonutChartData[]>(() =>
-    metrics.customerDemographics
-      .filter(item => item.gender === '전체')
-      .map(item => ({
-        name: item.ageGroup,
-        value: item.count
-      })), [metrics.customerDemographics])
-
-  // 성별 고객 수 집계 (메모이제이션)
-  const genderData = useMemo<DonutChartData[]>(() =>
-    metrics.customerDemographics
-      .filter(item => item.ageGroup === '전체')
-      .map(item => ({
-        name: item.gender,
-        value: item.count
-      })), [metrics.customerDemographics])
 
   return (
     <main className="min-h-screen p-6 bg-gray-50">

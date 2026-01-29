@@ -47,7 +47,7 @@ function TriggerSectionInner({ config, onChange }: TriggerSectionProps) {
         ...config,
         recurring: {
           ...config.recurring,
-          frequency: 'custom' as 'daily' | 'weekly' | 'monthly',
+          frequency: 'custom',
           customIntervalDays: customDays,
         },
       })
@@ -56,7 +56,7 @@ function TriggerSectionInner({ config, onChange }: TriggerSectionProps) {
         ...config,
         recurring: {
           ...config.recurring,
-          frequency: freq as 'daily' | 'weekly' | 'monthly',
+          frequency: freq,
         },
       })
     }

@@ -191,17 +191,7 @@ export default function FlowEditPage({ params }: { params: Promise<{ flowId: str
         )}
 
         {/* React Flow 캔버스 */}
-        <FlowCanvas
-          flowType={flowType}
-          triggerConfig={triggerConfig}
-          filterConfig={filterConfig}
-          messageTemplate={messageTemplate}
-          pointConfig={pointConfig}
-          onTriggerChange={setTriggerConfig}
-          onFilterChange={setFilterConfig}
-          onMessageChange={setMessageTemplate}
-          onPointChange={setPointConfig}
-        />
+        <FlowCanvas />
       </div>
     </div>
   )

@@ -48,6 +48,7 @@ export async function GET(request: NextRequest) {
     // KST 기준 날짜 계산
     const yesterdayStr = getKSTYesterdayStr()
     const yesterday = kstEndOfDay(yesterdayStr)
+    const today = new Date() // 이탈/이탈위험 판정용 (오늘 기준)
     const visitRangeStart = visitStartDate ? kstStartOfDay(visitStartDate) : kstStartOfDay(getKSTDaysAgoStr(30))
     const visitRangeEndRaw = visitEndDate ? kstEndOfDay(visitEndDate) : yesterday
     const visitRangeEnd = visitRangeEndRaw > yesterday ? yesterday : visitRangeEndRaw
@@ -124,6 +125,9 @@ export async function GET(request: NextRequest) {
           },
           select: { customerId: true, visitDate: true },
         }),
+        // [고객 리스트용] 전체 최신 방문 기록의 잔여 이용권 사용 (날짜 필터 없음)
+        // → 현재 보유 이용권 기준으로 세그먼트 분류
+        // 대시보드에서는 선택 기간 내 최신 방문 기준으로 기간별 분석
         prisma.dailyVisitor.findMany({
           where: { customerId: { in: customerIds } },
           distinct: ['customerId'],
@@ -191,17 +195,19 @@ export async function GET(request: NextRequest) {
         const remaining = remainingTicketMap.get(c.id)
         const hasFixedSeat = !!(remaining?.fixedSeat && remaining.fixedSeat.trim() !== '')
 
+        const hasTermTicket = !!(remaining?.termTicket && remaining.termTicket.trim() !== '')
         const vSeg = calculateVisitSegment({
           lastVisitDate: c.lastVisitDate,
           firstVisitDate: c.firstVisitDate,
           recentVisits,
-          referenceDate: visitRangeEnd,
+          referenceDate: today,
           rangeStart: visitRangeStart,
           previousLastVisitDate: preRangeLastVisit.get(c.id) || null,
           hasRemainingFixedSeat: hasFixedSeat,
+          hasRemainingTermTicket: hasTermTicket,
         })
         const tSeg = calculateTicketSegment({
-          hasRemainingTermTicket: !!(remaining?.termTicket && remaining.termTicket.trim() !== ''),
+          hasRemainingTermTicket: hasTermTicket,
           hasRemainingTimePackage: !!(remaining?.timePackage && remaining.timePackage.trim() !== ''),
           hasRemainingFixedSeat: hasFixedSeat,
         })
@@ -268,6 +274,8 @@ export async function GET(request: NextRequest) {
 
     const customerIds = customers.map(c => c.id)
     const [latestVisitsWithTickets, recentPurchases, preRangeVisitors] = await Promise.all([
+      // [고객 리스트용] 전체 최신 방문 기록의 잔여 이용권 사용 (날짜 필터 없음)
+      // → 현재 보유 이용권 기준으로 세그먼트 분류
       prisma.dailyVisitor.findMany({
         where: { customerId: { in: customerIds } },
         distinct: ['customerId'],
@@ -339,38 +347,40 @@ export async function GET(request: NextRequest) {
       const purchases = purchaseMap.get(c.id) || []
       const remaining = remainingTicketMap.get(c.id)
       const hasFixedSeat = !!(remaining?.fixedSeat && remaining.fixedSeat.trim() !== '')
+      const hasTermTicket = !!(remaining?.termTicket && remaining.termTicket.trim() !== '')
 
       const vSeg = calculateVisitSegment({
         lastVisitDate: c.lastVisitDate,
         firstVisitDate: c.firstVisitDate,
         recentVisits,
-        referenceDate: visitRangeEnd,
+        referenceDate: today,
         rangeStart: visitRangeStart,
         previousLastVisitDate: preRangeLastVisit.get(c.id) || null,
         hasRemainingFixedSeat: hasFixedSeat,
+        hasRemainingTermTicket: hasTermTicket,
       })
       const tSeg = calculateTicketSegment({
-        hasRemainingTermTicket: !!(remaining?.termTicket && remaining.termTicket.trim() !== ''),
+        hasRemainingTermTicket: hasTermTicket,
         hasRemainingTimePackage: !!(remaining?.timePackage && remaining.timePackage.trim() !== ''),
         hasRemainingFixedSeat: hasFixedSeat,
       })
 
-      // 세그먼트 경과일 계산
+      // 세그먼트 경과일 계산 (오늘 기준)
       let segmentDays: number | null = null
       if (vSeg === 'new_0_7') {
-        segmentDays = Math.floor((visitRangeEnd.getTime() - c.firstVisitDate.getTime()) / (1000 * 60 * 60 * 24)) + 1
+        segmentDays = Math.floor((today.getTime() - c.firstVisitDate.getTime()) / (1000 * 60 * 60 * 24)) + 1
       } else if (vSeg === 'at_risk_14' && c.lastVisitDate) {
-        const daysSince = Math.floor((visitRangeEnd.getTime() - c.lastVisitDate.getTime()) / (1000 * 60 * 60 * 24))
+        const daysSince = Math.floor((today.getTime() - c.lastVisitDate.getTime()) / (1000 * 60 * 60 * 24))
         segmentDays = daysSince - 13
       } else if (vSeg === 'churned' && c.lastVisitDate) {
-        const daysSince = Math.floor((visitRangeEnd.getTime() - c.lastVisitDate.getTime()) / (1000 * 60 * 60 * 24))
+        const daysSince = Math.floor((today.getTime() - c.lastVisitDate.getTime()) / (1000 * 60 * 60 * 24))
         segmentDays = daysSince - 29
       } else if (vSeg === 'returned') {
         const visitDates = customerVisitDates.get(c.id)
         if (visitDates && visitDates.size > 0) {
           const sorted = [...visitDates].sort()
           const firstRevisit = new Date(sorted[0] + 'T00:00:00+09:00')
-          segmentDays = Math.floor((visitRangeEnd.getTime() - firstRevisit.getTime()) / (1000 * 60 * 60 * 24)) + 1
+          segmentDays = Math.floor((today.getTime() - firstRevisit.getTime()) / (1000 * 60 * 60 * 24)) + 1
         }
       }
 

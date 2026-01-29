@@ -58,6 +58,7 @@ export function Sidebar() {
         { name: '고객 리스트', href: '/crm/customers', icon: '👥' },
         { name: '타임라인', href: '/crm/timeline', icon: '🕐' },
         { name: '자동화', href: '/crm/automation', icon: '⚙️' },
+        { name: 'AI 인사이트', href: '/crm/ai-insights', icon: '🤖' },
       ]
     }
   ]

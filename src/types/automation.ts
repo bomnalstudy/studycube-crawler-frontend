@@ -22,12 +22,16 @@ export interface TriggerConfig {
   type: TriggerType
   /** 실행 시각 (HH:mm), 오전 9시~오후 9시 */
   time?: string
+  /** 예약 실행 날짜 (YYYY-MM-DD) */
+  scheduledDate?: string
   /** 반복 주기 */
   recurring?: {
-    frequency: 'daily' | 'weekly' | 'monthly'
+    frequency: 'daily' | 'weekly' | 'monthly' | 'custom'
     /** weekly: 0(일)~6(토), monthly: 1~31 */
     daysOfWeek?: number[]
     dayOfMonth?: number
+    /** 직접 입력 간격 (N일마다) */
+    customIntervalDays?: number
   }
 }
 
