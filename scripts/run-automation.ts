@@ -213,20 +213,18 @@ async function grantPointToUser(
 async function getTargetCustomers(branchId: string, filterConfig: FilterConfig) {
   if (filterConfig.targetMode === 'manual' && filterConfig.manualPhones?.length) {
     return await prisma.customer.findMany({
-      where: { branchId, phone: { in: filterConfig.manualPhones } },
-      select: { id: true, phone: true, name: true },
+      where: { mainBranchId: branchId, phone: { in: filterConfig.manualPhones } },
+      select: { id: true, phone: true },
     })
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const where: any = { branchId }
+  const where: any = { mainBranchId: branchId }
 
-  if (filterConfig.visitSegments?.length) where.visitSegment = { in: filterConfig.visitSegments }
-  if (filterConfig.ticketSegments?.length) where.ticketSegment = { in: filterConfig.ticketSegments }
   if (filterConfig.ageGroups?.length) where.ageGroup = { in: filterConfig.ageGroups }
   if (filterConfig.genders?.length) where.gender = { in: filterConfig.genders }
-  if (filterConfig.minVisits !== undefined) where.visitCount = { ...where.visitCount, gte: filterConfig.minVisits }
-  if (filterConfig.maxVisits !== undefined) where.visitCount = { ...where.visitCount, lte: filterConfig.maxVisits }
+  if (filterConfig.minVisits !== undefined) where.totalVisits = { ...where.totalVisits, gte: filterConfig.minVisits }
+  if (filterConfig.maxVisits !== undefined) where.totalVisits = { ...where.totalVisits, lte: filterConfig.maxVisits }
   if (filterConfig.inactiveDays !== undefined) {
     const cutoffDate = new Date()
     cutoffDate.setDate(cutoffDate.getDate() - filterConfig.inactiveDays)
@@ -235,7 +233,7 @@ async function getTargetCustomers(branchId: string, filterConfig: FilterConfig) 
 
   return await prisma.customer.findMany({
     where,
-    select: { id: true, phone: true, name: true },
+    select: { id: true, phone: true },
   })
 }
 
