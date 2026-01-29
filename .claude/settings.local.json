@@ -29,7 +29,9 @@
       "Bash(npx tsc:*)",
       "Bash(npx:*)",
       "Bash(cmd /c \"cd /d c:\\\\Users\\\\ghpjh\\\\Desktop\\\\project\\\\studycube-crawler-frontend && npx tsc --noEmit\")",
-      "Bash(dir:*)"
+      "Bash(dir:*)",
+      "Bash(bash --norc -c \"cd /c/Users/ghpjh/Desktop/project/studycube-crawler-frontend && npm run build\")",
+      "Bash(timeout:*)"
     ],
     "deny": [],
     "ask": []

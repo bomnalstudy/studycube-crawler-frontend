@@ -231,8 +231,8 @@ function TriggerSectionInner({ config, onChange }: TriggerSectionProps) {
                         recurring: { ...config.recurring!, endDate: nextMonth.toISOString().split('T')[0] },
                       })
                     } else {
-                      const { endDate, ...rest } = config.recurring || {}
-                      onChange({ ...config, recurring: { ...rest, frequency: rest.frequency || 'daily' } })
+                      const { endDate, ...rest } = config.recurring || { frequency: 'daily' as const }
+                      onChange({ ...config, recurring: { frequency: 'daily', ...rest } })
                     }
                   }}
                   className="form-checkbox"
