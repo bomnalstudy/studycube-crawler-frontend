@@ -257,8 +257,8 @@ async function executeFlow(flowId: string) {
     return
   }
 
-  const filterConfig = flow.filterConfig as FilterConfig
-  const pointConfig = flow.pointConfig as PointConfig | null
+  const filterConfig = flow.filterConfig as unknown as FilterConfig
+  const pointConfig = flow.pointConfig as unknown as PointConfig | null
 
   if (!pointConfig && (flow.flowType === 'POINT' || flow.flowType === 'SMS_POINT')) {
     console.error('포인트 설정 없음')
@@ -391,7 +391,7 @@ async function runScheduledFlows() {
   console.log(`활성화된 플로우: ${activeFlows.length}개`)
 
   for (const flow of activeFlows) {
-    const triggerConfig = flow.triggerConfig as TriggerConfig
+    const triggerConfig = flow.triggerConfig as unknown as TriggerConfig
 
     if (shouldRunNow(triggerConfig)) {
       await executeFlow(flow.id)
