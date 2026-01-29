@@ -1,0 +1,296 @@
+.automation-form {
+  background: white;
+  border: 1px solid #E5E7EB;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.automation-form-columns {
+  display: grid;
+  grid-template-columns: 200px 1fr 320px;
+  min-height: 400px;
+}
+
+/* ===== 섹션 공통 ===== */
+.form-section {
+  padding: 20px;
+  border-right: 1px solid #E5E7EB;
+}
+
+.form-section:last-child {
+  border-right: none;
+}
+
+.form-section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #F3F4F6;
+}
+
+.form-section-number {
+  width: 24px;
+  height: 24px;
+  background: #7C3AED;
+  color: white;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.form-section-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #1F2937;
+}
+
+.form-section-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ===== 폼 요소 ===== */
+.form-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #6B7280;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 6px;
+  display: block;
+}
+
+.form-radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-radio {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.form-radio input {
+  accent-color: #7C3AED;
+}
+
+.form-radio span {
+  font-size: 13px;
+  color: #374151;
+}
+
+.form-select {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #D1D5DB;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #374151;
+  background: white;
+  cursor: pointer;
+}
+
+.form-select:focus {
+  outline: none;
+  border-color: #7C3AED;
+  box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.1);
+}
+
+.form-input {
+  padding: 8px 12px;
+  border: 1px solid #D1D5DB;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #374151;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: #7C3AED;
+  box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.1);
+}
+
+.form-input-sm {
+  width: 60px;
+  padding: 6px 8px;
+  text-align: center;
+}
+
+/* ===== 조건 카드 ===== */
+.condition-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: #F9FAFB;
+  border: 1px solid #E5E7EB;
+  border-radius: 8px;
+}
+
+.condition-card-select {
+  padding: 6px 10px;
+  border: 1px solid #D1D5DB;
+  border-radius: 4px;
+  font-size: 12px;
+  background: white;
+}
+
+.condition-card-input {
+  width: 50px;
+  padding: 6px 8px;
+  border: 1px solid #D1D5DB;
+  border-radius: 4px;
+  font-size: 12px;
+  text-align: center;
+}
+
+.condition-card-unit {
+  font-size: 12px;
+  color: #6B7280;
+}
+
+.condition-card-delete {
+  margin-left: auto;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: #FEE2E2;
+  color: #DC2626;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.condition-card-delete:hover {
+  background: #FECACA;
+}
+
+.add-condition-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px;
+  border: 1px dashed #D1D5DB;
+  border-radius: 8px;
+  background: transparent;
+  color: #6B7280;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.add-condition-btn:hover {
+  border-color: #7C3AED;
+  color: #7C3AED;
+  background: #FAF5FF;
+}
+
+/* ===== 체크박스 ===== */
+.form-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.form-checkbox input {
+  width: 16px;
+  height: 16px;
+  accent-color: #7C3AED;
+}
+
+.form-checkbox span {
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+}
+
+/* ===== 메시지 입력 ===== */
+.message-textarea {
+  width: 100%;
+  min-height: 100px;
+  padding: 10px 12px;
+  border: 1px solid #D1D5DB;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #374151;
+  resize: vertical;
+  font-family: inherit;
+}
+
+.message-textarea:focus {
+  outline: none;
+  border-color: #7C3AED;
+  box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.1);
+}
+
+.message-variables {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.variable-chip {
+  padding: 4px 8px;
+  background: #F3F4F6;
+  border: 1px solid #E5E7EB;
+  border-radius: 4px;
+  font-size: 11px;
+  color: #4B5563;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.variable-chip:hover {
+  background: #EDE9FE;
+  border-color: #C4B5FD;
+  color: #7C3AED;
+}
+
+/* ===== 포인트 입력 ===== */
+.point-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.point-input {
+  width: 80px;
+  padding: 8px 12px;
+  border: 1px solid #D1D5DB;
+  border-radius: 6px;
+  font-size: 13px;
+  text-align: right;
+}
+
+.point-unit {
+  font-size: 13px;
+  color: #6B7280;
+  font-weight: 600;
+}
+
+.point-action-radios {
+  display: flex;
+  gap: 12px;
+  margin-left: 8px;
+}
+
+/* ===== 비활성 상태 ===== */
+.form-disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}

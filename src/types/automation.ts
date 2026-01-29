@@ -33,19 +33,37 @@ export interface TriggerConfig {
 
 // ===== 필터 설정 =====
 
+export interface DateCondition {
+  /** 첫 방문 후 +N일 */
+  daysAfterFirstVisit?: number
+  /** 마지막 방문 후 +N일 */
+  daysAfterLastVisit?: number
+  /** 이번달 방문 횟수 (최소) */
+  minMonthlyVisits?: number
+  /** 이번달 방문 횟수 (최대) */
+  maxMonthlyVisits?: number
+}
+
 export interface FilterConfig {
+  // 세그먼트 기반 (선택)
   visitSegments?: string[]
   ticketSegments?: string[]
+  // 연령/성별 (선택)
   ageGroups?: string[]
   genders?: string[]
+  // 방문 횟수 기반 (선택)
   minVisits?: number
   maxVisits?: number
+  // 소비 금액 기반 (선택)
   minSpent?: number
   maxSpent?: number
+  // 세그먼트 기간 (선택)
   minSegmentDays?: number
   maxSegmentDays?: number
   /** 미방문 N일 이상 */
   inactiveDays?: number
+  /** 날짜 기반 조건 */
+  dateCondition?: DateCondition
 }
 
 // ===== 포인트 설정 =====
