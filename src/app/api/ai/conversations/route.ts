@@ -5,15 +5,24 @@ import { getAuthSession } from '@/lib/auth-helpers'
 export const dynamic = 'force-dynamic'
 
 // 대화 목록 조회
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const session = await getAuthSession()
     if (!session) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
     }
 
+    // 지점 필터 (쿼리 파라미터)
+    const { searchParams } = new URL(request.url)
+    const branchId = searchParams.get('branchId')
+
+    // 지점별 필터링: 'all'이면 branchId가 null인 것도 포함
+    const branchFilter = branchId && branchId !== 'all'
+      ? { branchId }
+      : {} // 전체 조회
+
     const conversations = await prisma.aiConversation.findMany({
-      where: { userId: session.user.id },
+      where: { userId: session.user.id, ...branchFilter },
       orderBy: { updatedAt: 'desc' },
       select: {
         id: true,

@@ -32,6 +32,8 @@ export interface TriggerConfig {
     dayOfMonth?: number
     /** 직접 입력 간격 (N일마다) */
     customIntervalDays?: number
+    /** 반복 종료 날짜 (YYYY-MM-DD) - 이 날짜 이후 자동 비활성화 */
+    endDate?: string
   }
 }
 
@@ -68,6 +70,11 @@ export interface FilterConfig {
   inactiveDays?: number
   /** 날짜 기반 조건 */
   dateCondition?: DateCondition
+  // ===== 중복 발송 방지 설정 =====
+  /** 동일 고객에게 최대 발송 횟수 (null = 무제한) */
+  maxSendsPerCustomer?: number | null
+  /** 동일 고객에게 재발송 대기 기간 (일), null이면 미적용 */
+  sendCooldownDays?: number | null
 }
 
 // ===== 포인트 설정 =====

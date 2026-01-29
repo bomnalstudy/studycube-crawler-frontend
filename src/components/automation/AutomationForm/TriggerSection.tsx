@@ -213,6 +213,52 @@ function TriggerSectionInner({ config, onChange }: TriggerSectionProps) {
                 </div>
               </div>
             )}
+
+            {/* 반복 종료 날짜 */}
+            <div>
+              <span className="form-label">종료 날짜 (선택)</span>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={!!config.recurring?.endDate}
+                  onChange={e => {
+                    if (e.target.checked) {
+                      // 기본값: 한 달 뒤
+                      const nextMonth = new Date()
+                      nextMonth.setMonth(nextMonth.getMonth() + 1)
+                      onChange({
+                        ...config,
+                        recurring: { ...config.recurring!, endDate: nextMonth.toISOString().split('T')[0] },
+                      })
+                    } else {
+                      const { endDate, ...rest } = config.recurring || {}
+                      onChange({ ...config, recurring: { ...rest, frequency: rest.frequency || 'daily' } })
+                    }
+                  }}
+                  className="form-checkbox"
+                />
+                {config.recurring?.endDate ? (
+                  <>
+                    <input
+                      type="date"
+                      value={config.recurring.endDate}
+                      min={new Date().toISOString().split('T')[0]}
+                      onChange={e =>
+                        onChange({
+                          ...config,
+                          recurring: { ...config.recurring!, endDate: e.target.value },
+                        })
+                      }
+                      className="form-input"
+                      style={{ width: 'auto' }}
+                    />
+                    <span className="text-sm text-gray-500">까지</span>
+                  </>
+                ) : (
+                  <span className="text-sm text-gray-500">종료 없이 계속 반복</span>
+                )}
+              </div>
+            </div>
           </>
         )}
       </div>

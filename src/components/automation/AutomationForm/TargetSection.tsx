@@ -158,6 +158,70 @@ function TargetSectionInner({ config, onChange }: TargetSectionProps) {
             </button>
           </div>
         </div>
+
+        {/* 중복 발송 방지 */}
+        <div>
+          <span className="form-label">중복 발송 방지</span>
+          <div className="flex flex-col gap-3">
+            {/* 최대 발송 횟수 */}
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={config.maxSendsPerCustomer !== null && config.maxSendsPerCustomer !== undefined}
+                onChange={e => {
+                  onChange({
+                    ...config,
+                    maxSendsPerCustomer: e.target.checked ? 1 : null,
+                  })
+                }}
+                className="form-checkbox"
+              />
+              <span className="text-sm text-gray-700">동일 고객 최대</span>
+              {config.maxSendsPerCustomer !== null && config.maxSendsPerCustomer !== undefined && (
+                <>
+                  <input
+                    type="number"
+                    min={1}
+                    value={config.maxSendsPerCustomer}
+                    onChange={e => onChange({ ...config, maxSendsPerCustomer: Number(e.target.value) })}
+                    className="form-input form-input-sm"
+                    style={{ width: '60px' }}
+                  />
+                  <span className="text-sm text-gray-500">회까지만 발송</span>
+                </>
+              )}
+            </label>
+
+            {/* 재발송 대기 기간 */}
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={config.sendCooldownDays !== null && config.sendCooldownDays !== undefined}
+                onChange={e => {
+                  onChange({
+                    ...config,
+                    sendCooldownDays: e.target.checked ? 30 : null,
+                  })
+                }}
+                className="form-checkbox"
+              />
+              <span className="text-sm text-gray-700">재발송 대기</span>
+              {config.sendCooldownDays !== null && config.sendCooldownDays !== undefined && (
+                <>
+                  <input
+                    type="number"
+                    min={1}
+                    value={config.sendCooldownDays}
+                    onChange={e => onChange({ ...config, sendCooldownDays: Number(e.target.value) })}
+                    className="form-input form-input-sm"
+                    style={{ width: '60px' }}
+                  />
+                  <span className="text-sm text-gray-500">일</span>
+                </>
+              )}
+            </label>
+          </div>
+        </div>
       </div>
     </div>
   )

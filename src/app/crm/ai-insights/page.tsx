@@ -74,11 +74,15 @@ export default function AIInsightsPage() {
     scrollToBottom()
   }, [messages])
 
-  // 대화 목록 조회
+  // 대화 목록 조회 (지점별 필터링)
   const fetchConversations = useCallback(async () => {
     try {
       setListLoading(true)
-      const res = await fetch('/api/ai/conversations')
+      const params = new URLSearchParams()
+      if (selectedBranchId && selectedBranchId !== 'all') {
+        params.set('branchId', selectedBranchId)
+      }
+      const res = await fetch(`/api/ai/conversations?${params}`)
       const json = await res.json()
       if (json.success) {
         setConversations(json.data)
@@ -88,10 +92,14 @@ export default function AIInsightsPage() {
     } finally {
       setListLoading(false)
     }
-  }, [])
+  }, [selectedBranchId])
 
+  // 지점 변경 시 대화 목록 새로고침 + 새 채팅으로 리셋
   useEffect(() => {
     fetchConversations()
+    // 지점 변경 시 현재 대화 초기화
+    setSelectedConversationId(null)
+    setMessages([])
   }, [fetchConversations])
 
   // 저장된 대화 선택
