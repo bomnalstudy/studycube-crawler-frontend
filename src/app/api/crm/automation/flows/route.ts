@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { name, flowType, branchId, triggerConfig, filterConfig, messageTemplate, messageType, pointConfig } = body
+    const { name, flowType, branchId, triggerConfig, filterConfig, messageTemplate, messageType, pointConfig, studycubeUsername, studycubePassword } = body
 
     if (!name || !flowType || !branchId || !triggerConfig || !filterConfig) {
       return NextResponse.json({ success: false, error: '필수 항목이 누락되었습니다.' }, { status: 400 })
@@ -73,6 +73,8 @@ export async function POST(request: NextRequest) {
         messageTemplate: messageTemplate || null,
         messageType: messageType || null,
         pointConfig: pointConfig || null,
+        studycubeUsername: studycubeUsername || null,
+        studycubePassword: studycubePassword || null,
         createdBy: session.user.id,
       },
       include: {

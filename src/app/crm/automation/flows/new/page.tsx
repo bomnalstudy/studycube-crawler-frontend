@@ -24,7 +24,7 @@ const DEFAULT_POINT: PointConfig = {
   amount: 1000,
   reason: '',
   expiryDays: 30,
-  deduplicateDays: null,
+  deduplicateDays: 1,
 }
 
 export default function NewFlowPage() {
