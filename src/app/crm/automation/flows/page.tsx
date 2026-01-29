@@ -11,6 +11,12 @@ export default function FlowListPage() {
   const [flows, setFlows] = useState<AutomationFlow[]>([])
   const [loading, setLoading] = useState(true)
   const [filterType, setFilterType] = useState<FlowType | 'ALL'>('ALL')
+  const [executingFlowId, setExecutingFlowId] = useState<string | null>(null)
+  const [executeResult, setExecuteResult] = useState<{
+    flowId: string
+    success: boolean
+    message: string
+  } | null>(null)
 
   const fetchFlows = useCallback(async () => {
     try {
@@ -59,6 +65,42 @@ export default function FlowListPage() {
     }
   }
 
+  const handleExecute = async (flowId: string) => {
+    setExecutingFlowId(flowId)
+    setExecuteResult(null)
+
+    try {
+      const res = await fetch(`/api/crm/automation/flows/${flowId}/execute`, {
+        method: 'POST',
+      })
+      const json = await res.json()
+
+      if (json.success) {
+        setExecuteResult({
+          flowId,
+          success: true,
+          message: json.data.message + (json.data.note ? ` (${json.data.note})` : ''),
+        })
+        // 리스트 새로고침 (실행 기록 업데이트)
+        fetchFlows()
+      } else {
+        setExecuteResult({
+          flowId,
+          success: false,
+          message: json.error || '실행 실패',
+        })
+      }
+    } catch {
+      setExecuteResult({
+        flowId,
+        success: false,
+        message: '네트워크 오류가 발생했습니다.',
+      })
+    } finally {
+      setExecutingFlowId(null)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-6xl mx-auto space-y-6">
@@ -93,6 +135,27 @@ export default function FlowListPage() {
           ))}
         </div>
 
+        {/* 실행 결과 메시지 */}
+        {executeResult && (
+          <div
+            className={`p-4 rounded-lg border ${
+              executeResult.success
+                ? 'bg-green-50 border-green-200 text-green-700'
+                : 'bg-red-50 border-red-200 text-red-700'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <p className="text-sm">{executeResult.message}</p>
+              <button
+                onClick={() => setExecuteResult(null)}
+                className="text-sm opacity-60 hover:opacity-100"
+              >
+                닫기
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* 목록 */}
         {loading ? (
           <div className="bg-white rounded-xl border border-gray-200 p-10 text-center">
@@ -104,6 +167,8 @@ export default function FlowListPage() {
             flows={flows}
             onToggleActive={handleToggleActive}
             onDelete={handleDelete}
+            onExecute={handleExecute}
+            executingFlowId={executingFlowId}
           />
         )}
       </div>

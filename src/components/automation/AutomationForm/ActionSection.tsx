@@ -128,6 +128,18 @@ function ActionSectionInner({
                 </label>
               </div>
             </div>
+
+            {/* 포인트 부여 설명 */}
+            <div style={{ marginTop: '12px' }}>
+              <input
+                type="text"
+                value={pointConfig.reason}
+                onChange={e => onPointChange({ ...pointConfig, reason: e.target.value })}
+                placeholder="포인트 부여 설명 (선택)"
+                className="point-reason-input"
+                disabled={!enablePoint}
+              />
+            </div>
           </div>
         </div>
       </div>

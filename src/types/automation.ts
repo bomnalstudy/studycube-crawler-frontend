@@ -51,6 +51,11 @@ export interface DateCondition {
 }
 
 export interface FilterConfig {
+  // ===== 대상 선택 모드 =====
+  /** 'condition' = 조건 기반, 'manual' = 직접 입력 */
+  targetMode?: 'condition' | 'manual'
+  /** 직접 입력한 전화번호 목록 */
+  manualPhones?: string[]
   // 세그먼트 기반 (선택)
   visitSegments?: string[]
   ticketSegments?: string[]
@@ -112,6 +117,9 @@ export interface AutomationFlow {
   createdAt: string
   updatedAt: string
   lastExecutedAt: string | null
+  // 스터디큐브 로그인 정보 (자동 문자 발송용)
+  studycubeUsername: string | null
+  studycubePassword: string | null
   // 조회 시 추가 정보
   branch?: { id: string; name: string }
   author?: { id: string; name: string }
@@ -128,6 +136,8 @@ export interface AutomationFlowCreateInput {
   messageTemplate?: string | null
   messageType?: MessageType | null
   pointConfig?: PointConfig | null
+  studycubeUsername?: string | null
+  studycubePassword?: string | null
 }
 
 // ===== 발송/실행 로그 =====

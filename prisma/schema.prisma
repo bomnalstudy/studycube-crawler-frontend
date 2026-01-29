@@ -394,6 +394,9 @@ model AutomationFlow {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   lastExecutedAt  DateTime?
+  // 스터디큐브 로그인 정보 (자동 문자 발송용)
+  studycubeUsername String?
+  studycubePassword String?   // 암호화 저장 권장
 
   branch    Branch          @relation(fields: [branchId], references: [id], onDelete: Cascade)
   author    User            @relation(fields: [createdBy], references: [id])

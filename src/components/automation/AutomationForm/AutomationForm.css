@@ -289,6 +289,25 @@
   margin-left: 8px;
 }
 
+.point-reason-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #D1D5DB;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #374151;
+}
+
+.point-reason-input:focus {
+  outline: none;
+  border-color: #7C3AED;
+  box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.1);
+}
+
+.point-reason-input::placeholder {
+  color: #9CA3AF;
+}
+
 /* ===== 비활성 상태 ===== */
 .form-disabled {
   opacity: 0.5;

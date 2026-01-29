@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useRole } from '@/hooks/useRole'
-import { AutomationForm } from '@/components/automation/AutomationForm'
+import { AutomationForm, CredentialsSection } from '@/components/automation/AutomationForm'
 import { TriggerConfig, FilterConfig, PointConfig, FlowType } from '@/types/automation'
 
 interface Branch {
@@ -48,6 +48,10 @@ export default function NewFlowPage() {
   const [enablePoint, setEnablePoint] = useState(false)
   const [pointConfig, setPointConfig] = useState<PointConfig>(DEFAULT_POINT)
 
+  // 스터디큐브 로그인
+  const [studycubeUsername, setStudycubeUsername] = useState('')
+  const [studycubePassword, setStudycubePassword] = useState('')
+
   // 상태
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -91,6 +95,10 @@ export default function NewFlowPage() {
       setError('문자 발송 또는 포인트 지급 중 하나 이상을 선택하세요.')
       return
     }
+    if (!studycubeUsername.trim() || !studycubePassword.trim()) {
+      setError('스터디큐브 로그인 정보를 입력하세요.')
+      return
+    }
 
     setSaving(true)
     setError(null)
@@ -103,6 +111,8 @@ export default function NewFlowPage() {
         branchId,
         triggerConfig,
         filterConfig,
+        studycubeUsername: studycubeUsername || null,
+        studycubePassword: studycubePassword || null,
       }
 
       if (enableSms) {
@@ -200,7 +210,7 @@ export default function NewFlowPage() {
           </div>
         )}
 
-        {/* 자동화 폼 */}
+        {/* 자동화 폼 (1,2,3번 섹션) */}
         <AutomationForm
           triggerConfig={triggerConfig}
           onTriggerChange={setTriggerConfig}
@@ -215,6 +225,16 @@ export default function NewFlowPage() {
           pointConfig={pointConfig}
           onPointChange={setPointConfig}
         />
+
+        {/* 스터디큐브 로그인 (4번 섹션 - 별도 카드) */}
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <CredentialsSection
+            username={studycubeUsername}
+            password={studycubePassword}
+            onUsernameChange={setStudycubeUsername}
+            onPasswordChange={setStudycubePassword}
+          />
+        </div>
       </div>
     </div>
   )

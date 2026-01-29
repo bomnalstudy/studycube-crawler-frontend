@@ -1,0 +1,43 @@
+name: Automation Flow Executor
+
+on:
+  # 수동 실행 (앱에서 버튼 클릭 시)
+  workflow_dispatch:
+    inputs:
+      flowId:
+        description: '실행할 플로우 ID'
+        required: true
+        type: string
+
+  # 크론 실행 (한국시간 오전 9시~오후 9시 매 정시)
+  # UTC 0시~12시 = KST 9시~21시
+  schedule:
+    - cron: '0 0-12 * * *'
+
+jobs:
+  execute:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: Run automation
+        env:
+          POSTGRES_URL: ${{ secrets.POSTGRES_URL }}
+          FLOW_ID: ${{ github.event.inputs.flowId }}
+          VERCEL_URL: ${{ secrets.VERCEL_URL }}
+          AUTOMATION_CALLBACK_SECRET: ${{ secrets.AUTOMATION_CALLBACK_SECRET }}
+        run: npx tsx scripts/run-automation.ts
