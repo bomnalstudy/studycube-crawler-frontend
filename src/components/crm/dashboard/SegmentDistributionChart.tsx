@@ -1,5 +1,6 @@
 'use client'
 
+import { memo, useMemo } from 'react'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts'
 import {
   SegmentChartItem, VisitSegment, TicketSegment,
@@ -17,8 +18,8 @@ function getColor(segment: string): string {
     || '#6B7280'
 }
 
-function DonutChart({ data, title }: { data: SegmentChartItem[]; title: string }) {
-  const total = data.reduce((sum, item) => sum + item.value, 0)
+const DonutChart = memo(function DonutChart({ data, title }: { data: SegmentChartItem[]; title: string }) {
+  const total = useMemo(() => data.reduce((sum, item) => sum + item.value, 0), [data])
 
   if (data.length === 0 || total === 0) {
     return (
@@ -87,9 +88,9 @@ function DonutChart({ data, title }: { data: SegmentChartItem[]; title: string }
       </div>
     </div>
   )
-}
+})
 
-export function SegmentDistributionChart({ visitData, ticketData }: SegmentDistributionChartProps) {
+export const SegmentDistributionChart = memo(function SegmentDistributionChart({ visitData, ticketData }: SegmentDistributionChartProps) {
   return (
     <div className="bg-white rounded-2xl p-6 shadow-sm">
       <h3 className="text-sm font-semibold text-gray-800 mb-5">세그먼트별 고객 분포</h3>
@@ -100,4 +101,4 @@ export function SegmentDistributionChart({ visitData, ticketData }: SegmentDistr
       </div>
     </div>
   )
-}
+})

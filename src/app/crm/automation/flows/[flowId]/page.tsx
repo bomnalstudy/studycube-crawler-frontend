@@ -4,10 +4,7 @@ import { useState, useEffect, use } from 'react'
 import { useRouter } from 'next/navigation'
 import { useRole } from '@/hooks/useRole'
 import { FlowType, TriggerConfig, FilterConfig, PointConfig, AutomationFlow } from '@/types/automation'
-import { TriggerBlock } from '@/components/automation/FlowEditor/TriggerBlock'
-import { FilterBlock } from '@/components/automation/FlowEditor/FilterBlock'
-import { MessageBlock } from '@/components/automation/FlowEditor/MessageBlock'
-import { PointBlock } from '@/components/automation/FlowEditor/PointBlock'
+import { FlowCanvas } from '@/components/automation/FlowEditor/FlowCanvas'
 
 interface Branch {
   id: string
@@ -38,7 +35,7 @@ export default function FlowEditPage({ params }: { params: Promise<{ flowId: str
     async function fetchData() {
       try {
         const [flowRes, branchRes] = await Promise.all([
-          fetch(`/api/crm/crm/automation/flows/${flowId}`),
+          fetch(`/api/crm/automation/flows/${flowId}`),
           fetch('/api/branches'),
         ])
 
@@ -81,7 +78,7 @@ export default function FlowEditPage({ params }: { params: Promise<{ flowId: str
       if (showMessage) body.messageTemplate = messageTemplate
       if (showPoint) body.pointConfig = pointConfig
 
-      const res = await fetch(`/api/crm/crm/automation/flows/${flowId}`, {
+      const res = await fetch(`/api/crm/automation/flows/${flowId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -102,7 +99,7 @@ export default function FlowEditPage({ params }: { params: Promise<{ flowId: str
   const handleDelete = async () => {
     if (!confirm('이 플로우를 삭제하시겠습니까?')) return
     try {
-      const res = await fetch(`/api/crm/crm/automation/flows/${flowId}`, { method: 'DELETE' })
+      const res = await fetch(`/api/crm/automation/flows/${flowId}`, { method: 'DELETE' })
       const json = await res.json()
       if (json.success) router.push('/crm/automation/flows')
     } catch {
@@ -118,12 +115,9 @@ export default function FlowEditPage({ params }: { params: Promise<{ flowId: str
     )
   }
 
-  const showMessage = flowType === 'SMS' || flowType === 'SMS_POINT'
-  const showPoint = flowType === 'POINT' || flowType === 'SMS_POINT'
-
   return (
     <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-3xl mx-auto space-y-6">
+      <div className="space-y-6">
         {/* 헤더 */}
         <div className="flex items-center justify-between">
           <div>
@@ -133,22 +127,28 @@ export default function FlowEditPage({ params }: { params: Promise<{ flowId: str
           <div className="flex items-center gap-3">
             <button onClick={handleDelete} className="text-sm text-red-400 hover:text-red-600">삭제</button>
             <button onClick={() => router.back()} className="text-sm text-gray-500 hover:text-gray-700">취소</button>
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="px-5 py-2.5 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50"
+            >
+              {saving ? '저장 중...' : '변경사항 저장'}
+            </button>
           </div>
         </div>
 
         {/* 기본 정보 */}
-        <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
-          <div>
-            <label className="text-xs font-medium text-gray-500">플로우 이름</label>
-            <input
-              type="text"
-              value={name}
-              onChange={e => setName(e.target.value)}
-              className="mt-1 w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-purple-400"
-            />
-          </div>
-
-          <div className="grid grid-cols-3 gap-4">
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <div className="grid grid-cols-4 gap-4">
+            <div>
+              <label className="text-xs font-medium text-gray-500">플로우 이름</label>
+              <input
+                type="text"
+                value={name}
+                onChange={e => setName(e.target.value)}
+                className="mt-1 w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-purple-400"
+              />
+            </div>
             <div>
               <label className="text-xs font-medium text-gray-500">유형</label>
               <select
@@ -183,61 +183,25 @@ export default function FlowEditPage({ params }: { params: Promise<{ flowId: str
           </div>
         </div>
 
-        {/* 블록 에디터 */}
-        <div className="space-y-3">
-          <TriggerBlock config={triggerConfig} onChange={setTriggerConfig} />
-
-          <div className="flex justify-center py-1 text-gray-300">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M12 5v14M5 12l7 7 7-7" />
-            </svg>
-          </div>
-
-          <FilterBlock config={filterConfig} onChange={setFilterConfig} />
-
-          <div className="flex justify-center py-1 text-gray-300">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M12 5v14M5 12l7 7 7-7" />
-            </svg>
-          </div>
-
-          {showMessage && (
-            <>
-              <MessageBlock template={messageTemplate} onChange={setMessageTemplate} />
-              {showPoint && (
-                <div className="flex justify-center py-1 text-gray-300">
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M12 5v14M5 12l7 7 7-7" />
-                  </svg>
-                </div>
-              )}
-            </>
-          )}
-
-          {showPoint && <PointBlock config={pointConfig} onChange={setPointConfig} />}
-        </div>
-
+        {/* 에러 */}
         {error && (
           <div className="bg-red-50 border border-red-200 rounded-lg p-3">
             <p className="text-sm text-red-600">{error}</p>
           </div>
         )}
 
-        <div className="flex justify-end gap-3">
-          <button
-            onClick={() => router.back()}
-            className="px-5 py-2.5 text-sm text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-          >
-            취소
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="px-5 py-2.5 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50"
-          >
-            {saving ? '저장 중...' : '변경사항 저장'}
-          </button>
-        </div>
+        {/* React Flow 캔버스 */}
+        <FlowCanvas
+          flowType={flowType}
+          triggerConfig={triggerConfig}
+          filterConfig={filterConfig}
+          messageTemplate={messageTemplate}
+          pointConfig={pointConfig}
+          onTriggerChange={setTriggerConfig}
+          onFilterChange={setFilterConfig}
+          onMessageChange={setMessageTemplate}
+          onPointChange={setPointConfig}
+        />
       </div>
     </div>
   )

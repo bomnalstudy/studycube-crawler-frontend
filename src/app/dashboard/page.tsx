@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { startOfMonth, endOfMonth, addMonths, subMonths } from 'date-fns'
 import { BarChart } from '@/components/charts/bar-chart'
 import { DonutChart } from '@/components/charts/donut-chart'
@@ -128,34 +128,37 @@ export default function DashboardPage() {
     )
   }
 
-  // 재방문자 수 차트 데이터
-  const revisitChartData: BarChartData[] = metrics.weeklyRevisitData.map(item => ({
-    label: `${item.visitCount}회`,
-    value: item.count
-  }))
+  // 재방문자 수 차트 데이터 (메모이제이션)
+  const revisitChartData = useMemo<BarChartData[]>(() =>
+    metrics.weeklyRevisitData.map(item => ({
+      label: `${item.visitCount}회`,
+      value: item.count
+    })), [metrics.weeklyRevisitData])
 
-  // 이용권 타입별 매출 비율 차트 데이터
-  const ticketTypeData: DonutChartData[] = [
+  // 이용권 타입별 매출 비율 차트 데이터 (메모이제이션)
+  const ticketTypeData = useMemo<DonutChartData[]>(() => [
     { name: '당일권', value: metrics.revenueByTicketType.day },
     { name: '시간권', value: metrics.revenueByTicketType.hour },
     { name: '기간권', value: metrics.revenueByTicketType.period }
-  ]
+  ], [metrics.revenueByTicketType])
 
-  // 나이대별 고객 수 집계 (gender가 '전체'인 것만)
-  const ageGroupData: DonutChartData[] = metrics.customerDemographics
-    .filter(item => item.gender === '전체')
-    .map(item => ({
-      name: item.ageGroup,
-      value: item.count
-    }))
+  // 나이대별 고객 수 집계 (메모이제이션)
+  const ageGroupData = useMemo<DonutChartData[]>(() =>
+    metrics.customerDemographics
+      .filter(item => item.gender === '전체')
+      .map(item => ({
+        name: item.ageGroup,
+        value: item.count
+      })), [metrics.customerDemographics])
 
-  // 성별 고객 수 집계 (ageGroup이 '전체'인 것만)
-  const genderData: DonutChartData[] = metrics.customerDemographics
-    .filter(item => item.ageGroup === '전체')
-    .map(item => ({
-      name: item.gender,
-      value: item.count
-    }))
+  // 성별 고객 수 집계 (메모이제이션)
+  const genderData = useMemo<DonutChartData[]>(() =>
+    metrics.customerDemographics
+      .filter(item => item.ageGroup === '전체')
+      .map(item => ({
+        name: item.gender,
+        value: item.count
+      })), [metrics.customerDemographics])
 
   return (
     <main className="min-h-screen p-6 bg-gray-50">

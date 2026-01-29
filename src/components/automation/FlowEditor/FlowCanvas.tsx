@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useMemo } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import {
   ReactFlow,
   Background,
@@ -47,6 +47,81 @@ const defaultEdgeOptions = {
   markerEnd: { type: MarkerType.ArrowClosed, color: '#A78BFA' },
 }
 
+function buildNodes(
+  flowType: FlowType,
+  triggerConfig: TriggerConfig,
+  filterConfig: FilterConfig,
+  messageTemplate: string,
+  pointConfig: PointConfig,
+  handlers: {
+    onTriggerChange: (config: TriggerConfig) => void
+    onFilterChange: (config: FilterConfig) => void
+    onMessageChange: (template: string) => void
+    onPointChange: (config: PointConfig) => void
+  }
+): Node[] {
+  const showMessage = flowType === 'SMS' || flowType === 'SMS_POINT'
+  const showPoint = flowType === 'POINT' || flowType === 'SMS_POINT'
+
+  const nodes: Node[] = [
+    {
+      id: 'trigger',
+      type: 'trigger',
+      position: { x: 250, y: 0 },
+      data: { config: triggerConfig, onChange: handlers.onTriggerChange },
+    },
+    {
+      id: 'filter',
+      type: 'filter',
+      position: { x: 250, y: 220 },
+      data: { config: filterConfig, onChange: handlers.onFilterChange },
+    },
+  ]
+
+  let nextY = 560
+
+  if (showMessage) {
+    nodes.push({
+      id: 'message',
+      type: 'message',
+      position: { x: 250, y: nextY },
+      data: { template: messageTemplate, onChange: handlers.onMessageChange },
+    })
+    nextY += 320
+  }
+
+  if (showPoint) {
+    nodes.push({
+      id: 'point',
+      type: 'point',
+      position: { x: 250, y: nextY },
+      data: { config: pointConfig, onChange: handlers.onPointChange },
+    })
+  }
+
+  return nodes
+}
+
+function buildEdges(flowType: FlowType): Edge[] {
+  const showMessage = flowType === 'SMS' || flowType === 'SMS_POINT'
+  const showPoint = flowType === 'POINT' || flowType === 'SMS_POINT'
+
+  const edges: Edge[] = [
+    { id: 'e-trigger-filter', source: 'trigger', target: 'filter' },
+  ]
+
+  if (showMessage) {
+    edges.push({ id: 'e-filter-message', source: 'filter', target: 'message' })
+    if (showPoint) {
+      edges.push({ id: 'e-message-point', source: 'message', target: 'point' })
+    }
+  } else if (showPoint) {
+    edges.push({ id: 'e-filter-point', source: 'filter', target: 'point' })
+  }
+
+  return edges
+}
+
 export function FlowCanvas({
   flowType,
   triggerConfig,
@@ -58,120 +133,102 @@ export function FlowCanvas({
   onMessageChange,
   onPointChange,
 }: FlowCanvasProps) {
-  const showMessage = flowType === 'SMS' || flowType === 'SMS_POINT'
-  const showPoint = flowType === 'POINT' || flowType === 'SMS_POINT'
+  // handlers를 ref로 관리하여 불필요한 리렌더링 방지
+  const handlersRef = useRef({
+    onTriggerChange,
+    onFilterChange,
+    onMessageChange,
+    onPointChange,
+  })
 
-  const initialNodes = useMemo(() => {
-    const nodes: Node[] = [
-      {
-        id: 'trigger',
-        type: 'trigger',
-        position: { x: 250, y: 0 },
-        data: { config: triggerConfig, onChange: onTriggerChange },
-      },
-      {
-        id: 'filter',
-        type: 'filter',
-        position: { x: 250, y: 220 },
-        data: { config: filterConfig, onChange: onFilterChange },
-      },
-    ]
-
-    let nextY = 560
-
-    if (showMessage) {
-      nodes.push({
-        id: 'message',
-        type: 'message',
-        position: { x: 250, y: nextY },
-        data: { template: messageTemplate, onChange: onMessageChange },
-      })
-      nextY += 320
+  // handlers 업데이트
+  useEffect(() => {
+    handlersRef.current = {
+      onTriggerChange,
+      onFilterChange,
+      onMessageChange,
+      onPointChange,
     }
+  }, [onTriggerChange, onFilterChange, onMessageChange, onPointChange])
 
-    if (showPoint) {
-      nodes.push({
-        id: 'point',
-        type: 'point',
-        position: { x: 250, y: nextY },
-        data: { config: pointConfig, onChange: onPointChange },
-      })
-    }
-
-    return nodes
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // 안정적인 콜백 함수들
+  const stableOnTriggerChange = useCallback((config: TriggerConfig) => {
+    handlersRef.current.onTriggerChange(config)
   }, [])
 
-  const initialEdges = useMemo(() => {
-    const edges: Edge[] = [
-      { id: 'e-trigger-filter', source: 'trigger', target: 'filter' },
-    ]
-
-    if (showMessage) {
-      edges.push({ id: 'e-filter-message', source: 'filter', target: 'message' })
-      if (showPoint) {
-        edges.push({ id: 'e-message-point', source: 'message', target: 'point' })
-      }
-    } else if (showPoint) {
-      edges.push({ id: 'e-filter-point', source: 'filter', target: 'point' })
-    }
-
-    return edges
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const stableOnFilterChange = useCallback((config: FilterConfig) => {
+    handlersRef.current.onFilterChange(config)
   }, [])
+
+  const stableOnMessageChange = useCallback((template: string) => {
+    handlersRef.current.onMessageChange(template)
+  }, [])
+
+  const stableOnPointChange = useCallback((config: PointConfig) => {
+    handlersRef.current.onPointChange(config)
+  }, [])
+
+  const stableHandlers = {
+    onTriggerChange: stableOnTriggerChange,
+    onFilterChange: stableOnFilterChange,
+    onMessageChange: stableOnMessageChange,
+    onPointChange: stableOnPointChange,
+  }
+
+  // 초기 노드/엣지 생성
+  const initialNodes = buildNodes(
+    flowType,
+    triggerConfig,
+    filterConfig,
+    messageTemplate,
+    pointConfig,
+    stableHandlers
+  )
+  const initialEdges = buildEdges(flowType)
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
+
+  // flowType 변경 시 노드/엣지 재구성
+  const prevFlowTypeRef = useRef(flowType)
+  useEffect(() => {
+    if (prevFlowTypeRef.current !== flowType) {
+      prevFlowTypeRef.current = flowType
+      setNodes(buildNodes(
+        flowType,
+        triggerConfig,
+        filterConfig,
+        messageTemplate,
+        pointConfig,
+        stableHandlers
+      ))
+      setEdges(buildEdges(flowType))
+    }
+  }, [flowType, triggerConfig, filterConfig, messageTemplate, pointConfig, setNodes, setEdges, stableHandlers])
+
+  // config 변경 시 노드 data만 업데이트 (position 유지)
+  useEffect(() => {
+    setNodes(nds => nds.map(n => {
+      if (n.id === 'trigger') {
+        return { ...n, data: { config: triggerConfig, onChange: stableOnTriggerChange } }
+      }
+      if (n.id === 'filter') {
+        return { ...n, data: { config: filterConfig, onChange: stableOnFilterChange } }
+      }
+      if (n.id === 'message') {
+        return { ...n, data: { template: messageTemplate, onChange: stableOnMessageChange } }
+      }
+      if (n.id === 'point') {
+        return { ...n, data: { config: pointConfig, onChange: stableOnPointChange } }
+      }
+      return n
+    }))
+  }, [triggerConfig, filterConfig, messageTemplate, pointConfig, setNodes, stableOnTriggerChange, stableOnFilterChange, stableOnMessageChange, stableOnPointChange])
 
   const onConnect = useCallback(
     (connection: Connection) => setEdges(eds => addEdge(connection, eds)),
     [setEdges]
   )
-
-  // 노드 data가 변경될 때 동기화
-  const updateNodeData = useCallback(
-    (nodeId: string, newData: Record<string, unknown>) => {
-      setNodes(nds => nds.map(n => n.id === nodeId ? { ...n, data: { ...n.data, ...newData } } : n))
-    },
-    [setNodes]
-  )
-
-  // config 변경 시 노드 data도 업데이트
-  const handleTriggerChange = useCallback((config: TriggerConfig) => {
-    onTriggerChange(config)
-    updateNodeData('trigger', { config, onChange: handleTriggerChange })
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [onTriggerChange, updateNodeData])
-
-  const handleFilterChange = useCallback((config: FilterConfig) => {
-    onFilterChange(config)
-    updateNodeData('filter', { config, onChange: handleFilterChange })
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [onFilterChange, updateNodeData])
-
-  const handleMessageChange = useCallback((template: string) => {
-    onMessageChange(template)
-    updateNodeData('message', { template, onChange: handleMessageChange })
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [onMessageChange, updateNodeData])
-
-  const handlePointChange = useCallback((config: PointConfig) => {
-    onPointChange(config)
-    updateNodeData('point', { config, onChange: handlePointChange })
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [onPointChange, updateNodeData])
-
-  // 초기 data에 래핑된 onChange 주입
-  useMemo(() => {
-    setNodes(nds => nds.map(n => {
-      if (n.id === 'trigger') return { ...n, data: { ...n.data, onChange: handleTriggerChange } }
-      if (n.id === 'filter') return { ...n, data: { ...n.data, onChange: handleFilterChange } }
-      if (n.id === 'message') return { ...n, data: { ...n.data, onChange: handleMessageChange } }
-      if (n.id === 'point') return { ...n, data: { ...n.data, onChange: handlePointChange } }
-      return n
-    }))
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [handleTriggerChange, handleFilterChange, handleMessageChange, handlePointChange])
 
   return (
     <div className="flow-canvas-container">

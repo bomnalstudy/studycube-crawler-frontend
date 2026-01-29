@@ -1,5 +1,6 @@
 'use client'
 
+import { memo, useMemo } from 'react'
 import {
   ComposedChart,
   Bar,
@@ -23,16 +24,17 @@ interface HourlyUsageChartProps {
   height?: number
 }
 
-export function HourlyUsageChart({
+export const HourlyUsageChart = memo(function HourlyUsageChart({
   data,
   title,
   height = 350
 }: HourlyUsageChartProps) {
-  // 시간 포맷팅 (0 -> "00시", 13 -> "13시")
-  const chartData = data.map(item => ({
-    ...item,
-    label: `${item.hour.toString().padStart(2, '0')}시`
-  }))
+  // 시간 포맷팅 (0 -> "00시", 13 -> "13시") - 메모이제이션
+  const chartData = useMemo(() =>
+    data.map(item => ({
+      ...item,
+      label: `${item.hour.toString().padStart(2, '0')}시`
+    })), [data])
 
   return (
     <div className="bg-white p-6 rounded-lg shadow-md">
@@ -91,4 +93,4 @@ export function HourlyUsageChart({
       </ResponsiveContainer>
     </div>
   )
-}
+})

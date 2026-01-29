@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, memo, useMemo } from 'react'
 import {
   CustomerListItem,
   VISIT_SEGMENT_LABELS, VISIT_SEGMENT_COLORS,
@@ -25,7 +25,7 @@ interface CustomerTableProps {
   onSortChange?: (field: SortField) => void
 }
 
-export function CustomerTable({ items, total, page, totalPages, onPageChange, selectedId, onRowClick, sortBy, sortOrder, onSortChange }: CustomerTableProps) {
+export const CustomerTable = memo(function CustomerTable({ items, total, page, totalPages, onPageChange, selectedId, onRowClick, sortBy, sortOrder, onSortChange }: CustomerTableProps) {
   const [showPhone, setShowPhone] = useState(false)
 
   if (items.length === 0) {
@@ -196,9 +196,9 @@ export function CustomerTable({ items, total, page, totalPages, onPageChange, se
       )}
     </div>
   )
-}
+})
 
-function SortableHeader({
+const SortableHeader = memo(function SortableHeader({
   field,
   label,
   align,
@@ -226,7 +226,7 @@ function SortableHeader({
       {label}{arrow}
     </th>
   )
-}
+})
 
 function generatePageNumbers(current: number, total: number): (number | string)[] {
   if (total <= 7) {

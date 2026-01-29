@@ -1,6 +1,7 @@
 'use client'
 
-import { BarChart as RechartsBarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LabelList, Cell } from 'recharts'
+import { memo } from 'react'
+import { BarChart as RechartsBarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LabelList } from 'recharts'
 import { BarChartData } from '@/types/dashboard'
 
 interface BarChartProps {
@@ -14,7 +15,7 @@ interface BarChartProps {
   formatValue?: (value: number) => string
 }
 
-export function BarChart({
+export const BarChart = memo(function BarChart({
   data,
   title,
   dataKey = 'value',
@@ -58,4 +59,4 @@ export function BarChart({
       </ResponsiveContainer>
     </div>
   )
-}
+})

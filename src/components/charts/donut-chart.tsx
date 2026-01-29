@@ -1,5 +1,6 @@
 'use client'
 
+import { memo } from 'react'
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts'
 import { DonutChartData } from '@/types/dashboard'
 
@@ -12,7 +13,7 @@ interface DonutChartProps {
 
 const DEFAULT_COLORS = ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#6366f1']
 
-export function DonutChart({
+export const DonutChart = memo(function DonutChart({
   data,
   title,
   height = 300,
@@ -44,4 +45,4 @@ export function DonutChart({
       </ResponsiveContainer>
     </div>
   )
-}
+})

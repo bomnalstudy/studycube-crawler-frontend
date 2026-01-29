@@ -1,5 +1,6 @@
 'use client'
 
+import { memo, useMemo } from 'react'
 import { formatNumber } from '@/lib/utils/formatters'
 
 interface CrmKpiCardsProps {
@@ -12,7 +13,7 @@ interface CrmKpiCardsProps {
   fixedTicketCustomers: number
 }
 
-export function CrmKpiCards({
+export const CrmKpiCards = memo(function CrmKpiCards({
   totalCustomers,
   newCustomers,
   atRiskCustomers,
@@ -138,4 +139,4 @@ export function CrmKpiCards({
       ))}
     </div>
   )
-}
+})

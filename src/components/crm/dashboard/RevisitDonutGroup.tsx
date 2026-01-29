@@ -1,5 +1,6 @@
 'use client'
 
+import { memo, useMemo } from 'react'
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts'
 
 interface RevisitDonutGroupProps {
@@ -7,11 +8,11 @@ interface RevisitDonutGroupProps {
   newRevisitRate: number
 }
 
-function MiniDonut({ rate, label, color, bgColor }: { rate: number; label: string; color: string; bgColor: string }) {
-  const data = [
+const MiniDonut = memo(function MiniDonut({ rate, label, color, bgColor }: { rate: number; label: string; color: string; bgColor: string }) {
+  const data = useMemo(() => [
     { name: '재방문', value: rate },
     { name: '미방문', value: 100 - rate },
-  ]
+  ], [rate])
 
   return (
     <div className="flex flex-col items-center">
@@ -44,9 +45,9 @@ function MiniDonut({ rate, label, color, bgColor }: { rate: number; label: strin
       </div>
     </div>
   )
-}
+})
 
-export function RevisitDonutGroup({ generalRevisitRate, newRevisitRate }: RevisitDonutGroupProps) {
+export const RevisitDonutGroup = memo(function RevisitDonutGroup({ generalRevisitRate, newRevisitRate }: RevisitDonutGroupProps) {
   return (
     <div className="bg-white rounded-2xl p-6 shadow-sm">
       <div className="flex items-center justify-between mb-5">
@@ -59,4 +60,4 @@ export function RevisitDonutGroup({ generalRevisitRate, newRevisitRate }: Revisi
       </div>
     </div>
   )
-}
+})

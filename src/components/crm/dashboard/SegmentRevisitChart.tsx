@@ -1,5 +1,6 @@
 'use client'
 
+import { memo } from 'react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import {
   SegmentChartItem, VisitSegment, TicketSegment,
@@ -17,7 +18,7 @@ function getColor(segment: string): string {
     || '#22C55E'
 }
 
-function RevisitBarChart({ data, title }: { data: SegmentChartItem[]; title: string }) {
+const RevisitBarChart = memo(function RevisitBarChart({ data, title }: { data: SegmentChartItem[]; title: string }) {
   if (data.length === 0) {
     return (
       <div className="flex-1">
@@ -66,9 +67,9 @@ function RevisitBarChart({ data, title }: { data: SegmentChartItem[]; title: str
       </div>
     </div>
   )
-}
+})
 
-export function SegmentRevisitChart({ visitData, ticketData }: SegmentRevisitChartProps) {
+export const SegmentRevisitChart = memo(function SegmentRevisitChart({ visitData, ticketData }: SegmentRevisitChartProps) {
   return (
     <div className="bg-white rounded-2xl p-6 shadow-sm">
       <div className="flex items-center justify-between mb-5">
@@ -82,4 +83,4 @@ export function SegmentRevisitChart({ visitData, ticketData }: SegmentRevisitCha
       </div>
     </div>
   )
-}
+})

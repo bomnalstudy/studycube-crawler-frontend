@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, memo, useMemo } from 'react'
 import Link from 'next/link'
 import { OperationQueueItem } from '@/types/crm'
 import { maskPhone } from '@/lib/crm/phone-masker'
@@ -30,15 +30,15 @@ const TAB_SEGMENT_PARAMS: Record<TabKey, string> = {
   dayTicketRepeaters: 'ticketSegment=day_ticket',
 }
 
-export function OperationQueue({ atRisk, returned, newSignups, dayTicketRepeaters, onCustomerClick }: OperationQueueProps) {
+export const OperationQueue = memo(function OperationQueue({ atRisk, returned, newSignups, dayTicketRepeaters, onCustomerClick }: OperationQueueProps) {
   const [activeTab, setActiveTab] = useState<TabKey>('atRisk')
 
-  const dataMap: Record<TabKey, OperationQueueItem[]> = {
+  const dataMap = useMemo<Record<TabKey, OperationQueueItem[]>>(() => ({
     atRisk,
     returned,
     newSignups,
     dayTicketRepeaters,
-  }
+  }), [atRisk, returned, newSignups, dayTicketRepeaters])
 
   const currentData = dataMap[activeTab]
   const currentTab = TABS.find(t => t.key === activeTab)!
@@ -133,4 +133,4 @@ export function OperationQueue({ atRisk, returned, newSignups, dayTicketRepeater
       )}
     </div>
   )
-}
+})
