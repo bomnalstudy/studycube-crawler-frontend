@@ -3,12 +3,28 @@
 import { useState, useEffect, use } from 'react'
 import { useRouter } from 'next/navigation'
 import { useRole } from '@/hooks/useRole'
-import { FlowType, TriggerConfig, FilterConfig, PointConfig, AutomationFlow } from '@/types/automation'
-import { FlowCanvas } from '@/components/automation/FlowEditor/FlowCanvas'
+import { AutomationForm, CredentialsSection } from '@/components/automation/AutomationForm'
+import { TriggerConfig, FilterConfig, PointConfig, FlowType } from '@/types/automation'
 
 interface Branch {
   id: string
   name: string
+}
+
+const DEFAULT_TRIGGER: TriggerConfig = {
+  type: 'recurring',
+  time: '10:00',
+  recurring: { frequency: 'daily' },
+}
+
+const DEFAULT_FILTER: FilterConfig = {}
+
+const DEFAULT_POINT: PointConfig = {
+  action: 'GRANT',
+  amount: 1000,
+  reason: '',
+  expiryDays: 30,
+  deduplicateDays: 1,
 }
 
 export default function FlowEditPage({ params }: { params: Promise<{ flowId: string }> }) {
@@ -16,18 +32,32 @@ export default function FlowEditPage({ params }: { params: Promise<{ flowId: str
   const router = useRouter()
   const { isAdmin, branchId: userBranchId } = useRole()
 
+  // 로딩 상태
   const [loading, setLoading] = useState(true)
+
+  // 기본 정보
   const [name, setName] = useState('')
-  const [flowType, setFlowType] = useState<FlowType>('SMS')
   const [branchId, setBranchId] = useState('')
   const [branches, setBranches] = useState<Branch[]>([])
-  const [triggerConfig, setTriggerConfig] = useState<TriggerConfig>({ type: 'manual' })
-  const [filterConfig, setFilterConfig] = useState<FilterConfig>({})
-  const [messageTemplate, setMessageTemplate] = useState('')
-  const [pointConfig, setPointConfig] = useState<PointConfig>({
-    action: 'GRANT', amount: 1000, reason: '', expiryDays: 30, deduplicateDays: null,
-  })
   const [isActive, setIsActive] = useState(false)
+
+  // 트리거
+  const [triggerConfig, setTriggerConfig] = useState<TriggerConfig>(DEFAULT_TRIGGER)
+
+  // 대상 (필터)
+  const [filterConfig, setFilterConfig] = useState<FilterConfig>(DEFAULT_FILTER)
+
+  // 액션
+  const [enableSms, setEnableSms] = useState(true)
+  const [messageTemplate, setMessageTemplate] = useState('')
+  const [enablePoint, setEnablePoint] = useState(false)
+  const [pointConfig, setPointConfig] = useState<PointConfig>(DEFAULT_POINT)
+
+  // 스터디큐브 로그인
+  const [studycubeUsername, setStudycubeUsername] = useState('')
+  const [studycubePassword, setStudycubePassword] = useState('')
+
+  // 상태
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -45,15 +75,24 @@ export default function FlowEditPage({ params }: { params: Promise<{ flowId: str
         if (branchJson.success) setBranches(branchJson.data)
 
         if (flowJson.success) {
-          const flow: AutomationFlow = flowJson.data
+          const flow = flowJson.data
           setName(flow.name)
-          setFlowType(flow.flowType)
           setBranchId(flow.branchId)
-          setTriggerConfig(flow.triggerConfig)
-          setFilterConfig(flow.filterConfig)
-          setMessageTemplate(flow.messageTemplate || '')
           setIsActive(flow.isActive)
-          if (flow.pointConfig) setPointConfig(flow.pointConfig)
+          setTriggerConfig(flow.triggerConfig || DEFAULT_TRIGGER)
+          setFilterConfig(flow.filterConfig || DEFAULT_FILTER)
+          setMessageTemplate(flow.messageTemplate || '')
+          setStudycubeUsername(flow.studycubeUsername || '')
+          setStudycubePassword(flow.studycubePassword || '')
+
+          // flowType에 따라 SMS/포인트 활성화
+          const ft = flow.flowType as FlowType
+          setEnableSms(ft === 'SMS' || ft === 'SMS_POINT')
+          setEnablePoint(ft === 'POINT' || ft === 'SMS_POINT')
+
+          if (flow.pointConfig) {
+            setPointConfig(flow.pointConfig)
+          }
         }
       } catch {
         setError('플로우를 불러올 수 없습니다.')
@@ -64,25 +103,54 @@ export default function FlowEditPage({ params }: { params: Promise<{ flowId: str
     fetchData()
   }, [flowId])
 
+  const getFlowType = (): FlowType => {
+    if (enableSms && enablePoint) return 'SMS_POINT'
+    if (enablePoint) return 'POINT'
+    return 'SMS'
+  }
+
   const handleSave = async () => {
-    if (!name.trim()) { setError('플로우 이름을 입력하세요.'); return }
+    if (!name.trim()) {
+      setError('플로우 이름을 입력하세요.')
+      return
+    }
+    if (!enableSms && !enablePoint) {
+      setError('문자 발송 또는 포인트 지급 중 하나 이상을 선택하세요.')
+      return
+    }
+    if (!studycubeUsername.trim() || !studycubePassword.trim()) {
+      setError('스터디큐브 로그인 정보를 입력하세요.')
+      return
+    }
+
     setSaving(true)
     setError(null)
 
     try {
+      const flowType = getFlowType()
       const body: Record<string, unknown> = {
-        name: name.trim(), flowType, triggerConfig, filterConfig, isActive,
+        name: name.trim(),
+        flowType,
+        triggerConfig,
+        filterConfig,
+        isActive,
+        studycubeUsername: studycubeUsername || null,
+        studycubePassword: studycubePassword || null,
       }
-      const showMessage = flowType === 'SMS' || flowType === 'SMS_POINT'
-      const showPoint = flowType === 'POINT' || flowType === 'SMS_POINT'
-      if (showMessage) body.messageTemplate = messageTemplate
-      if (showPoint) body.pointConfig = pointConfig
+
+      if (enableSms) {
+        body.messageTemplate = messageTemplate
+      }
+      if (enablePoint) {
+        body.pointConfig = pointConfig
+      }
 
       const res = await fetch(`/api/crm/automation/flows/${flowId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       })
+
       const json = await res.json()
       if (json.success) {
         router.push('/crm/automation/flows')
@@ -117,16 +185,28 @@ export default function FlowEditPage({ params }: { params: Promise<{ flowId: str
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
-      <div className="space-y-6">
+      <div className="max-w-6xl mx-auto space-y-5">
         {/* 헤더 */}
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-bold text-gray-800">플로우 편집</h1>
-            <p className="text-sm text-gray-500 mt-1">{name || '이름 없음'}</p>
+            <p className="text-sm text-gray-500 mt-1">
+              언제, 누구에게, 무엇을 할지 설정하세요
+            </p>
           </div>
           <div className="flex items-center gap-3">
-            <button onClick={handleDelete} className="text-sm text-red-400 hover:text-red-600">삭제</button>
-            <button onClick={() => router.back()} className="text-sm text-gray-500 hover:text-gray-700">취소</button>
+            <button
+              onClick={handleDelete}
+              className="text-sm text-red-400 hover:text-red-600"
+            >
+              삭제
+            </button>
+            <button
+              onClick={() => router.back()}
+              className="text-sm text-gray-500 hover:text-gray-700"
+            >
+              취소
+            </button>
             <button
               onClick={handleSave}
               disabled={saving}
@@ -138,36 +218,25 @@ export default function FlowEditPage({ params }: { params: Promise<{ flowId: str
         </div>
 
         {/* 기본 정보 */}
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <div className="grid grid-cols-4 gap-4">
-            <div>
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <div className="flex items-center gap-4">
+            <div className="flex-1">
               <label className="text-xs font-medium text-gray-500">플로우 이름</label>
               <input
                 type="text"
                 value={name}
                 onChange={e => setName(e.target.value)}
+                placeholder="예: 고정석 만료 임박 알림"
                 className="mt-1 w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-purple-400"
               />
             </div>
-            <div>
-              <label className="text-xs font-medium text-gray-500">유형</label>
-              <select
-                value={flowType}
-                onChange={e => setFlowType(e.target.value as FlowType)}
-                className="mt-1 w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-purple-400"
-              >
-                <option value="SMS">문자</option>
-                <option value="POINT">포인트</option>
-                <option value="SMS_POINT">문자 + 포인트</option>
-              </select>
-            </div>
-            <div>
+            <div className="w-48">
               <label className="text-xs font-medium text-gray-500">지점</label>
               <p className="mt-1 px-3 py-2 bg-gray-50 rounded-lg text-sm text-gray-600">
                 {branches.find(b => b.id === branchId)?.name || '-'}
               </p>
             </div>
-            <div>
+            <div className="w-32">
               <label className="text-xs font-medium text-gray-500">상태</label>
               <button
                 onClick={() => setIsActive(!isActive)}
@@ -190,8 +259,31 @@ export default function FlowEditPage({ params }: { params: Promise<{ flowId: str
           </div>
         )}
 
-        {/* React Flow 캔버스 */}
-        <FlowCanvas />
+        {/* 자동화 폼 (1,2,3번 섹션) */}
+        <AutomationForm
+          triggerConfig={triggerConfig}
+          onTriggerChange={setTriggerConfig}
+          filterConfig={filterConfig}
+          onFilterChange={setFilterConfig}
+          enableSms={enableSms}
+          onEnableSmsChange={setEnableSms}
+          messageTemplate={messageTemplate}
+          onMessageChange={setMessageTemplate}
+          enablePoint={enablePoint}
+          onEnablePointChange={setEnablePoint}
+          pointConfig={pointConfig}
+          onPointChange={setPointConfig}
+        />
+
+        {/* 스터디큐브 로그인 (4번 섹션 - 별도 카드) */}
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <CredentialsSection
+            username={studycubeUsername}
+            password={studycubePassword}
+            onUsernameChange={setStudycubeUsername}
+            onPasswordChange={setStudycubePassword}
+          />
+        </div>
       </div>
     </div>
   )

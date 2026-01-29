@@ -66,7 +66,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ success: false, error: '권한이 없습니다.' }, { status: 403 })
     }
 
-    const { name, flowType, isActive, triggerConfig, filterConfig, messageTemplate, messageType, pointConfig } = body
+    const { name, flowType, isActive, triggerConfig, filterConfig, messageTemplate, messageType, pointConfig, studycubeUsername, studycubePassword } = body
 
     const updateData: Record<string, unknown> = {}
     if (name !== undefined) updateData.name = name
@@ -77,6 +77,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     if (messageTemplate !== undefined) updateData.messageTemplate = messageTemplate
     if (messageType !== undefined) updateData.messageType = messageType
     if (pointConfig !== undefined) updateData.pointConfig = pointConfig
+    if (studycubeUsername !== undefined) updateData.studycubeUsername = studycubeUsername
+    if (studycubePassword !== undefined) updateData.studycubePassword = studycubePassword
 
     const flow = await prisma.automationFlow.update({
       where: { id: flowId },
