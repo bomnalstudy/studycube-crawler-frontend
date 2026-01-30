@@ -179,20 +179,23 @@ async function loginToStudycube(page: Page, username: string, password: string):
 async function navigateToUserManagement(page: Page) {
   console.log('사용자 관리 페이지로 이동')
 
-  // 페이지 로드 완료 후 메뉴가 준비될 때까지 대기
-  await new Promise(resolve => setTimeout(resolve, 500))
+  // 페이지 로드 완료 후 메뉴가 준비될 때까지 대기 (headless에서 더 오래 필요)
+  await new Promise(resolve => setTimeout(resolve, 1000))
 
   // 메인 메뉴 클릭
   await clickByXPath(page, '//*[@id="ui-id-14"]')
 
   // 서브메뉴가 펼쳐질 때까지 대기
-  await new Promise(resolve => setTimeout(resolve, 300))
+  await new Promise(resolve => setTimeout(resolve, 500))
 
   // 서브메뉴 아이템 클릭
   await clickByXPath(page, '//*[@id="ui-id-15"]/li[1]/a')
 
-  // 검색 버튼이 나타날 때까지 대기 (최대 4초, 나타나면 바로 진행)
-  await waitForXPath(page, '//*[@id="btn_search"]', 4000)
+  // 페이지 전환 완료 대기
+  await new Promise(resolve => setTimeout(resolve, 1000))
+
+  // 검색 버튼이 나타날 때까지 대기 (최대 5초, 나타나면 바로 진행)
+  await waitForXPath(page, '//*[@id="btn_search"]', 5000)
 }
 
 async function searchUser(page: Page, phone: string): Promise<boolean> {
