@@ -3,9 +3,45 @@ export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getAuthSession } from '@/lib/auth-helpers'
+import { spawn } from 'child_process'
+import path from 'path'
 
 interface RouteParams {
   params: Promise<{ flowId: string }>
+}
+
+const isLocal = process.env.NODE_ENV === 'development'
+
+// 로컬에서 직접 크롤링 스크립트 실행
+function runLocalAutomation(flowId: string): Promise<{ success: boolean; message: string }> {
+  return new Promise((resolve) => {
+    console.log('[Local] 크롤링 스크립트 실행:', flowId)
+
+    const scriptPath = path.join(process.cwd(), 'scripts', 'run-automation.ts')
+    const child = spawn('npx', ['tsx', scriptPath], {
+      env: {
+        ...process.env,
+        FLOW_ID: flowId,
+        HEADLESS: 'false', // 로컬에서는 브라우저 보이게
+      },
+      shell: true,
+      stdio: 'inherit', // 로그 출력 보이게
+    })
+
+    child.on('error', (err) => {
+      console.error('[Local] 스크립트 실행 에러:', err)
+    })
+
+    child.on('exit', (code) => {
+      console.log('[Local] 스크립트 종료, exit code:', code)
+    })
+
+    // 바로 응답 (백그라운드에서 실행됨)
+    resolve({
+      success: true,
+      message: '로컬에서 크롤링이 시작되었습니다. 브라우저 창을 확인하세요.',
+    })
+  })
 }
 
 // GitHub API로 워크플로우 트리거
@@ -97,15 +133,19 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       }, { status: 400 })
     }
 
-    // GitHub Actions 워크플로우 트리거
-    const result = await triggerGitHubWorkflow(flowId)
+    // 로컬에서는 직접 실행, 프로덕션에서는 GitHub Actions
+    const result = isLocal
+      ? await runLocalAutomation(flowId)
+      : await triggerGitHubWorkflow(flowId)
 
     if (result.success) {
       return NextResponse.json({
         success: true,
         data: {
           message: result.message,
-          note: 'GitHub Actions에서 실행 중입니다. 결과는 잠시 후 확인하세요.',
+          note: isLocal
+            ? '브라우저 창에서 크롤링 과정을 확인하세요.'
+            : 'GitHub Actions에서 실행 중입니다. 결과는 잠시 후 확인하세요.',
         },
       })
     } else {

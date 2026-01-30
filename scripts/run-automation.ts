@@ -87,7 +87,7 @@ interface TriggerConfig {
 
 // ===== Puppeteer 헬퍼 함수 =====
 
-async function waitForXPath(page: Page, xpath: string, timeout = 4000, interval = 200): Promise<boolean> {
+async function waitForXPath(page: Page, xpath: string, timeout = 3000, interval = 100): Promise<boolean> {
   const startTime = Date.now()
   while (Date.now() - startTime < timeout) {
     const elements = await page.$$(`xpath/${xpath}`)
@@ -98,25 +98,43 @@ async function waitForXPath(page: Page, xpath: string, timeout = 4000, interval 
 }
 
 async function clickByXPath(page: Page, xpath: string, timeout = 4000) {
-  const found = await waitForXPath(page, xpath, timeout)
-  if (!found) throw new Error(`요소를 찾을 수 없음: ${xpath}`)
-  const elements = await page.$$(`xpath/${xpath}`)
-  await elements[0].click()
-  await new Promise(resolve => setTimeout(resolve, 500))
+  const startTime = Date.now()
+  while (Date.now() - startTime < timeout) {
+    const elements = await page.$$(`xpath/${xpath}`)
+    if (elements.length > 0) {
+      try {
+        // JavaScript로 직접 클릭 (더 안정적)
+        await elements[0].evaluate((el) => {
+          (el as HTMLElement).click()
+        })
+        await new Promise(resolve => setTimeout(resolve, 200))
+        return
+      } catch {
+        // 클릭 실패시 잠시 대기 후 재시도
+        await new Promise(resolve => setTimeout(resolve, 150))
+      }
+    } else {
+      await new Promise(resolve => setTimeout(resolve, 150))
+    }
+  }
+  throw new Error(`요소를 찾을 수 없거나 클릭 불가: ${xpath}`)
 }
 
 async function typeByXPath(page: Page, xpath: string, text: string, timeout = 4000) {
   const found = await waitForXPath(page, xpath, timeout)
   if (!found) throw new Error(`요소를 찾을 수 없음: ${xpath}`)
   const elements = await page.$$(`xpath/${xpath}`)
-  await elements[0].click()
-  await elements[0].type(text)
+  // 한 번에 값 설정 (타이핑 대신)
+  await elements[0].evaluate((el, value) => {
+    (el as HTMLInputElement).value = value
+  }, text)
 }
 
 async function clearInput(page: Page, xpath: string) {
-  const elements = await page.$$(`xpath/${xpath}`)
-  if (elements.length > 0) {
-    await elements[0].click()
+  const found = await waitForXPath(page, xpath, 3000)
+  if (found) {
+    const elements = await page.$$(`xpath/${xpath}`)
+    // evaluate로 직접 값 비우기 (클릭 없이)
     await elements[0].evaluate((el) => {
       (el as HTMLInputElement).value = ''
     })
@@ -128,24 +146,53 @@ async function clearInput(page: Page, xpath: string) {
 async function loginToStudycube(page: Page, username: string, password: string): Promise<boolean> {
   console.log(`로그인 시도: ${username}`)
 
-  await page.goto('https://sensibility.studycube.kr/user/userLogin.jspx', { waitUntil: 'networkidle2' })
-  await page.waitForSelector('#userid', { timeout: 10000 })
-  await page.type('#userid', username)
-  await page.type('#password', password)
-  await page.click('#btn_submit')
-  await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 15000 })
+  try {
+    await page.goto('https://sensibility.studycube.kr/user/userLogin.jspx', { waitUntil: 'networkidle2' })
+    await page.waitForSelector('#userid', { timeout: 10000 })
 
-  const currentUrl = page.url()
-  const success = !currentUrl.includes('userLogin')
-  console.log(success ? '로그인 성공' : '로그인 실패')
-  return success
+    // 한 번에 값 설정 (타이핑 대신)
+    await page.evaluate((user, pass) => {
+      (document.getElementById('userid') as HTMLInputElement).value = user;
+      (document.getElementById('password') as HTMLInputElement).value = pass;
+    }, username, password)
+    await page.click('#btn_submit')
+
+    // URL 변경 폴링 (최대 10초)
+    const startTime = Date.now()
+    while (Date.now() - startTime < 10000) {
+      await new Promise(resolve => setTimeout(resolve, 300))
+      const currentUrl = page.url()
+      if (!currentUrl.includes('userLogin')) {
+        console.log('로그인 성공')
+        return true
+      }
+    }
+
+    console.log('로그인 실패')
+    return false
+  } catch (error) {
+    console.error('로그인 오류:', error)
+    throw error
+  }
 }
 
 async function navigateToUserManagement(page: Page) {
   console.log('사용자 관리 페이지로 이동')
+
+  // 페이지 로드 완료 후 메뉴가 준비될 때까지 대기
+  await new Promise(resolve => setTimeout(resolve, 500))
+
+  // 메인 메뉴 클릭
   await clickByXPath(page, '//*[@id="ui-id-14"]')
+
+  // 서브메뉴가 펼쳐질 때까지 대기
+  await new Promise(resolve => setTimeout(resolve, 300))
+
+  // 서브메뉴 아이템 클릭
   await clickByXPath(page, '//*[@id="ui-id-15"]/li[1]/a')
-  await new Promise(resolve => setTimeout(resolve, 2000))
+
+  // 검색 버튼이 나타날 때까지 대기 (최대 4초, 나타나면 바로 진행)
+  await waitForXPath(page, '//*[@id="btn_search"]', 4000)
 }
 
 async function searchUser(page: Page, phone: string): Promise<boolean> {
@@ -153,10 +200,9 @@ async function searchUser(page: Page, phone: string): Promise<boolean> {
   await clearInput(page, inputXPath)
   await typeByXPath(page, inputXPath, phone)
   await clickByXPath(page, '//*[@id="btn_search"]')
-  await new Promise(resolve => setTimeout(resolve, 2000))
-
+  // 검색 결과가 나타날 때까지 대기 (최대 4초)
   const resultXPath = '//*[@id="simple-table"]/tbody/tr[1]/td[2]/a'
-  return await waitForXPath(page, resultXPath, 3000)
+  return await waitForXPath(page, resultXPath, 4000)
 }
 
 async function grantPointToUser(
@@ -185,10 +231,12 @@ async function grantPointToUser(
     await clickByXPath(mainPage, customerLinkXPath)
     const detailPage = await newPagePromise
     await detailPage.setViewport({ width: 1280, height: 800 })
-    await new Promise(resolve => setTimeout(resolve, 2000))
+    // 포인트 버튼이 나타날 때까지 대기
+    await waitForXPath(detailPage, '//*[@id="btn_point"]', 4000)
 
     await clickByXPath(detailPage, '//*[@id="btn_point"]')
-    await new Promise(resolve => setTimeout(resolve, 1000))
+    // 포인트 입력창이 나타날 때까지 대기
+    await waitForXPath(detailPage, '//*[@id="point"]', 3000)
 
     await typeByXPath(detailPage, '//*[@id="point"]', String(amount))
     if (reason) {
@@ -196,7 +244,7 @@ async function grantPointToUser(
     }
 
     await clickByXPath(detailPage, '//*[@id="btn_reg_hidden"]')
-    await new Promise(resolve => setTimeout(resolve, 1500))
+    await new Promise(resolve => setTimeout(resolve, 300))
 
     await detailPage.close()
     await mainPage.bringToFront()
@@ -204,19 +252,23 @@ async function grantPointToUser(
     return { success: true, message: `${amount}P 지급 완료` }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
+    console.error(`  [에러] ${phone}: ${message}`)
     return { success: false, message }
   }
 }
 
 // ===== 플로우 실행 =====
 
-async function getTargetCustomers(branchId: string, filterConfig: FilterConfig) {
+// 대상 고객 전화번호 리스트 가져오기
+async function getTargetPhones(branchId: string, filterConfig: FilterConfig): Promise<string[]> {
+  // 수동 모드: DB 조회 없이 입력된 전화번호 바로 사용
   if (filterConfig.targetMode === 'manual' && filterConfig.manualPhones?.length) {
-    return await prisma.customer.findMany({
-      where: { mainBranchId: branchId, phone: { in: filterConfig.manualPhones } },
-      select: { id: true, phone: true },
-    })
+    console.log('수동 모드: 입력된 전화번호 사용')
+    return filterConfig.manualPhones
   }
+
+  // 조건 모드: 우리 DB에서 조건에 맞는 고객 필터링
+  console.log('조건 모드: DB에서 고객 필터링')
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const where: any = { mainBranchId: branchId }
@@ -231,10 +283,12 @@ async function getTargetCustomers(branchId: string, filterConfig: FilterConfig) 
     where.lastVisitDate = { lt: cutoffDate }
   }
 
-  return await prisma.customer.findMany({
+  const customers = await prisma.customer.findMany({
     where,
-    select: { id: true, phone: true },
+    select: { phone: true },
   })
+
+  return customers.map(c => c.phone)
 }
 
 async function executeFlow(flowId: string) {
@@ -266,17 +320,22 @@ async function executeFlow(flowId: string) {
     return
   }
 
-  const targets = await getTargetCustomers(flow.branchId, filterConfig)
-  console.log(`대상 고객: ${targets.length}명`)
+  const targetPhones = await getTargetPhones(flow.branchId, filterConfig)
+  console.log(`대상 고객: ${targetPhones.length}명`)
+  console.log(`전화번호 목록: ${targetPhones.join(', ')}`)
 
-  if (targets.length === 0) {
+  if (targetPhones.length === 0) {
     console.log('대상 고객 없음')
     await sendCallback(flowId, { success: true, successCount: 0, failCount: 0, totalCount: 0 })
     return
   }
 
+  // 로컬 테스트: HEADLESS=false npx tsx scripts/run-automation.ts
+  const isHeadless = process.env.HEADLESS !== 'false'
+  console.log(`브라우저 모드: ${isHeadless ? 'headless' : 'visible'}`)
+
   const browser = await puppeteer.launch({
-    headless: true,
+    headless: isHeadless,
     args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
   })
 
@@ -296,21 +355,22 @@ async function executeFlow(flowId: string) {
     let successCount = 0
     let failCount = 0
 
-    for (const target of targets) {
+    for (const phone of targetPhones) {
       if (pointConfig) {
         const result = await grantPointToUser(
           browser,
           page,
-          target.phone,
+          phone,
           pointConfig.amount,
           pointConfig.reason
         )
 
+        // 로그 저장
         await prisma.pointActionLog.create({
           data: {
             flowId: flow.id,
-            customerId: target.id,
-            phone: target.phone,
+            customerId: 'manual', // 수동 입력 모드
+            phone: phone,
             action: pointConfig.action,
             amount: pointConfig.amount,
             reason: pointConfig.reason,
@@ -320,13 +380,13 @@ async function executeFlow(flowId: string) {
 
         if (result.success) {
           successCount++
-          console.log(`  [성공] ${target.phone}: ${result.message}`)
+          console.log(`  [성공] ${phone}: ${result.message}`)
         } else {
           failCount++
-          console.log(`  [실패] ${target.phone}: ${result.message}`)
+          console.log(`  [실패] ${phone}: ${result.message}`)
         }
 
-        await new Promise(resolve => setTimeout(resolve, 1000))
+        await new Promise(resolve => setTimeout(resolve, 300))
       }
     }
 
@@ -342,7 +402,7 @@ async function executeFlow(flowId: string) {
       success: true,
       successCount,
       failCount,
-      totalCount: targets.length,
+      totalCount: targetPhones.length,
     })
 
   } catch (error) {
