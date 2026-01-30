@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { calculateVisitSegment } from '@/lib/crm/segment-calculator'
+import { db, type DateRange } from '@/lib/db'
 import type { SegmentChangeData, SegmentMigration } from '@/types/strategy'
 
 // 세그먼트 코드 → 표시 이름 매핑
@@ -8,86 +9,62 @@ const SEGMENT_NAMES: Record<string, string> = {
   visit_10_20: '단골',
   visit_under10: '일반',
   at_risk_14: '이탈위험',
-  churned: '휴면',
+  churned: '이탈',
   new_0_7: '신규',
   returned: '복귀',
 }
 
-// 세그먼트 우선순위 (긍정적 순서)
-const SEGMENT_ORDER = ['VIP', '단골', '일반', '신규', '복귀', '이탈위험', '휴면']
+// 세그먼트 표시 순서 (사용자 요청 순서)
+const SEGMENT_ORDER = ['단골', 'VIP', '일반', '신규', '이탈위험', '이탈', '복귀']
+
+// 부정적 세그먼트 (감소가 긍정적인 것들)
+const NEGATIVE_SEGMENTS = ['이탈위험', '이탈']
+
+// 유효한 세그먼트 이동 규칙
+// 복귀는 오직 이탈/이탈위험에서만 가능
+const VALID_TRANSITIONS: Record<string, string[]> = {
+  '신규': ['일반', '단골', 'VIP', '이탈위험', '이탈'],
+  '일반': ['단골', 'VIP', '이탈위험', '이탈'],
+  '단골': ['VIP', '일반', '이탈위험', '이탈'],
+  'VIP': ['단골', '일반', '이탈위험', '이탈'],
+  '이탈위험': ['일반', '단골', 'VIP', '이탈', '복귀'],
+  '이탈': ['일반', '단골', 'VIP', '복귀'],
+  '복귀': ['일반', '단골', 'VIP', '이탈위험', '이탈'],
+}
 
 /**
- * 특정 날짜 기준 고객의 세그먼트 계산
+ * 고객 세그먼트 일괄 계산 (배치 처리)
  */
-async function getCustomerSegmentAtDate(
+function calculateSegmentFromData(
   customerId: string,
-  branchId: string,
+  customerData: {
+    firstVisitDate: Date
+    lastVisitDate: Date | null
+  } | null,
+  recentVisitCount: number,
+  previousVisitDate: Date | null,
+  hasFixedSeat: boolean,
   referenceDate: Date,
   rangeStart: Date
-): Promise<string> {
-  // 해당 기간 내 방문 수
-  const recentVisits = await prisma.dailyVisitor.count({
-    where: {
-      customerId,
-      branchId,
-      visitDate: { gte: rangeStart, lte: referenceDate },
-    },
-  })
+): string {
+  if (!customerData) return '일반'
 
-  // 고객 정보
-  const customer = await prisma.customer.findUnique({
-    where: { id: customerId },
-    select: {
-      firstVisitDate: true,
-      lastVisitDate: true,
-    },
-  })
-
-  if (!customer) return '일반'
-
-  // 기간 시작 이전 마지막 방문일
-  const previousVisit = await prisma.dailyVisitor.findFirst({
-    where: {
-      customerId,
-      branchId,
-      visitDate: { lt: rangeStart },
-    },
-    orderBy: { visitDate: 'desc' },
-    select: { visitDate: true },
-  })
-
-  // 잔여 이용권 확인 (고정석/기간권)
-  const remainingTickets = await prisma.customerPurchase.findFirst({
-    where: {
-      customerId,
-      branchId,
-      purchaseDate: { lte: referenceDate },
-      ticketName: {
-        contains: '고정',
-      },
-    },
-    orderBy: { purchaseDate: 'desc' },
-  })
-
-  const hasRemainingFixedSeat = !!remainingTickets
-
-  // 세그먼트 계산
   const segment = calculateVisitSegment({
-    lastVisitDate: customer.lastVisitDate,
-    firstVisitDate: customer.firstVisitDate,
-    recentVisits,
+    lastVisitDate: customerData.lastVisitDate,
+    firstVisitDate: customerData.firstVisitDate,
+    recentVisits: recentVisitCount,
     referenceDate,
     rangeStart,
-    previousLastVisitDate: previousVisit?.visitDate ?? null,
-    hasRemainingFixedSeat,
-    hasRemainingTermTicket: false, // 간소화
+    previousLastVisitDate: previousVisitDate,
+    hasRemainingFixedSeat: hasFixedSeat,
+    hasRemainingTermTicket: false,
   })
 
   return SEGMENT_NAMES[segment] || '일반'
 }
 
 /**
- * 이벤트 기간 전후의 세그먼트 변화 추적
+ * 이벤트 기간 전후의 세그먼트 변화 추적 (최적화 버전)
  */
 export async function trackSegmentChanges(
   branchId: string,
@@ -107,17 +84,18 @@ export async function trackSegmentChanges(
   const afterEnd = new Date(eventEnd)
   afterEnd.setDate(afterEnd.getDate() + 30)
 
-  // 관련 고객 목록 (이벤트 전후 기간에 방문한 고객)
-  const relevantVisitors = await prisma.dailyVisitor.findMany({
+  // 전체 고객 목록 조회 (이 지점을 한 번이라도 방문한 모든 고객)
+  // 이탈/이탈위험 고객도 포함해야 정확한 카운트 가능
+  const allBranchCustomers = await prisma.dailyVisitor.findMany({
     where: {
       branchId,
-      visitDate: { gte: beforeStart, lte: afterEnd },
+      visitDate: { lte: afterEnd }, // afterEnd 이전에 방문한 적 있는 모든 고객
     },
     select: { customerId: true },
     distinct: ['customerId'],
   })
 
-  const customerIds = relevantVisitors
+  const customerIds = allBranchCustomers
     .map((v) => v.customerId)
     .filter((id): id is string => id !== null)
 
@@ -129,16 +107,112 @@ export async function trackSegmentChanges(
         countAfter: 0,
         change: 0,
         changePercent: 0,
+        isNegativeSegment: NEGATIVE_SEGMENTS.includes(name),
       })),
       segmentMigrations: [],
     }
   }
 
-  // 제한된 고객 수만 처리 (성능)
-  const sampleSize = Math.min(customerIds.length, 500)
-  const sampledIds = customerIds.slice(0, sampleSize)
+  // 전체 고객 처리 (제한 없음)
+  const sampledIds = customerIds
 
-  // 각 고객의 전후 세그먼트 계산
+  // === 배치 쿼리로 모든 데이터 한 번에 가져오기 ===
+
+  // 1. 모든 고객 정보 일괄 조회
+  const customers = await prisma.customer.findMany({
+    where: { id: { in: sampledIds } },
+    select: {
+      id: true,
+      firstVisitDate: true,
+      lastVisitDate: true,
+    },
+  })
+  const customerMap = new Map(customers.map((c) => [c.id, c]))
+
+  // 2. 모든 방문 기록 조회 (시점별 lastVisitDate 계산용)
+  const allVisits = await prisma.dailyVisitor.findMany({
+    where: {
+      branchId,
+      customerId: { in: sampledIds },
+    },
+    select: { customerId: true, visitDate: true },
+    orderBy: { visitDate: 'desc' },
+  })
+
+  // 고객별 방문 목록 구성
+  const visitsByCustomer = new Map<string, Date[]>()
+  for (const v of allVisits) {
+    if (!v.customerId) continue
+    if (!visitsByCustomer.has(v.customerId)) {
+      visitsByCustomer.set(v.customerId, [])
+    }
+    visitsByCustomer.get(v.customerId)!.push(v.visitDate)
+  }
+
+  // beforeEnd 시점 기준 마지막 방문일 계산
+  const lastVisitAsOfBefore = new Map<string, Date | null>()
+  const lastVisitAsOfAfter = new Map<string, Date | null>()
+
+  for (const [customerId, visits] of visitsByCustomer) {
+    // beforeEnd 이전의 마지막 방문
+    const beforeVisits = visits.filter(v => v <= beforeEnd)
+    lastVisitAsOfBefore.set(customerId, beforeVisits.length > 0 ? beforeVisits[0] : null)
+
+    // afterEnd 이전의 마지막 방문
+    const afterVisits = visits.filter(v => v <= afterEnd)
+    lastVisitAsOfAfter.set(customerId, afterVisits.length > 0 ? afterVisits[0] : null)
+  }
+
+  // 3. 이벤트 전 기간 방문 수 (배치 groupBy)
+  const beforeVisitCounts = await prisma.dailyVisitor.groupBy({
+    by: ['customerId'],
+    where: {
+      branchId,
+      customerId: { in: sampledIds },
+      visitDate: { gte: beforeStart, lte: beforeEnd },
+    },
+    _count: { customerId: true },
+  })
+  const beforeVisitMap = new Map(
+    beforeVisitCounts.map((v) => [v.customerId!, v._count.customerId])
+  )
+
+  // 4. 이벤트 후 기간 방문 수 (배치 groupBy)
+  const afterVisitCounts = await prisma.dailyVisitor.groupBy({
+    by: ['customerId'],
+    where: {
+      branchId,
+      customerId: { in: sampledIds },
+      visitDate: { gte: eventEnd, lte: afterEnd },
+    },
+    _count: { customerId: true },
+  })
+  const afterVisitMap = new Map(
+    afterVisitCounts.map((v) => [v.customerId!, v._count.customerId])
+  )
+
+  // 5. 이전 기간 이전 마지막 방문일 (복귀 판단용)
+  const previousVisitMap = new Map<string, Date>()
+  for (const [customerId, visits] of visitsByCustomer) {
+    const prevVisits = visits.filter(v => v < beforeStart)
+    if (prevVisits.length > 0) {
+      previousVisitMap.set(customerId, prevVisits[0])
+    }
+  }
+
+  // 6. 고정석/기간권 보유 여부 (배치 조회)
+  const fixedSeatPurchases = await prisma.customerPurchase.findMany({
+    where: {
+      branchId,
+      customerId: { in: sampledIds },
+      ticketName: { contains: '고정' },
+    },
+    select: { customerId: true },
+    distinct: ['customerId'],
+  })
+  const hasFixedSeatSet = new Set(fixedSeatPurchases.map((p) => p.customerId))
+
+  // === 메모리에서 세그먼트 계산 ===
   const migrations: Map<string, number> = new Map()
   const segmentCountBefore: Record<string, number> = {}
   const segmentCountAfter: Record<string, number> = {}
@@ -149,18 +223,62 @@ export async function trackSegmentChanges(
   }
 
   for (const customerId of sampledIds) {
+    const customerData = customerMap.get(customerId)
+    const visits = visitsByCustomer.get(customerId) || []
+
+    // customer 테이블에 없으면 방문 기록에서 firstVisitDate 추출
+    // visits는 내림차순 정렬되어 있으므로 마지막 요소가 첫 방문일
+    const firstVisitDate = customerData?.firstVisitDate ||
+      (visits.length > 0 ? visits[visits.length - 1] : null)
+
+    if (!firstVisitDate) continue // 방문 기록도 없으면 스킵
+
+    // beforeEnd 시점 기준 고객 데이터
+    const customerDataBefore = {
+      firstVisitDate,
+      lastVisitDate: lastVisitAsOfBefore.get(customerId) || null,
+    }
+
+    // afterEnd 시점 기준 고객 데이터
+    const customerDataAfter = {
+      firstVisitDate,
+      lastVisitDate: lastVisitAsOfAfter.get(customerId) || null,
+    }
+
+    // beforeEnd 시점에 아직 방문한 적 없는 고객은 제외
+    if (!customerDataBefore.lastVisitDate && firstVisitDate > beforeEnd) {
+      // 이벤트 후에만 첫 방문한 신규 고객 - "이후"에만 카운트
+      const segmentAfter = calculateSegmentFromData(
+        customerId,
+        customerDataAfter,
+        afterVisitMap.get(customerId) || 0,
+        null,
+        hasFixedSeatSet.has(customerId),
+        afterEnd,
+        eventEnd
+      )
+      segmentCountAfter[segmentAfter] = (segmentCountAfter[segmentAfter] || 0) + 1
+      continue
+    }
+
     // 이벤트 전 세그먼트
-    const segmentBefore = await getCustomerSegmentAtDate(
+    const segmentBefore = calculateSegmentFromData(
       customerId,
-      branchId,
+      customerDataBefore,
+      beforeVisitMap.get(customerId) || 0,
+      previousVisitMap.get(customerId) || null,
+      hasFixedSeatSet.has(customerId),
       beforeEnd,
       beforeStart
     )
 
     // 이벤트 후 세그먼트
-    const segmentAfter = await getCustomerSegmentAtDate(
+    const segmentAfter = calculateSegmentFromData(
       customerId,
-      branchId,
+      customerDataAfter,
+      afterVisitMap.get(customerId) || 0,
+      previousVisitMap.get(customerId) || null,
+      hasFixedSeatSet.has(customerId),
       afterEnd,
       eventEnd
     )
@@ -181,6 +299,7 @@ export async function trackSegmentChanges(
     const countAfter = segmentCountAfter[segmentName] || 0
     const change = countAfter - countBefore
     const changePercent = countBefore > 0 ? ((change / countBefore) * 100) : (countAfter > 0 ? 100 : 0)
+    const isNegativeSegment = NEGATIVE_SEGMENTS.includes(segmentName)
 
     return {
       segmentName,
@@ -188,31 +307,44 @@ export async function trackSegmentChanges(
       countAfter,
       change,
       changePercent: Math.round(changePercent * 10) / 10,
+      isNegativeSegment, // 이탈위험, 이탈은 감소가 좋은 것
     }
   })
 
-  // 세그먼트 이동 데이터 생성
+  // 세그먼트 이동 데이터 생성 (유효한 이동만 필터링)
   const segmentMigrations: SegmentMigration[] = []
 
   for (const [key, count] of migrations) {
     const [fromSegment, toSegment] = key.split('->')
 
+    // 유효하지 않은 이동 필터링 (일반→신규, VIP→복귀 등)
+    const validTargets = VALID_TRANSITIONS[fromSegment]
+    if (!validTargets || !validTargets.includes(toSegment)) {
+      continue
+    }
+
     // 긍정/부정 판단
-    // 긍정: VIP/단골로 이동, 이탈위험/휴면에서 벗어남
-    // 부정: 이탈위험/휴면으로 이동
     let isPositive = false
 
-    if (['VIP', '단골'].includes(toSegment)) {
+    // 복귀는 항상 긍정적 (이탈/이탈위험에서만 올 수 있음)
+    if (toSegment === '복귀') {
       isPositive = true
-    } else if (['이탈위험', '휴면'].includes(fromSegment) && ['일반', '단골', 'VIP', '신규', '복귀'].includes(toSegment)) {
+    }
+    // VIP/단골로 이동은 긍정적
+    else if (['VIP', '단골'].includes(toSegment)) {
       isPositive = true
-    } else if (['이탈위험', '휴면'].includes(toSegment)) {
+    }
+    // 이탈위험/이탈에서 벗어남은 긍정적
+    else if (NEGATIVE_SEGMENTS.includes(fromSegment) && !NEGATIVE_SEGMENTS.includes(toSegment)) {
+      isPositive = true
+    }
+    // 이탈위험/이탈로 이동은 부정적
+    else if (NEGATIVE_SEGMENTS.includes(toSegment)) {
       isPositive = false
-    } else if (['VIP', '단골'].includes(fromSegment) && ['일반', '이탈위험', '휴면'].includes(toSegment)) {
+    }
+    // VIP/단골에서 일반으로 이동은 부정적
+    else if (['VIP', '단골'].includes(fromSegment) && toSegment === '일반') {
       isPositive = false
-    } else {
-      // 기타 (일반→신규, 복귀→일반 등)은 중립
-      isPositive = SEGMENT_ORDER.indexOf(toSegment) < SEGMENT_ORDER.indexOf(fromSegment)
     }
 
     segmentMigrations.push({
@@ -230,7 +362,7 @@ export async function trackSegmentChanges(
 }
 
 /**
- * 이용권 업그레이드 추적
+ * 이용권 업그레이드 추적 (최적화 버전)
  */
 export async function trackTicketUpgrades(
   branchId: string,
@@ -255,34 +387,51 @@ export async function trackTicketUpgrades(
     orderBy: { purchaseDate: 'asc' },
   })
 
-  // 각 고객의 이전 구매 이력 확인
+  if (eventPurchases.length === 0) {
+    return []
+  }
+
+  // 고유 고객 ID 추출
+  const customerIds = [...new Set(eventPurchases.map((p) => p.customerId))]
+
+  // 모든 이전 구매 이력 한 번에 조회 (배치)
+  const previousPurchases = await prisma.customerPurchase.findMany({
+    where: {
+      branchId,
+      customerId: { in: customerIds },
+      purchaseDate: { lt: eventStart },
+    },
+    select: {
+      customerId: true,
+      ticketName: true,
+      purchaseDate: true,
+    },
+    orderBy: { purchaseDate: 'desc' },
+  })
+
+  // 고객별 가장 최근 이전 구매만 추출
+  const previousPurchaseMap = new Map<string, string>()
+  for (const p of previousPurchases) {
+    if (!previousPurchaseMap.has(p.customerId)) {
+      previousPurchaseMap.set(p.customerId, p.ticketName)
+    }
+  }
+
+  // 업그레이드 계산
   const upgrades: Map<string, number> = new Map()
   const processedCustomers = new Set<string>()
-
   const ticketOrder = ['당일권', '시간권', '기간권', '고정석']
 
   for (const purchase of eventPurchases) {
     if (processedCustomers.has(purchase.customerId)) continue
     processedCustomers.add(purchase.customerId)
 
-    // 이전 구매 이력
-    const previousPurchase = await prisma.customerPurchase.findFirst({
-      where: {
-        customerId: purchase.customerId,
-        branchId,
-        purchaseDate: { lt: eventStart },
-      },
-      orderBy: { purchaseDate: 'desc' },
-      select: { ticketName: true },
-    })
+    const previousTicketName = previousPurchaseMap.get(purchase.customerId)
+    if (!previousTicketName) continue
 
-    if (!previousPurchase) continue
-
-    // 이용권 타입 추출
-    const prevType = inferTicketTypeSimple(previousPurchase.ticketName)
+    const prevType = inferTicketTypeSimple(previousTicketName)
     const currType = inferTicketTypeSimple(purchase.ticketName)
 
-    // 업그레이드 확인
     if (ticketOrder.indexOf(currType) > ticketOrder.indexOf(prevType)) {
       const key = `${prevType}->${currType}`
       upgrades.set(key, (upgrades.get(key) || 0) + 1)
@@ -295,7 +444,6 @@ export async function trackTicketUpgrades(
   for (const [key, count] of upgrades) {
     const [fromTicket, toTicket] = key.split('->')
 
-    // 해당 이용권 사용자 중 업그레이드 비율
     const fromTicketUsers = eventPurchases.filter(
       (p) => inferTicketTypeSimple(p.ticketName) === fromTicket
     ).length

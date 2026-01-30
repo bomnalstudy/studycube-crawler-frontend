@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
       if (branch.openedAt) {
         const monthsOpen =
           (new Date().getTime() - branch.openedAt.getTime()) / (1000 * 60 * 60 * 24 * 30)
-        if (monthsOpen < 12) {
+        if (monthsOpen < 6) {
           maturity = 'NEW'
         } else if (monthsOpen < 36) {
           maturity = 'STABLE'
@@ -215,7 +215,7 @@ export async function POST(request: NextRequest) {
           (new Date().getTime() - branch.openedAt.getTime()) / (1000 * 60 * 60 * 24 * 30)
 
         const getMaturityStage = (months: number) => {
-          if (months < 12) return 'NEW'
+          if (months < 6) return 'NEW'
           if (months < 36) return 'STABLE'
           return 'MATURE'
         }

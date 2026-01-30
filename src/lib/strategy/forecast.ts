@@ -8,12 +8,14 @@ import { prisma } from '@/lib/prisma'
 
 export interface ForecastResult {
   expectedRevenue: number         // 예상 매출
-  baseRevenue: number             // 기저 매출 (최근 평균)
+  baseRevenue: number             // 기저 매출 (전체 평균 - 시즌 지수 계산 기준)
+  recentAvgRevenue: number        // 최근 평균 매출 (참고용)
   seasonIndex: number             // 시즌 지수
   externalFactorIndex: number     // 외부 요인 지수
   trendCoefficient: number        // 추세 계수
   breakdown: {
     baseRevenueReason: string
+    recentAvgReason: string       // 최근 평균 참고 정보
     seasonReason: string
     externalReason: string
     trendReason: string
@@ -368,11 +370,13 @@ async function getFallbackFromSimilarBranch(
   return {
     expectedRevenue: Math.round(expectedRevenue),
     baseRevenue: Math.round(baseRevenue),
+    recentAvgRevenue: Math.round(baseRevenue), // 유사 지점 기준이므로 동일
     seasonIndex: Math.round(seasonIndex * 100) / 100,
     externalFactorIndex: 1.0,
     trendCoefficient: 1.0,
     breakdown: {
       baseRevenueReason: `유사 지점(${similarBranch.branchName}) 기준 평균 일 매출: ${Math.round(baseRevenue).toLocaleString()}원`,
+      recentAvgReason: `유사 지점 기준 (동일)`,
       seasonReason: `유사 지점 기준 - ${seasonReason}`,
       externalReason: '유사 지점 기준 외부 요인 미적용',
       trendReason: '유사 지점 기준 추세 미적용',
@@ -384,6 +388,12 @@ async function getFallbackFromSimilarBranch(
 
 /**
  * 기대 매출 예측 메인 함수
+ *
+ * 계산 방식 개선:
+ * - 기저 매출: 전체 평균 사용 (시즌 지수가 계절성을 반영하므로)
+ * - 시즌 지수: 해당 월의 연평균 대비 비율
+ * - 추세 계수: 장기 성장/하락 추세
+ * - 최근 평균: 참고값으로만 표시 (이중 계산 방지)
  */
 export async function forecastRevenue(
   branchId: string,
@@ -395,15 +405,18 @@ export async function forecastRevenue(
   const targetYear = eventStart.getFullYear()
   const eventDays = Math.ceil((eventEnd.getTime() - eventStart.getTime()) / (1000 * 60 * 60 * 24)) + 1
 
-  // 1. 기저 매출 (최근 90일 평균 일 매출)
-  const recentMetrics = await prisma.dailyMetric.findMany({
+  // 1. 전체 데이터 조회 (기저 매출 및 시즌 지수 계산용)
+  const allMetrics = await prisma.dailyMetric.findMany({
     where: { branchId },
     orderBy: { date: 'desc' },
-    take: 90,
+    select: {
+      date: true,
+      totalRevenue: true,
+    },
   })
 
   // 데이터 부족 시 유사 지점 기반 예측
-  if (recentMetrics.length < 30) {
+  if (allMetrics.length < 30) {
     const fallback = await getFallbackFromSimilarBranch(branchId, targetMonth, eventDays, externalFactorTypes)
     if (fallback) {
       return fallback
@@ -412,11 +425,13 @@ export async function forecastRevenue(
     return {
       expectedRevenue: 0,
       baseRevenue: 0,
+      recentAvgRevenue: 0,
       seasonIndex: 1,
       externalFactorIndex: 1,
       trendCoefficient: 1,
       breakdown: {
         baseRevenueReason: '데이터 없음 (유사 지점도 찾지 못함)',
+        recentAvgReason: '데이터 없음',
         seasonReason: '데이터 없음',
         externalReason: '데이터 없음',
         trendReason: '데이터 없음',
@@ -426,10 +441,16 @@ export async function forecastRevenue(
     }
   }
 
-  const baseRevenue = recentMetrics.reduce((sum, m) => sum + Number(m.totalRevenue ?? 0), 0) / recentMetrics.length
-  const dataMonths = Math.ceil(recentMetrics.length / 30)
+  // 전체 평균 (기저 매출 - 시즌 지수 계산의 기준)
+  const overallAvg = allMetrics.reduce((sum, m) => sum + Number(m.totalRevenue ?? 0), 0) / allMetrics.length
 
-  // 2. 시즌 지수
+  // 최근 90일 평균 (참고용)
+  const recentMetrics = allMetrics.slice(0, Math.min(90, allMetrics.length))
+  const recentAvgRevenue = recentMetrics.reduce((sum, m) => sum + Number(m.totalRevenue ?? 0), 0) / recentMetrics.length
+
+  const dataMonths = Math.ceil(allMetrics.length / 30)
+
+  // 2. 시즌 지수 (월별 평균 데이터 재활용)
   const monthlyAverages = await getMonthlyAverages(branchId)
   const { index: seasonIndex, reason: seasonReason } = calculateSeasonIndex(monthlyAverages, targetMonth)
 
@@ -448,8 +469,10 @@ export async function forecastRevenue(
     targetYear
   )
 
-  // 기대 매출 계산 (일 매출 × 이벤트 일수)
-  const expectedDailyRevenue = baseRevenue * seasonIndex * externalFactorIndex * trendCoefficient
+  // 기대 매출 계산
+  // 공식: 전체 평균 × 시즌 지수 × 외부 요인 × 추세 계수 × 일수
+  // (최근 평균이 아닌 전체 평균 사용 → 시즌 지수와의 이중 계산 방지)
+  const expectedDailyRevenue = overallAvg * seasonIndex * externalFactorIndex * trendCoefficient
   const expectedRevenue = expectedDailyRevenue * eventDays
 
   // 신뢰도 결정
@@ -462,20 +485,208 @@ export async function forecastRevenue(
     confidence = 'LOW'
   }
 
+  // 최근 평균 vs 전체 평균 비교 정보
+  const recentVsOverall = ((recentAvgRevenue - overallAvg) / overallAvg * 100).toFixed(1)
+  const recentDirection = recentAvgRevenue >= overallAvg ? '높음' : '낮음'
+
   return {
     expectedRevenue: Math.round(expectedRevenue),
-    baseRevenue: Math.round(baseRevenue),
+    baseRevenue: Math.round(overallAvg),
+    recentAvgRevenue: Math.round(recentAvgRevenue),
     seasonIndex: Math.round(seasonIndex * 100) / 100,
     externalFactorIndex: Math.round(externalFactorIndex * 100) / 100,
     trendCoefficient: Math.round(trendCoefficient * 100) / 100,
     breakdown: {
-      baseRevenueReason: `최근 ${recentMetrics.length}일 평균 일 매출: ${Math.round(baseRevenue).toLocaleString()}원`,
+      baseRevenueReason: `전체 평균 일 매출: ${Math.round(overallAvg).toLocaleString()}원 (${allMetrics.length}일 기준)`,
+      recentAvgReason: `최근 ${recentMetrics.length}일 평균: ${Math.round(recentAvgRevenue).toLocaleString()}원 (전체 대비 ${Math.abs(Number(recentVsOverall))}% ${recentDirection})`,
       seasonReason,
       externalReason,
       trendReason,
     },
     confidence,
     dataMonths,
+  }
+}
+
+/**
+ * 이용권별 기대 매출 예측
+ * 전체 기대 매출과 과거 이용권별 비율을 사용하여 계산
+ */
+export interface TicketTypeForecast {
+  dayTicket: number
+  timeTicket: number
+  termTicket: number
+  fixedTicket: number
+  ratios: {
+    dayTicket: number
+    timeTicket: number
+    termTicket: number
+    fixedTicket: number
+  }
+  dataSource: 'HISTORICAL' | 'SIMILAR_BRANCH' | 'DEFAULT'
+}
+
+/**
+ * 이용권명에서 이용권 유형 추론
+ */
+function inferTicketType(ticketName: string): 'day' | 'time' | 'term' | 'fixed' {
+  const lower = ticketName.toLowerCase()
+
+  if (lower.includes('고정')) return 'fixed'
+  if (lower.includes('기간') || lower.includes('정기') || lower.includes('주간') || lower.includes('월간')) {
+    return 'term'
+  }
+  if (lower.includes('패키지') || (lower.includes('시간') && !lower.match(/(\d+)\s*시간/))) {
+    return 'time'
+  }
+
+  const hourMatch = ticketName.match(/(\d+)\s*시간/)
+  if (hourMatch) {
+    const hours = parseInt(hourMatch[1], 10)
+    if (hours <= 12) return 'day'
+  }
+
+  if (lower.includes('당일') || lower.includes('일일')) return 'day'
+
+  return 'time'
+}
+
+export async function forecastRevenueByTicketType(
+  branchId: string,
+  eventStart: Date,
+  eventEnd: Date,
+  totalExpectedRevenue: number
+): Promise<TicketTypeForecast> {
+  // daily_metrics에서 이용권별 매출 직접 조회 (최근 90일)
+  const ninetyDaysAgo = new Date(eventStart)
+  ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90)
+
+  const dailyMetrics = await prisma.dailyMetric.findMany({
+    where: {
+      branchId,
+      date: { gte: ninetyDaysAgo, lt: eventStart },
+    },
+    select: {
+      dayTicketRevenue: true,
+      timeTicketRevenue: true,
+      termTicketRevenue: true,
+    },
+  })
+
+  // 이용권별 합계 계산 (daily_metrics에서 직접)
+  let dayTotal = 0
+  let timeTotal = 0
+  let termTotal = 0
+
+  for (const m of dailyMetrics) {
+    dayTotal += Number(m.dayTicketRevenue ?? 0)
+    timeTotal += Number(m.timeTicketRevenue ?? 0)
+    termTotal += Number(m.termTicketRevenue ?? 0)
+  }
+
+  // 고정석은 daily_metrics에 없으므로, customerPurchase에서 별도 조회
+  const fixedPurchases = await prisma.customerPurchase.aggregate({
+    where: {
+      branchId,
+      purchaseDate: { gte: ninetyDaysAgo, lt: eventStart },
+      ticketName: { contains: '고정' },
+    },
+    _sum: { amount: true },
+  })
+  const fixedTotal = Number(fixedPurchases._sum?.amount ?? 0)
+
+  const total = dayTotal + timeTotal + termTotal + fixedTotal
+
+  // 데이터가 충분하면 과거 비율 사용
+  if (total > 0) {
+    const ratios = {
+      dayTicket: dayTotal / total,
+      timeTicket: timeTotal / total,
+      termTicket: termTotal / total,
+      fixedTicket: fixedTotal / total,
+    }
+
+    return {
+      dayTicket: Math.round(totalExpectedRevenue * ratios.dayTicket),
+      timeTicket: Math.round(totalExpectedRevenue * ratios.timeTicket),
+      termTicket: Math.round(totalExpectedRevenue * ratios.termTicket),
+      fixedTicket: Math.round(totalExpectedRevenue * ratios.fixedTicket),
+      ratios,
+      dataSource: 'HISTORICAL',
+    }
+  }
+
+  // 데이터가 없으면 유사 지점 비율 조회 (daily_metrics 사용)
+  const similarMetrics = await prisma.dailyMetric.findMany({
+    where: {
+      branchId: { not: branchId },
+      date: { gte: ninetyDaysAgo, lt: eventStart },
+    },
+    select: {
+      branchId: true,
+      dayTicketRevenue: true,
+      timeTicketRevenue: true,
+      termTicketRevenue: true,
+    },
+    take: 5000,
+  })
+
+  let similarDayTotal = 0
+  let similarTimeTotal = 0
+  let similarTermTotal = 0
+
+  for (const m of similarMetrics) {
+    similarDayTotal += Number(m.dayTicketRevenue ?? 0)
+    similarTimeTotal += Number(m.timeTicketRevenue ?? 0)
+    similarTermTotal += Number(m.termTicketRevenue ?? 0)
+  }
+
+  // 유사 지점 고정석 매출
+  const similarFixedPurchases = await prisma.customerPurchase.aggregate({
+    where: {
+      branchId: { not: branchId },
+      purchaseDate: { gte: ninetyDaysAgo, lt: eventStart },
+      ticketName: { contains: '고정' },
+    },
+    _sum: { amount: true },
+  })
+  const similarFixedTotal = Number(similarFixedPurchases._sum?.amount ?? 0)
+
+  const similarTotal = similarDayTotal + similarTimeTotal + similarTermTotal + similarFixedTotal
+
+  if (similarTotal > 0) {
+    const ratios = {
+      dayTicket: similarDayTotal / similarTotal,
+      timeTicket: similarTimeTotal / similarTotal,
+      termTicket: similarTermTotal / similarTotal,
+      fixedTicket: similarFixedTotal / similarTotal,
+    }
+
+    return {
+      dayTicket: Math.round(totalExpectedRevenue * ratios.dayTicket),
+      timeTicket: Math.round(totalExpectedRevenue * ratios.timeTicket),
+      termTicket: Math.round(totalExpectedRevenue * ratios.termTicket),
+      fixedTicket: Math.round(totalExpectedRevenue * ratios.fixedTicket),
+      ratios,
+      dataSource: 'SIMILAR_BRANCH',
+    }
+  }
+
+  // 기본 비율 (일반적인 스터디카페 비율)
+  const defaultRatios = {
+    dayTicket: 0.30,
+    timeTicket: 0.35,
+    termTicket: 0.25,
+    fixedTicket: 0.10,
+  }
+
+  return {
+    dayTicket: Math.round(totalExpectedRevenue * defaultRatios.dayTicket),
+    timeTicket: Math.round(totalExpectedRevenue * defaultRatios.timeTicket),
+    termTicket: Math.round(totalExpectedRevenue * defaultRatios.termTicket),
+    fixedTicket: Math.round(totalExpectedRevenue * defaultRatios.fixedTicket),
+    ratios: defaultRatios,
+    dataSource: 'DEFAULT',
   }
 }
 

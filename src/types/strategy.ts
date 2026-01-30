@@ -488,11 +488,12 @@ export interface OperationDetail extends OperationListItem {
 
 // 세그먼트 변화 데이터
 export interface SegmentChangeData {
-  segmentName: string // VIP, 단골, 일반, 이탈위험, 휴면
+  segmentName: string // VIP, 단골, 일반, 신규, 이탈위험, 이탈, 복귀
   countBefore: number
   countAfter: number
   change: number
   changePercent: number
+  isNegativeSegment: boolean // 감소가 긍정적인 세그먼트인지 (이탈위험, 이탈)
 }
 
 // 세그먼트 이동 데이터 (A→B)

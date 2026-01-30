@@ -705,6 +705,128 @@ function TicketRevenueItem({ label, after, before, formatCurrency }: { label: st
   )
 }
 
+// 세그먼트 카드 컴포넌트
+function SegmentCard({
+  segmentName,
+  countBefore,
+  countAfter,
+  change,
+  changePercent,
+  isNegativeSegment,
+  inflows,
+  outflows,
+}: {
+  segmentName: string
+  countBefore: number
+  countAfter: number
+  change: number
+  changePercent: number
+  isNegativeSegment: boolean
+  inflows: { from: string; count: number }[]
+  outflows: { to: string; count: number }[]
+}) {
+  // 부정적 세그먼트의 감소는 긍정적 (초록색)
+  // 부정적 세그먼트의 증가는 부정적 (빨간색)
+  // 긍정적 세그먼트의 증가는 긍정적 (초록색)
+  // 긍정적 세그먼트의 감소는 부정적 (빨간색)
+  const isPositiveChange = isNegativeSegment ? change < 0 : change > 0
+  const isNeutralChange = change === 0
+
+  // 세그먼트별 색상 테마
+  const segmentColors: Record<string, { bg: string; border: string; text: string; light: string }> = {
+    'VIP': { bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-700', light: 'bg-amber-100' },
+    '단골': { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-700', light: 'bg-blue-100' },
+    '일반': { bg: 'bg-slate-50', border: 'border-slate-200', text: 'text-slate-700', light: 'bg-slate-100' },
+    '신규': { bg: 'bg-purple-50', border: 'border-purple-200', text: 'text-purple-700', light: 'bg-purple-100' },
+    '이탈위험': { bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-700', light: 'bg-orange-100' },
+    '이탈': { bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-700', light: 'bg-red-100' },
+    '복귀': { bg: 'bg-teal-50', border: 'border-teal-200', text: 'text-teal-700', light: 'bg-teal-100' },
+  }
+
+  const colors = segmentColors[segmentName] || segmentColors['일반']
+
+  return (
+    <div className={`rounded-2xl ${colors.bg} border ${colors.border} overflow-hidden`}>
+      {/* 헤더 */}
+      <div className={`px-4 py-3 ${colors.light} border-b ${colors.border}`}>
+        <div className="flex items-center justify-between">
+          <span className={`font-semibold ${colors.text}`}>{segmentName}</span>
+          {isNegativeSegment && (
+            <span className="text-xs text-slate-500">(감소가 좋음)</span>
+          )}
+        </div>
+      </div>
+
+      {/* 본문 */}
+      <div className="p-4">
+        {/* 인원 변화 */}
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-center">
+            <p className="text-xs text-slate-500">이전</p>
+            <p className="text-xl font-bold text-slate-700">{countBefore}명</p>
+          </div>
+          <div className="flex flex-col items-center">
+            <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+            </svg>
+          </div>
+          <div className="text-center">
+            <p className="text-xs text-slate-500">이후</p>
+            <p className="text-xl font-bold text-slate-700">{countAfter}명</p>
+          </div>
+        </div>
+
+        {/* 변화율 막대 */}
+        <div className={`px-3 py-2 rounded-lg text-center ${
+          isNeutralChange ? 'bg-slate-100' :
+          isPositiveChange ? 'bg-green-100' : 'bg-red-100'
+        }`}>
+          <span className={`text-sm font-semibold ${
+            isNeutralChange ? 'text-slate-600' :
+            isPositiveChange ? 'text-green-700' : 'text-red-700'
+          }`}>
+            {change >= 0 ? '+' : ''}{change}명 ({changePercent >= 0 ? '+' : ''}{changePercent}%)
+          </span>
+        </div>
+
+        {/* 유입/유출 */}
+        {(inflows.length > 0 || outflows.length > 0) && (
+          <div className="mt-3 pt-3 border-t border-slate-200/50 space-y-2">
+            {/* 유입 */}
+            {inflows.length > 0 && (
+              <div>
+                <p className="text-xs text-green-600 font-medium mb-1">↓ 유입</p>
+                <div className="space-y-1">
+                  {inflows.slice(0, 3).map((inf, idx) => (
+                    <div key={idx} className="flex items-center justify-between text-xs">
+                      <span className="text-slate-500">{inf.from}에서</span>
+                      <span className="text-green-600 font-medium">+{inf.count}명</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {/* 유출 */}
+            {outflows.length > 0 && (
+              <div>
+                <p className="text-xs text-red-600 font-medium mb-1">↑ 유출</p>
+                <div className="space-y-1">
+                  {outflows.slice(0, 3).map((out, idx) => (
+                    <div key={idx} className="flex items-center justify-between text-xs">
+                      <span className="text-slate-500">{out.to}로</span>
+                      <span className="text-red-600 font-medium">-{out.count}명</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // 세그먼트 탭
 function SegmentTab({
   performances,
@@ -714,13 +836,54 @@ function SegmentTab({
   summary: AnalysisSummary
 }) {
   const firstPerf = performances[0]
+  const segmentChanges = firstPerf?.segmentChanges || []
+  const migrations = firstPerf?.segmentMigrations || []
+
+  // 각 세그먼트별 유입/유출 계산
+  const getFlowsForSegment = (segmentName: string) => {
+    const inflows = migrations
+      .filter((m) => m.toSegment === segmentName)
+      .map((m) => ({ from: m.fromSegment, count: m.count }))
+      .sort((a, b) => b.count - a.count)
+
+    const outflows = migrations
+      .filter((m) => m.fromSegment === segmentName)
+      .map((m) => ({ to: m.toSegment, count: m.count }))
+      .sort((a, b) => b.count - a.count)
+
+    return { inflows, outflows }
+  }
 
   return (
     <div className="space-y-6">
-      {/* 세그먼트 이동 요약 */}
+      {/* 세그먼트별 카드 그리드 */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
-        <h2 className="font-semibold text-slate-800 mb-4">세그먼트 이동 요약</h2>
-        <p className="text-sm text-slate-500 mb-4">이벤트 전후 고객 세그먼트가 어떻게 이동했는지 보여줍니다.</p>
+        <h2 className="font-semibold text-slate-800 mb-2">세그먼트별 변화</h2>
+        <p className="text-sm text-slate-500 mb-6">이벤트 전후 각 세그먼트의 고객 수 변화와 유입/유출 현황입니다.</p>
+
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {segmentChanges.map((seg) => {
+            const { inflows, outflows } = getFlowsForSegment(seg.segmentName)
+            return (
+              <SegmentCard
+                key={seg.segmentName}
+                segmentName={seg.segmentName}
+                countBefore={seg.countBefore}
+                countAfter={seg.countAfter}
+                change={seg.change}
+                changePercent={seg.changePercent}
+                isNegativeSegment={seg.isNegativeSegment}
+                inflows={inflows}
+                outflows={outflows}
+              />
+            )
+          })}
+        </div>
+      </div>
+
+      {/* 전체 이동 요약 */}
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
+        <h2 className="font-semibold text-slate-800 mb-4">전체 이동 요약</h2>
 
         <div className="grid sm:grid-cols-2 gap-4">
           {/* 긍정적 이동 */}
@@ -732,17 +895,18 @@ function SegmentTab({
               긍정적 이동
             </p>
             <div className="space-y-2">
-              {summary.segmentMigrations
-                ?.filter((m) => m.isPositive)
+              {migrations
+                .filter((m) => m.isPositive)
+                .slice(0, 5)
                 .map((m, idx) => (
-                  <div key={idx} className="flex items-center justify-between text-sm">
+                  <div key={idx} className="flex items-center justify-between text-sm bg-white/60 p-2 rounded-lg">
                     <span className="text-slate-600">
                       {m.fromSegment} → {m.toSegment}
                     </span>
                     <span className="font-semibold text-green-700">{m.count}명</span>
                   </div>
                 ))}
-              {(!summary.segmentMigrations || summary.segmentMigrations.filter((m) => m.isPositive).length === 0) && (
+              {migrations.filter((m) => m.isPositive).length === 0 && (
                 <p className="text-sm text-slate-400">데이터 없음</p>
               )}
             </div>
@@ -757,17 +921,18 @@ function SegmentTab({
               부정적 이동
             </p>
             <div className="space-y-2">
-              {summary.segmentMigrations
-                ?.filter((m) => !m.isPositive)
+              {migrations
+                .filter((m) => !m.isPositive)
+                .slice(0, 5)
                 .map((m, idx) => (
-                  <div key={idx} className="flex items-center justify-between text-sm">
+                  <div key={idx} className="flex items-center justify-between text-sm bg-white/60 p-2 rounded-lg">
                     <span className="text-slate-600">
                       {m.fromSegment} → {m.toSegment}
                     </span>
                     <span className="font-semibold text-red-700">{m.count}명</span>
                   </div>
                 ))}
-              {(!summary.segmentMigrations || summary.segmentMigrations.filter((m) => !m.isPositive).length === 0) && (
+              {migrations.filter((m) => !m.isPositive).length === 0 && (
                 <p className="text-sm text-slate-400">데이터 없음</p>
               )}
             </div>
@@ -775,66 +940,40 @@ function SegmentTab({
         </div>
       </div>
 
-      {/* 세그먼트별 변화 */}
-      {firstPerf?.segmentChanges && firstPerf.segmentChanges.length > 0 && (
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
-          <h2 className="font-semibold text-slate-800 mb-4">세그먼트별 고객 수 변화</h2>
-
-          <div className="space-y-4">
-            {firstPerf.segmentChanges.map((seg, idx) => (
-              <div key={idx} className="flex items-center gap-4">
-                <div className="w-20 text-sm font-medium text-slate-700">{seg.segmentName}</div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-sm text-slate-500">{seg.countBefore}명</span>
-                    <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                    </svg>
-                    <span className="text-sm font-medium text-slate-700">{seg.countAfter}명</span>
-                    <span className={`text-sm font-medium ${seg.changePercent >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      ({seg.changePercent >= 0 ? '+' : ''}{seg.changePercent}%)
-                    </span>
-                  </div>
-                  <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                    <div
-                      className={`h-full rounded-full ${seg.changePercent >= 0 ? 'bg-green-500' : 'bg-red-500'}`}
-                      style={{ width: `${Math.min(Math.abs(seg.changePercent) * 2, 100)}%` }}
-                    />
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* 지점별 세그먼트 이동 */}
+      {/* 지점별 세그먼트 변화 (여러 지점일 때만) */}
       {performances.length > 1 && (
         <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
-          <h2 className="font-semibold text-slate-800 mb-4">지점별 세그먼트 이동</h2>
+          <h2 className="font-semibold text-slate-800 mb-4">지점별 세그먼트 변화</h2>
 
           <div className="space-y-4">
             {performances.map((perf) => {
-              const migrations = perf.segmentMigrations
-              if (!migrations || migrations.length === 0) return null
+              if (!perf.segmentChanges) return null
 
               return (
                 <div key={perf.id} className="p-4 bg-slate-50 rounded-xl">
                   <p className="font-medium text-slate-700 mb-3">{perf.branchName}</p>
-                  <div className="grid grid-cols-2 gap-3 text-sm">
-                    {migrations.slice(0, 4).map((m, idx) => (
-                      <div
-                        key={idx}
-                        className={`flex items-center justify-between p-2 rounded ${m.isPositive ? 'bg-green-100' : 'bg-red-100'}`}
-                      >
-                        <span className="text-slate-600">
-                          {m.fromSegment} → {m.toSegment}
-                        </span>
-                        <span className={`font-medium ${m.isPositive ? 'text-green-700' : 'text-red-700'}`}>
-                          {m.count}명
-                        </span>
-                      </div>
-                    ))}
+                  <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-7 gap-2 text-sm">
+                    {perf.segmentChanges.map((seg) => {
+                      const isPositiveChange = seg.isNegativeSegment ? seg.change < 0 : seg.change > 0
+                      const isNeutral = seg.change === 0
+                      return (
+                        <div
+                          key={seg.segmentName}
+                          className={`p-2 rounded-lg text-center ${
+                            isNeutral ? 'bg-white' :
+                            isPositiveChange ? 'bg-green-100' : 'bg-red-100'
+                          }`}
+                        >
+                          <p className="text-xs text-slate-500">{seg.segmentName}</p>
+                          <p className={`font-semibold ${
+                            isNeutral ? 'text-slate-600' :
+                            isPositiveChange ? 'text-green-700' : 'text-red-700'
+                          }`}>
+                            {seg.change >= 0 ? '+' : ''}{seg.change}
+                          </p>
+                        </div>
+                      )
+                    })}
                   </div>
                 </div>
               )

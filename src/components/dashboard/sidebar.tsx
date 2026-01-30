@@ -74,6 +74,7 @@ export function Sidebar() {
         { name: '운영 변경', href: '/strategy/operations', icon: '⚙️' },
         { name: '성과 분석', href: '/strategy/analysis', icon: '📈' },
         { name: '외부 요인', href: '/strategy/factors', icon: '🌤️' },
+        { name: '지점 설정', href: '/strategy/branches', icon: '🏢' },
       ]
     }
   ]

@@ -89,7 +89,7 @@ export default function BranchesPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           branchId,
-          ...editForm,
+          characteristics: editForm,
         }),
       })
       const data = await res.json()
@@ -172,8 +172,8 @@ export default function BranchesPage() {
   const getMaturityBadge = (maturity?: 'NEW' | 'STABLE' | 'MATURE') => {
     if (!maturity) return <span className="text-slate-400 text-sm">-</span>
     const labels: Record<string, string> = {
-      NEW: '신규 (<1년)',
-      STABLE: '안정 (1-3년)',
+      NEW: '신규 (<6개월)',
+      STABLE: '안정 (6개월~3년)',
       MATURE: '성숙 (3년+)',
     }
     const colors: Record<string, string> = {

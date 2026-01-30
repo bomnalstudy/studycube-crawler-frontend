@@ -3,8 +3,9 @@ import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { requireAdmin } from '@/lib/auth-helpers'
 import { tTest, cohensD, calculateGrowthRate } from '@/lib/strategy/statistics'
-import { forecastRevenue, calculatePerformanceVsForecast, type ForecastResult } from '@/lib/strategy/forecast'
+import { forecastRevenue, forecastRevenueByTicketType, calculatePerformanceVsForecast, type ForecastResult, type TicketTypeForecast } from '@/lib/strategy/forecast'
 import { trackSegmentChanges, trackTicketUpgrades } from '@/lib/strategy/segment-tracker'
+import { db, type DateRange } from '@/lib/db'
 import type {
   AnalysisRequest,
   EventPerformanceData,
@@ -20,31 +21,43 @@ import type {
   ScoreBreakdown,
 } from '@/types/strategy'
 
-// 방문 패턴 계산 (실제 DB 데이터)
+// 방문 패턴 계산 (DB 유틸리티 사용)
+// hasComparisonData가 false면 최근 3개월 데이터를 비교 기간으로 사용
 async function calculateVisitPattern(
   branchId: string,
-  eventStart: Date,
-  eventEnd: Date,
-  comparisonStart: Date,
-  comparisonEnd: Date
+  eventRange: DateRange,
+  comparisonRange: DateRange,
+  hasComparisonData: boolean = true
 ): Promise<VisitPatternData> {
-  // 이벤트 기간 방문 데이터
-  const eventVisitors = await prisma.dailyVisitor.findMany({
-    where: {
-      branchId,
-      visitDate: { gte: eventStart, lte: eventEnd },
-    },
-    select: { customerId: true, visitDate: true },
-  })
+  // 비교 데이터가 없으면 최근 3개월 데이터 사용
+  let actualComparisonRange = comparisonRange
+  if (!hasComparisonData) {
+    const threeMonthsAgo = new Date(eventRange.start)
+    threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3)
+    const beforeEventStart = new Date(eventRange.start)
+    beforeEventStart.setDate(beforeEventStart.getDate() - 1)
+    actualComparisonRange = { start: threeMonthsAgo, end: beforeEventStart }
+  }
 
-  // 비교 기간 방문 데이터
-  const comparisonVisitors = await prisma.dailyVisitor.findMany({
-    where: {
-      branchId,
-      visitDate: { gte: comparisonStart, lte: comparisonEnd },
-    },
-    select: { customerId: true, visitDate: true },
-  })
+  // 병렬로 모든 데이터 조회
+  const [eventVisitors, comparisonVisitors, eventHourly, comparisonHourly] = await Promise.all([
+    prisma.dailyVisitor.findMany({
+      where: {
+        branchId,
+        visitDate: { gte: eventRange.start, lte: eventRange.end },
+      },
+      select: { customerId: true },
+    }),
+    prisma.dailyVisitor.findMany({
+      where: {
+        branchId,
+        visitDate: { gte: actualComparisonRange.start, lte: actualComparisonRange.end },
+      },
+      select: { customerId: true },
+    }),
+    db.visitors.getHourlyUsage(branchId, eventRange),
+    db.visitors.getHourlyUsage(branchId, actualComparisonRange),
+  ])
 
   // 고객별 방문 수 계산
   const eventCustomerVisits = new Map<string, number>()
@@ -62,64 +75,39 @@ async function calculateVisitPattern(
     }
   }
 
-  // 평균 방문 수 계산
+  // 이벤트 기간과 비교 기간의 일수 정규화
+  const eventDays = Math.ceil((eventRange.end.getTime() - eventRange.start.getTime()) / (1000 * 60 * 60 * 24)) + 1
+  const comparisonDays = Math.ceil((actualComparisonRange.end.getTime() - actualComparisonRange.start.getTime()) / (1000 * 60 * 60 * 24)) + 1
+
+  // 정규화된 평균 방문 수 계산 (일수 보정)
   const avgVisitsAfter = eventCustomerVisits.size > 0
     ? Array.from(eventCustomerVisits.values()).reduce((sum, v) => sum + v, 0) / eventCustomerVisits.size
     : 0
-  const avgVisitsBefore = comparisonCustomerVisits.size > 0
+  const rawAvgVisitsBefore = comparisonCustomerVisits.size > 0
     ? Array.from(comparisonCustomerVisits.values()).reduce((sum, v) => sum + v, 0) / comparisonCustomerVisits.size
     : 0
+  // 비교 기간이 다르면 일별 기준으로 정규화
+  const avgVisitsBefore = hasComparisonData
+    ? rawAvgVisitsBefore
+    : rawAvgVisitsBefore * (eventDays / comparisonDays)
 
   const visitFrequencyChange = avgVisitsBefore > 0
     ? ((avgVisitsAfter - avgVisitsBefore) / avgVisitsBefore) * 100
     : (avgVisitsAfter > 0 ? 100 : 0)
 
-  // 시간대별 방문 분포 (피크 시간)
-  const hourlyUsage = await prisma.hourlyUsage.findMany({
-    where: {
-      branchId,
-      date: { gte: eventStart, lte: eventEnd },
-    },
-    select: { hour: true, usageCount: true },
-  })
-
-  const comparisonHourly = await prisma.hourlyUsage.findMany({
-    where: {
-      branchId,
-      date: { gte: comparisonStart, lte: comparisonEnd },
-    },
-    select: { hour: true, usageCount: true },
-  })
-
-  // 시간대별 합계
-  const hourSumAfter: Record<number, number> = {}
-  const hourSumBefore: Record<number, number> = {}
-
-  for (const h of hourlyUsage) {
-    hourSumAfter[h.hour] = (hourSumAfter[h.hour] || 0) + (h.usageCount || 0)
-  }
-
-  for (const h of comparisonHourly) {
-    hourSumBefore[h.hour] = (hourSumBefore[h.hour] || 0) + (h.usageCount || 0)
-  }
-
-  // 피크 시간 찾기
-  const peakHourAfter = Object.entries(hourSumAfter).sort((a, b) => b[1] - a[1])[0]?.[0] || '14'
-  const peakHourBefore = Object.entries(hourSumBefore).sort((a, b) => b[1] - a[1])[0]?.[0] || '14'
-
-  // 평균 이용 시간은 데이터가 없으므로 기본값 사용
-  const avgUsageTimeBefore = 150 // 분
-  const avgUsageTimeAfter = 150
+  // 피크 시간 찾기 (이미 병렬로 조회됨)
+  const peakHourAfter = db.visitors.findPeakHour(eventHourly)
+  const peakHourBefore = db.visitors.findPeakHour(comparisonHourly)
 
   return {
     avgVisitsPerCustomerBefore: Math.round(avgVisitsBefore * 10) / 10,
     avgVisitsPerCustomerAfter: Math.round(avgVisitsAfter * 10) / 10,
     visitFrequencyChange: Math.round(visitFrequencyChange * 10) / 10,
-    avgUsageTimeBefore,
-    avgUsageTimeAfter,
+    avgUsageTimeBefore: 150,
+    avgUsageTimeAfter: 150,
     usageTimeChange: 0,
-    peakHourBefore: parseInt(peakHourBefore),
-    peakHourAfter: parseInt(peakHourAfter),
+    peakHourBefore,
+    peakHourAfter,
   }
 }
 
@@ -347,7 +335,7 @@ export async function POST(request: NextRequest) {
         types: true,
         branches: {
           include: {
-            branch: { select: { id: true, name: true } },
+            branch: { select: { id: true, name: true, openedAt: true } },
           },
         },
         targets: true,
@@ -377,28 +365,45 @@ export async function POST(request: NextRequest) {
       oldestDataDate: string
     }[] = []
 
-    for (const branchId of targetBranchIds) {
+    // === 공통 데이터 배치 조회 (최적화) ===
+    const eventRange: DateRange = { start: eventStart, end: eventEnd }
+
+    // YoY 비교 기간
+    const yoyComparisonRange: DateRange = {
+      start: new Date(eventStart.getFullYear() - 1, eventStart.getMonth(), eventStart.getDate()),
+      end: new Date(eventEnd.getFullYear() - 1, eventEnd.getMonth(), eventEnd.getDate()),
+    }
+
+    // 모든 지점 데이터 일괄 조회
+    const [
+      oldestDatesMap,
+      eventMetricsBatch,
+      yoyMetricsBatch,
+      eventVisitsBatch,
+      yoyVisitsBatch,
+    ] = await Promise.all([
+      db.metrics.getOldestDataDates(targetBranchIds),
+      db.metrics.getMetricsSummaryBatch(targetBranchIds, eventRange),
+      db.metrics.getMetricsSummaryBatch(targetBranchIds, yoyComparisonRange),
+      db.visitors.getVisitCountBatch(targetBranchIds, eventRange),
+      db.visitors.getVisitCountBatch(targetBranchIds, yoyComparisonRange),
+    ])
+
+    // 일별 매출 데이터 (통계 분석용)
+    const [eventDailyRevenues, yoyDailyRevenues] = await Promise.all([
+      db.metrics.getDailyRevenuesBatch(targetBranchIds, eventRange),
+      db.metrics.getDailyRevenuesBatch(targetBranchIds, yoyComparisonRange),
+    ])
+
+    // === 지점별 분석 (병렬 처리) ===
+    const analysisPromises = targetBranchIds.map(async (branchId) => {
       const branch = event.branches.find((b) => b.branchId === branchId)?.branch
-      if (!branch) continue
+      if (!branch) return null
 
-      // 가장 오래된 데이터 날짜 확인
-      const oldestMetric = await prisma.dailyMetric.findFirst({
-        where: { branchId },
-        orderBy: { date: 'asc' },
-        select: { date: true },
-      })
-
-      const oldestDate = oldestMetric?.date ?? new Date()
+      const oldestDate = oldestDatesMap.get(branchId) ?? new Date()
       const hasYoyData =
         oldestDate.getTime() <=
         new Date(eventStart.getTime() - 365 * 24 * 60 * 60 * 1000).getTime()
-
-      dataAvailability.push({
-        branchId,
-        branchName: branch.name,
-        hasYoyData,
-        oldestDataDate: oldestDate.toISOString().split('T')[0],
-      })
 
       // 비교 유형 결정 (자동 선택)
       const comparisonType: ComparisonType = body.comparisonType ?? (hasYoyData ? 'YOY' : 'MOM')
@@ -419,34 +424,44 @@ export async function POST(request: NextRequest) {
         comparisonEnd.setMonth(comparisonEnd.getMonth() - 1)
       }
 
-      // 이벤트 기간 매출 데이터
-      const eventMetrics = await prisma.dailyMetric.findMany({
-        where: {
-          branchId,
-          date: { gte: eventStart, lte: eventEnd },
-        },
-        orderBy: { date: 'asc' },
-      })
+      const comparisonRange: DateRange = { start: comparisonStart, end: comparisonEnd }
 
-      // 비교 기간 매출 데이터
-      const comparisonMetrics = await prisma.dailyMetric.findMany({
-        where: {
-          branchId,
-          date: { gte: comparisonStart, lte: comparisonEnd },
-        },
-        orderBy: { date: 'asc' },
-      })
+      // 배치에서 이미 조회된 데이터 사용 (YoY인 경우)
+      // MoM인 경우만 별도 조회
+      let eventMetrics = eventMetricsBatch.get(branchId)!
+      let comparisonMetrics
+      let eventRevenues = eventDailyRevenues.get(branchId) || []
+      let comparisonRevenues: number[]
+
+      if (comparisonType === 'YOY') {
+        comparisonMetrics = yoyMetricsBatch.get(branchId)!
+        comparisonRevenues = yoyDailyRevenues.get(branchId) || []
+      } else {
+        // MoM은 별도 조회 필요
+        const [momMetrics, momRevenues] = await Promise.all([
+          db.metrics.getMetricsSummary(branchId, comparisonRange),
+          db.metrics.getDailyRevenues(branchId, comparisonRange),
+        ])
+        comparisonMetrics = momMetrics
+        comparisonRevenues = momRevenues
+      }
 
       // 매출 계산
-      const eventRevenues = eventMetrics.map((m) => Number(m.totalRevenue ?? 0))
-      const comparisonRevenues = comparisonMetrics.map((m) => Number(m.totalRevenue ?? 0))
-
-      const revenueAfter = eventRevenues.reduce((sum, r) => sum + r, 0)
-      let revenueBefore = comparisonRevenues.reduce((sum, r) => sum + r, 0)
+      const revenueAfter = eventMetrics.totalRevenue
+      let revenueBefore = comparisonType === 'YOY'
+        ? comparisonMetrics.totalRevenue
+        : (comparisonMetrics as any).totalRevenue || 0
 
       // 비교 데이터 없음 여부 확인
-      const hasComparisonData = comparisonMetrics.length > 0 && revenueBefore > 0
+      const hasComparisonData = revenueBefore > 0
+
+      // 신규 지점 여부는 openedAt 기준으로 판단 (6개월 미만)
       let isNewBranch = false
+      if (branch.openedAt) {
+        const monthsOpen = (new Date().getTime() - branch.openedAt.getTime()) / (1000 * 60 * 60 * 24 * 30)
+        isNewBranch = monthsOpen < 6
+      }
+
       let noYoyDataReason = ''
       let revenueGrowth = 0
       let forecast: ForecastResult | null = null
@@ -454,7 +469,6 @@ export async function POST(request: NextRequest) {
 
       // 전년/전월 데이터가 없으면 예측 시스템 사용
       if (!hasComparisonData) {
-        isNewBranch = true
         useForecast = true
 
         // 해당 기간의 외부 요인 타입 조회
@@ -492,73 +506,75 @@ export async function POST(request: NextRequest) {
         revenueGrowth = calculateGrowthRate(revenueBefore, revenueAfter)
       }
 
-      // 이용권별 매출 (전후 비교)
-      const dayTicketRevenue = eventMetrics.reduce((sum, m) => sum + Number(m.dayTicketRevenue ?? 0), 0)
-      const dayTicketRevenueBefore = comparisonMetrics.reduce((sum, m) => sum + Number(m.dayTicketRevenue ?? 0), 0)
-      const timeTicketRevenue = eventMetrics.reduce((sum, m) => sum + Number(m.timeTicketRevenue ?? 0), 0)
-      const timeTicketRevenueBefore = comparisonMetrics.reduce((sum, m) => sum + Number(m.timeTicketRevenue ?? 0), 0)
-      const termTicketRevenue = eventMetrics.reduce((sum, m) => sum + Number(m.termTicketRevenue ?? 0), 0)
-      const termTicketRevenueBefore = comparisonMetrics.reduce((sum, m) => sum + Number(m.termTicketRevenue ?? 0), 0)
+      // 이용권별 매출 (배치 데이터 사용)
+      const dayTicketRevenue = eventMetrics.dayTicketRevenue
+      const timeTicketRevenue = eventMetrics.timeTicketRevenue
+      const termTicketRevenue = eventMetrics.termTicketRevenue
 
-      // 방문 데이터
-      const eventVisits = await prisma.dailyVisitor.count({
-        where: {
-          branchId,
-          visitDate: { gte: eventStart, lte: eventEnd },
-        },
-      })
+      // 비교 이용권별 매출 - 비교 데이터 없으면 기대매출 예측 사용
+      let dayTicketRevenueBefore = comparisonType === 'YOY'
+        ? (comparisonMetrics as any).dayTicketRevenue || 0
+        : (comparisonMetrics as any).dayTicketRevenue || 0
+      let timeTicketRevenueBefore = comparisonType === 'YOY'
+        ? (comparisonMetrics as any).timeTicketRevenue || 0
+        : (comparisonMetrics as any).timeTicketRevenue || 0
+      let termTicketRevenueBefore = comparisonType === 'YOY'
+        ? (comparisonMetrics as any).termTicketRevenue || 0
+        : (comparisonMetrics as any).termTicketRevenue || 0
+      let fixedTicketRevenueBefore = 0
+      let ticketForecastUsed = false
 
-      const comparisonVisits = await prisma.dailyVisitor.count({
-        where: {
-          branchId,
-          visitDate: { gte: comparisonStart, lte: comparisonEnd },
-        },
-      })
+      // 이용권별 비교 데이터가 없으면 기대매출 예측으로 대체
+      const hasTicketComparisonData = dayTicketRevenueBefore > 0 || timeTicketRevenueBefore > 0 || termTicketRevenueBefore > 0
+      if (!hasTicketComparisonData && (useForecast || !hasComparisonData)) {
+        // 전체 기대 매출이 계산되었으면 이용권별로 분배
+        const expectedTotal = forecast?.expectedRevenue || revenueBefore
+        if (expectedTotal > 0) {
+          const ticketForecast = await forecastRevenueByTicketType(branchId, eventStart, eventEnd, expectedTotal)
+          dayTicketRevenueBefore = ticketForecast.dayTicket
+          timeTicketRevenueBefore = ticketForecast.timeTicket
+          termTicketRevenueBefore = ticketForecast.termTicket
+          fixedTicketRevenueBefore = ticketForecast.fixedTicket
+          ticketForecastUsed = true
+        }
+      }
+
+      // 방문 데이터 (배치에서 가져오기, MoM은 별도 조회)
+      const eventVisits = eventVisitsBatch.get(branchId) || 0
+      let comparisonVisits: number
+
+      if (comparisonType === 'YOY') {
+        comparisonVisits = yoyVisitsBatch.get(branchId) || 0
+      } else {
+        comparisonVisits = await db.visitors.getVisitCount(branchId, comparisonRange)
+      }
 
       const visitsGrowth = comparisonVisits === 0
         ? (eventVisits > 0 ? 100 : 0)
         : calculateGrowthRate(comparisonVisits, eventVisits)
 
-      // 신규/복귀 고객 계산
-      const eventVisitors = await prisma.dailyVisitor.findMany({
-        where: {
-          branchId,
-          visitDate: { gte: eventStart, lte: eventEnd },
-        },
-        select: { phone: true, customerId: true },
-        distinct: ['phone'],
-      })
-
-      const newCustomers = await prisma.customer.count({
-        where: {
-          phone: { in: eventVisitors.map((v) => v.phone) },
-          firstVisitDate: { gte: eventStart, lte: eventEnd },
-        },
-      })
+      // 신규/복귀 고객 계산 (db 유틸리티 사용)
+      const eventVisitors = await db.visitors.getUniqueVisitors(branchId, eventRange)
+      const phones = eventVisitors.map((v) => v.phone)
 
       const thirtyDaysBeforeEvent = new Date(eventStart)
       thirtyDaysBeforeEvent.setDate(thirtyDaysBeforeEvent.getDate() - 30)
 
-      const potentialReturned = await prisma.customer.findMany({
-        where: {
-          phone: { in: eventVisitors.map((v) => v.phone) },
-          lastVisitDate: { lt: thirtyDaysBeforeEvent },
-        },
-        select: { id: true },
-      })
+      // 신규 및 복귀 고객 병렬 조회
+      const [newCustomers, returnedCustomerIds] = await Promise.all([
+        db.customers.countNewCustomers(phones, eventRange),
+        db.customers.getReturnedCustomers(phones, thirtyDaysBeforeEvent),
+      ])
+      const returnedCustomers = returnedCustomerIds.length
 
-      const returnedCustomers = potentialReturned.length
+      // 세그먼트 및 이용권 변화 병렬 추적
+      const [{ segmentChanges, segmentMigrations }, ticketUpgrades] = await Promise.all([
+        trackSegmentChanges(branchId, eventStart, eventEnd),
+        trackTicketUpgrades(branchId, eventStart, eventEnd),
+      ])
 
-      // 세그먼트 변화 및 이용권 업그레이드 추적 (실제 DB 데이터)
-      const { segmentChanges, segmentMigrations } = await trackSegmentChanges(
-        branchId,
-        eventStart,
-        eventEnd
-      )
-      const ticketUpgrades = await trackTicketUpgrades(branchId, eventStart, eventEnd)
-
-      // 방문 패턴 (실제 데이터 계산)
-      const visitPattern = await calculateVisitPattern(branchId, eventStart, eventEnd, comparisonStart, comparisonEnd)
+      // 방문 패턴 (비교 데이터 없으면 최근 3개월 사용)
+      const visitPattern = await calculateVisitPattern(branchId, eventRange, comparisonRange, hasComparisonData)
 
       // 통계 분석
       const stats = eventRevenues.length > 1 && comparisonRevenues.length > 1
@@ -568,44 +584,37 @@ export async function POST(request: NextRequest) {
         ? cohensD(comparisonRevenues, eventRevenues)
         : { d: 0, interpretation: 'NONE' as const }
 
-      // 전년 대비 불가 시 유사 지점 대조군 비교
+      // 전년 대비 불가 시 유사 지점 대조군 비교 (최적화: 미리 조회된 지점만 사용)
       let controlGroupGrowth: number | undefined
       let controlBranchName: string | undefined
 
       if (!hasYoyData || isNewBranch) {
-        // 같은 기간 동안 이벤트 미적용 지점 중 유사한 지점 찾기
+        // 첫 번째 유효한 대조군만 찾기 (모든 지점 루프 대신)
         const otherBranches = await prisma.branch.findMany({
-          where: {
-            id: { notIn: targetBranchIds }, // 이벤트 적용 지점 제외
-          },
+          where: { id: { notIn: targetBranchIds } },
           select: { id: true, name: true },
+          take: 5, // 최대 5개만 확인
         })
 
-        // 대조군 매출 데이터 조회
+        // 대조군 데이터 배치 조회
+        const controlBranchIds = otherBranches.map((b) => b.id)
+        const [controlEventMetrics, controlComparisonMetrics] = await Promise.all([
+          db.metrics.getMetricsSummaryBatch(controlBranchIds, eventRange),
+          db.metrics.getMetricsSummaryBatch(controlBranchIds, comparisonRange),
+        ])
+
+        // 첫 번째 유효한 대조군 찾기
         for (const controlBranch of otherBranches) {
-          const controlMetrics = await prisma.dailyMetric.findMany({
-            where: {
-              branchId: controlBranch.id,
-              date: { gte: eventStart, lte: eventEnd },
-            },
-          })
+          const controlAfterData = controlEventMetrics.get(controlBranch.id)
+          const controlBeforeData = controlComparisonMetrics.get(controlBranch.id)
 
-          const controlPrevMetrics = await prisma.dailyMetric.findMany({
-            where: {
-              branchId: controlBranch.id,
-              date: { gte: comparisonStart, lte: comparisonEnd },
-            },
-          })
-
-          if (controlMetrics.length > 0 && controlPrevMetrics.length > 0) {
-            const controlAfter = controlMetrics.reduce((sum, m) => sum + Number(m.totalRevenue ?? 0), 0)
-            const controlBefore = controlPrevMetrics.reduce((sum, m) => sum + Number(m.totalRevenue ?? 0), 0)
-
-            if (controlBefore > 0) {
-              controlGroupGrowth = calculateGrowthRate(controlBefore, controlAfter)
-              controlBranchName = controlBranch.name
-              break // 첫 번째 유효한 대조군 사용
-            }
+          if (controlAfterData && controlBeforeData && controlBeforeData.totalRevenue > 0) {
+            controlGroupGrowth = calculateGrowthRate(
+              controlBeforeData.totalRevenue,
+              controlAfterData.totalRevenue
+            )
+            controlBranchName = controlBranch.name
+            break // 첫 번째 유효한 대조군 사용
           }
         }
       }
@@ -643,9 +652,13 @@ export async function POST(request: NextRequest) {
         insights.push(`📊 기대 매출 예측 기반 분석 (신뢰도: ${forecast.confidence})`)
         insights.push(`예상 매출: ${forecast.expectedRevenue.toLocaleString()}원 | 실제: ${revenueAfter.toLocaleString()}원`)
         if (forecast.breakdown.baseRevenueReason.includes('유사 지점')) {
-          insights.push(`ℹ️ 신규 매장으로 유사 지점 데이터를 참고했습니다`)
+          if (isNewBranch) {
+            insights.push(`ℹ️ 신규 매장 (오픈 6개월 미만)으로 유사 지점 데이터를 참고했습니다`)
+          } else {
+            insights.push(`ℹ️ 비교 데이터 부족으로 유사 지점 데이터를 참고했습니다`)
+          }
         }
-      } else if (isNewBranch) {
+      } else if (!hasComparisonData) {
         insights.push(`⚠️ ${noYoyDataReason}`)
       }
 
@@ -702,15 +715,9 @@ export async function POST(request: NextRequest) {
         insights,
       }
 
-      performances.push(performanceData)
-
       // 성과 분석 결과를 DB에 저장 (AI 추천용)
       await prisma.eventPerformance.upsert({
-        where: {
-          // eventId + branchId 조합으로 유니크하게 저장
-          // 기존 분석이 있으면 업데이트, 없으면 생성
-          id: `${body.eventId}-${branchId}`,
-        },
+        where: { id: `${body.eventId}-${branchId}` },
         create: {
           id: `${body.eventId}-${branchId}`,
           eventId: body.eventId,
@@ -770,6 +777,28 @@ export async function POST(request: NextRequest) {
           insights: insights as unknown as Prisma.InputJsonValue,
         },
       })
+
+      // 결과 반환
+      return {
+        performanceData,
+        dataAvailabilityItem: {
+          branchId,
+          branchName: branch.name,
+          hasYoyData,
+          oldestDataDate: oldestDate.toISOString().split('T')[0],
+        },
+      }
+    })
+
+    // 병렬 처리 결과 수집
+    const results = await Promise.all(analysisPromises)
+
+    // 결과 분류
+    for (const result of results) {
+      if (result) {
+        performances.push(result.performanceData)
+        dataAvailability.push(result.dataAvailabilityItem)
+      }
     }
 
     // 해당 기간 겹치는 외부 요인 조회

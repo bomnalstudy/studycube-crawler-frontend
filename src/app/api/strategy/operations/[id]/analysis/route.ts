@@ -11,8 +11,10 @@ import type {
 } from '@/types/strategy'
 
 // 세그먼트 변화 더미 데이터 생성
+const NEGATIVE_SEGMENTS = ['이탈위험', '이탈', '휴면']
+
 function generateSegmentChanges(): SegmentChangeData[] {
-  const segments = ['VIP', '단골', '일반', '이탈위험', '휴면']
+  const segments = ['VIP', '단골', '일반', '신규', '이탈위험', '이탈', '복귀']
   return segments.map((segmentName) => {
     const countBefore = Math.floor(Math.random() * 50) + 20
     const changePercent = (Math.random() - 0.3) * 30 // -10% ~ +20%
@@ -23,6 +25,7 @@ function generateSegmentChanges(): SegmentChangeData[] {
       countAfter,
       change: countAfter - countBefore,
       changePercent: Number(changePercent.toFixed(1)),
+      isNegativeSegment: NEGATIVE_SEGMENTS.includes(segmentName),
     }
   })
 }
