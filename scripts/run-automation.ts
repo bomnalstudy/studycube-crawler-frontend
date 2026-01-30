@@ -203,6 +203,10 @@ async function searchUser(page: Page, phone: string): Promise<boolean> {
   await clearInput(page, inputXPath)
   await typeByXPath(page, inputXPath, phone)
   await clickByXPath(page, '//*[@id="btn_search"]')
+
+  // 검색 결과 로딩 대기 (테이블 갱신 시간 확보)
+  await new Promise(resolve => setTimeout(resolve, 1500))
+
   // 검색 결과가 나타날 때까지 대기 (최대 4초)
   const resultXPath = '//*[@id="simple-table"]/tbody/tr[1]/td[2]/a'
   return await waitForXPath(page, resultXPath, 4000)
