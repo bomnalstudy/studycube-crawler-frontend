@@ -200,16 +200,35 @@ async function navigateToUserManagement(page: Page) {
 
 async function searchUser(page: Page, phone: string): Promise<boolean> {
   const inputXPath = '//*[@id="frm"]/section/div[1]/div/article/div[3]/p/input'
+  const resultXPath = '//*[@id="simple-table"]/tbody/tr[1]/td[2]/a'
+
+  // 검색 전 현재 첫 번째 행의 텍스트 저장
+  let oldText = ''
+  const oldElements = await page.$$(`xpath/${resultXPath}`)
+  if (oldElements.length > 0) {
+    oldText = await oldElements[0].evaluate(el => el.textContent || '')
+  }
+
   await clearInput(page, inputXPath)
   await typeByXPath(page, inputXPath, phone)
   await clickByXPath(page, '//*[@id="btn_search"]')
 
-  // 검색 결과 로딩 대기 (테이블 갱신 시간 확보)
-  await new Promise(resolve => setTimeout(resolve, 1500))
+  // 테이블 내용이 변경될 때까지 대기 (최대 5초)
+  const startTime = Date.now()
+  while (Date.now() - startTime < 5000) {
+    const newElements = await page.$$(`xpath/${resultXPath}`)
+    if (newElements.length > 0) {
+      const newText = await newElements[0].evaluate(el => el.textContent || '')
+      // 이전 텍스트와 다르면 테이블이 갱신된 것
+      if (newText !== oldText) {
+        return true
+      }
+    }
+    await new Promise(resolve => setTimeout(resolve, 200))
+  }
 
-  // 검색 결과가 나타날 때까지 대기 (최대 4초)
-  const resultXPath = '//*[@id="simple-table"]/tbody/tr[1]/td[2]/a'
-  return await waitForXPath(page, resultXPath, 4000)
+  // 타임아웃 시에도 결과가 있으면 true
+  return await waitForXPath(page, resultXPath, 1000)
 }
 
 async function grantPointToUser(
