@@ -29,6 +29,7 @@ export function Sidebar() {
 
   const currentUsername = session?.user?.username || ''
   const isCrmSection = pathname.startsWith('/crm')
+  const isStrategySection = pathname.startsWith('/strategy')
 
   // 매출 대시보드 섹션 메뉴
   const dashboardMenuGroups: MenuGroup[] = [
@@ -63,11 +64,30 @@ export function Sidebar() {
     }
   ]
 
-  const menuGroups = isCrmSection ? crmMenuGroups : dashboardMenuGroups
+  // Strategy 섹션 메뉴 (ADMIN 전용)
+  const strategyMenuGroups: MenuGroup[] = [
+    {
+      label: '전략 & 이벤트',
+      items: [
+        { name: '대시보드', href: '/strategy', icon: '📊' },
+        { name: '이벤트 관리', href: '/strategy/events', icon: '📅' },
+        { name: '운영 변경', href: '/strategy/operations', icon: '⚙️' },
+        { name: '성과 분석', href: '/strategy/analysis', icon: '📈' },
+        { name: '외부 요인', href: '/strategy/factors', icon: '🌤️' },
+      ]
+    }
+  ]
+
+  const menuGroups = isStrategySection
+    ? strategyMenuGroups
+    : isCrmSection
+    ? crmMenuGroups
+    : dashboardMenuGroups
 
   const isActive = (href: string) => {
     if (href === '/dashboard') return pathname === '/dashboard'
     if (href === '/crm') return pathname === '/crm'
+    if (href === '/strategy') return pathname === '/strategy'
     return pathname.startsWith(href)
   }
 
