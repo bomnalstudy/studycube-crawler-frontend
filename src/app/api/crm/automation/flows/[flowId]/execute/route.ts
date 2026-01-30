@@ -14,16 +14,26 @@ async function triggerGitHubWorkflow(flowId: string): Promise<{ success: boolean
   const owner = process.env.GITHUB_OWNER
   const repo = process.env.GITHUB_REPO
 
+  console.log('[GitHub Workflow] 환경 변수 확인:', {
+    hasToken: !!token,
+    tokenPrefix: token?.substring(0, 10) + '...',
+    owner,
+    repo,
+  })
+
   if (!token || !owner || !repo) {
     return {
       success: false,
-      message: 'GitHub 설정이 없습니다. 환경 변수를 확인하세요.',
+      message: `GitHub 설정이 없습니다. token: ${!!token}, owner: ${owner}, repo: ${repo}`,
     }
   }
 
+  const url = `https://api.github.com/repos/${owner}/${repo}/actions/workflows/automation.yml/dispatches`
+  console.log('[GitHub Workflow] 요청 URL:', url)
+
   try {
     const response = await fetch(
-      `https://api.github.com/repos/${owner}/${repo}/actions/workflows/automation.yml/dispatches`,
+      url,
       {
         method: 'POST',
         headers: {
@@ -40,11 +50,14 @@ async function triggerGitHubWorkflow(flowId: string): Promise<{ success: boolean
       }
     )
 
+    console.log('[GitHub Workflow] 응답 상태:', response.status)
+
     if (response.status === 204) {
       return { success: true, message: '워크플로우가 트리거되었습니다.' }
     } else {
       const error = await response.text()
-      return { success: false, message: `GitHub API 오류: ${error}` }
+      console.error('[GitHub Workflow] 오류 응답:', error)
+      return { success: false, message: `GitHub API 오류 (${response.status}): ${error}` }
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
