@@ -313,9 +313,10 @@ export interface EventPerformanceData {
   fixedTicketRevenue?: number
   fixedTicketRevenueBefore?: number
 
-  // 세그먼트 변화
-  segmentChanges?: SegmentChangeData[]
-  segmentMigrations?: SegmentMigration[]
+  // 세그먼트 변화 (비교 데이터 포함)
+  segmentChanges?: SegmentChangeData[] | SegmentChangeComparison[]
+  segmentMigrations?: SegmentMigration[] | SegmentMigrationComparison[]
+  hasSegmentComparisonData?: boolean // 세그먼트 비교 데이터 존재 여부
 
   // 이용권 업그레이드
   ticketUpgrades?: TicketUpgradeData[]
@@ -505,6 +506,32 @@ export interface SegmentMigration {
   toSegment: string
   count: number
   isPositive: boolean // 긍정적인 이동인지 (이탈위험→단골 등)
+}
+
+// 세그먼트 변화 비교 데이터 (예상 vs 실제)
+export interface SegmentChangeComparison {
+  segmentName: string
+  countBefore: number // 이벤트 전
+  countAfter: number // 이벤트 후
+  change: number // 실제 변화
+  changePercent: number
+  expectedChange: number // 비교 기간 기반 예상 변화
+  expectedChangePercent: number
+  vsExpected: number // 실제 - 예상 (양수면 예상보다 좋음)
+  vsExpectedPercent: number
+  isNegativeSegment: boolean
+  isBetterThanExpected: boolean // 예상보다 좋은 성과인지
+}
+
+// 세그먼트 이동 비교 데이터 (예상 vs 실제)
+export interface SegmentMigrationComparison {
+  fromSegment: string
+  toSegment: string
+  count: number // 실제 이동 수
+  expectedCount: number // 비교 기간 기반 예상 이동 수
+  vsExpected: number // 실제 - 예상
+  isPositive: boolean
+  isBetterThanExpected: boolean // 긍정 이동은 예상보다 많으면 좋고, 부정 이동은 적으면 좋음
 }
 
 // 이용권 변화 데이터

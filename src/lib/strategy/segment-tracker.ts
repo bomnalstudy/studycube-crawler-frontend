@@ -7,6 +7,9 @@ import type {
   SegmentChangePrediction,
   TicketUpgradePrediction,
   ExternalFactorImpactPrediction,
+  SegmentChangeComparison,
+  SegmentMigrationComparison,
+  ComparisonType,
 } from '@/types/strategy'
 
 // 세그먼트 코드 → 표시 이름 매핑
@@ -705,5 +708,121 @@ export async function predictEventImpactWithExternalFactors(
     segmentPredictions: segmentResult.predictions,
     ticketUpgradePredictions: ticketResult.predictions,
     overallConfidence,
+  }
+}
+
+/**
+ * 세그먼트 변화를 비교 기간과 비교하여 분석
+ * YoY: 전년 동일 기간 / MoM: 전월 동일 요일
+ */
+export async function trackSegmentChangesWithComparison(
+  branchId: string,
+  eventStart: Date,
+  eventEnd: Date,
+  comparisonType: ComparisonType
+): Promise<{
+  segmentChanges: SegmentChangeComparison[]
+  segmentMigrations: SegmentMigrationComparison[]
+  hasComparisonData: boolean
+}> {
+  // 현재 기간 세그먼트 변화 계산
+  const currentResult = await trackSegmentChanges(branchId, eventStart, eventEnd)
+
+  // 비교 기간 계산
+  const eventDays = Math.ceil((eventEnd.getTime() - eventStart.getTime()) / (1000 * 60 * 60 * 24)) + 1
+  let comparisonStart: Date
+  let comparisonEnd: Date
+
+  if (comparisonType === 'YOY') {
+    // 전년 동일 기간
+    comparisonStart = new Date(eventStart)
+    comparisonStart.setFullYear(comparisonStart.getFullYear() - 1)
+    comparisonEnd = new Date(eventEnd)
+    comparisonEnd.setFullYear(comparisonEnd.getFullYear() - 1)
+  } else {
+    // MoM: 전월 동일 요일 (4주 전)
+    comparisonStart = new Date(eventStart)
+    comparisonStart.setDate(comparisonStart.getDate() - 28)
+    comparisonEnd = new Date(eventEnd)
+    comparisonEnd.setDate(comparisonEnd.getDate() - 28)
+  }
+
+  // 비교 기간 데이터 존재 여부 확인
+  const comparisonDataCheck = await prisma.dailyVisitor.findFirst({
+    where: {
+      branchId,
+      visitDate: { gte: comparisonStart, lte: comparisonEnd },
+    },
+  })
+
+  let comparisonResult: { segmentChanges: SegmentChangeData[]; segmentMigrations: SegmentMigration[] } | null = null
+  let hasComparisonData = false
+
+  if (comparisonDataCheck) {
+    comparisonResult = await trackSegmentChanges(branchId, comparisonStart, comparisonEnd)
+    hasComparisonData = true
+  }
+
+  // 세그먼트 변화 비교 데이터 생성
+  const segmentChanges: SegmentChangeComparison[] = currentResult.segmentChanges.map((current) => {
+    const comparison = comparisonResult?.segmentChanges.find((c) => c.segmentName === current.segmentName)
+    const expectedChange = comparison?.change ?? 0
+    const expectedChangePercent = comparison?.changePercent ?? 0
+    const vsExpected = current.change - expectedChange
+
+    // 부정적 세그먼트(이탈위험, 이탈)는 감소가 좋은 것
+    // 긍정적 세그먼트(VIP, 단골 등)는 증가가 좋은 것
+    let isBetterThanExpected: boolean
+    if (current.isNegativeSegment) {
+      // 이탈위험/이탈: 실제 변화가 예상보다 적으면 좋음 (덜 늘어남 또는 더 줄어듦)
+      isBetterThanExpected = current.change < expectedChange
+    } else {
+      // VIP/단골/일반 등: 실제 변화가 예상보다 크면 좋음 (더 늘어남)
+      isBetterThanExpected = current.change > expectedChange
+    }
+
+    return {
+      segmentName: current.segmentName,
+      countBefore: current.countBefore,
+      countAfter: current.countAfter,
+      change: current.change,
+      changePercent: current.changePercent,
+      expectedChange,
+      expectedChangePercent,
+      vsExpected,
+      vsExpectedPercent: expectedChange !== 0 ? ((vsExpected) / Math.abs(expectedChange)) * 100 : (vsExpected !== 0 ? 100 : 0),
+      isNegativeSegment: current.isNegativeSegment,
+      isBetterThanExpected: hasComparisonData ? isBetterThanExpected : true, // 비교 데이터 없으면 neutral
+    }
+  })
+
+  // 세그먼트 이동 비교 데이터 생성
+  const segmentMigrations: SegmentMigrationComparison[] = currentResult.segmentMigrations.map((current) => {
+    const comparison = comparisonResult?.segmentMigrations.find(
+      (c) => c.fromSegment === current.fromSegment && c.toSegment === current.toSegment
+    )
+    const expectedCount = comparison?.count ?? 0
+    const vsExpected = current.count - expectedCount
+
+    // 긍정적 이동: 많을수록 좋음, 부정적 이동: 적을수록 좋음
+    const isBetterThanExpected = current.isPositive
+      ? current.count > expectedCount // 긍정 이동은 예상보다 많으면 좋음
+      : current.count < expectedCount // 부정 이동은 예상보다 적으면 좋음
+
+    return {
+      fromSegment: current.fromSegment,
+      toSegment: current.toSegment,
+      count: current.count,
+      expectedCount,
+      vsExpected,
+      isPositive: current.isPositive,
+      isBetterThanExpected: hasComparisonData ? isBetterThanExpected : true,
+    }
+  })
+
+  return {
+    segmentChanges,
+    segmentMigrations,
+    hasComparisonData,
   }
 }

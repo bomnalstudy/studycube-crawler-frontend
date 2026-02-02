@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { requireAdmin } from '@/lib/auth-helpers'
 import { tTest, cohensD, calculateGrowthRate } from '@/lib/strategy/statistics'
 import { forecastRevenue, forecastRevenueByTicketType, calculatePerformanceVsForecast, type ForecastResult, type TicketTypeForecast } from '@/lib/strategy/forecast'
-import { trackSegmentChanges, trackTicketUpgrades, predictEventImpactWithExternalFactors } from '@/lib/strategy/segment-tracker'
+import { trackSegmentChanges, trackSegmentChangesWithComparison, trackTicketUpgrades, predictEventImpactWithExternalFactors } from '@/lib/strategy/segment-tracker'
 import { db, type DateRange } from '@/lib/db'
 import type {
   AnalysisRequest,
@@ -16,6 +16,8 @@ import type {
   ImpactEstimate,
   SegmentChangeData,
   SegmentMigration,
+  SegmentChangeComparison,
+  SegmentMigrationComparison,
   TicketUpgradeData,
   VisitPatternData,
   ScoreBreakdown,
@@ -127,7 +129,7 @@ function calculateScoreWithBreakdown(
   effectInterpretation: string,
   newCustomers: number,
   returnedCustomers: number,
-  segmentMigrations: SegmentMigration[],
+  segmentMigrations: SegmentMigration[] | SegmentMigrationComparison[],
   ticketUpgrades: TicketUpgradeData[],
   controlGroupGrowth?: number // 대조군 성장률 (있으면 비교)
 ): { score: number; breakdown: ScoreBreakdown } {
@@ -590,11 +592,12 @@ export async function POST(request: NextRequest) {
       const branchFactorTypes = branchFactors.map((f) => f.type)
 
       // 세그먼트 및 이용권 변화 + 외부요인 기반 예측 병렬 추적
-      const [{ segmentChanges, segmentMigrations }, ticketUpgrades, externalFactorPredictions] = await Promise.all([
-        trackSegmentChanges(branchId, eventStart, eventEnd),
+      const [segmentComparisonResult, ticketUpgrades, externalFactorPredictions] = await Promise.all([
+        trackSegmentChangesWithComparison(branchId, eventStart, eventEnd, comparisonType),
         trackTicketUpgrades(branchId, eventStart, eventEnd),
         predictEventImpactWithExternalFactors(branchId, branchFactorTypes, eventStart, eventEnd),
       ])
+      const { segmentChanges, segmentMigrations, hasComparisonData: hasSegmentComparisonData } = segmentComparisonResult
 
       // 방문 패턴 (비교 데이터 없으면 최근 3개월 사용)
       const visitPattern = await calculateVisitPattern(branchId, eventRange, comparisonRange, hasComparisonData)
@@ -715,6 +718,7 @@ export async function POST(request: NextRequest) {
         termTicketRevenueBefore,
         segmentChanges,
         segmentMigrations,
+        hasSegmentComparisonData,
         ticketUpgrades,
         visitPattern,
         isNewBranch,

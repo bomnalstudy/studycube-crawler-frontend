@@ -745,6 +745,10 @@ function SegmentCard({
   isNegativeSegment,
   inflows,
   outflows,
+  expectedChange,
+  vsExpected,
+  isBetterThanExpected,
+  hasComparison,
 }: {
   segmentName: string
   countBefore: number
@@ -754,6 +758,10 @@ function SegmentCard({
   isNegativeSegment: boolean
   inflows: { from: string; count: number }[]
   outflows: { to: string; count: number }[]
+  expectedChange?: number
+  vsExpected?: number
+  isBetterThanExpected?: boolean
+  hasComparison?: boolean
 }) {
   // 부정적 세그먼트의 감소는 긍정적 (초록색)
   // 부정적 세그먼트의 증가는 부정적 (빨간색)
@@ -815,9 +823,26 @@ function SegmentCard({
             isNeutralChange ? 'text-slate-600' :
             isPositiveChange ? 'text-green-700' : 'text-red-700'
           }`}>
-            {change >= 0 ? '+' : ''}{change}명 ({changePercent >= 0 ? '+' : ''}{changePercent}%)
+            {change >= 0 ? '+' : ''}{change}명 ({changePercent >= 0 ? '+' : ''}{changePercent.toFixed(1)}%)
           </span>
         </div>
+
+        {/* 예상 대비 비교 */}
+        {hasComparison && expectedChange !== undefined && (
+          <div className={`mt-2 px-3 py-2 rounded-lg text-center ${
+            isBetterThanExpected ? 'bg-blue-50' : 'bg-amber-50'
+          }`}>
+            <p className="text-xs text-slate-500 mb-1">
+              예상: {expectedChange >= 0 ? '+' : ''}{expectedChange}명
+            </p>
+            <span className={`text-xs font-medium ${
+              isBetterThanExpected ? 'text-blue-600' : 'text-amber-600'
+            }`}>
+              {isBetterThanExpected ? '✓ 예상보다 좋음' : '△ 예상보다 저조'}
+              ({vsExpected !== undefined && vsExpected >= 0 ? '+' : ''}{vsExpected}명)
+            </span>
+          </div>
+        )}
 
         {/* 유입/유출 */}
         {(inflows.length > 0 || outflows.length > 0) && (
@@ -868,6 +893,7 @@ function SegmentTab({
   const firstPerf = performances[0]
   const segmentChanges = firstPerf?.segmentChanges || []
   const migrations = firstPerf?.segmentMigrations || []
+  const hasSegmentComparisonData = firstPerf?.hasSegmentComparisonData || false
 
   // 각 세그먼트별 유입/유출 계산
   const getFlowsForSegment = (segmentName: string) => {
@@ -894,6 +920,8 @@ function SegmentTab({
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {segmentChanges.map((seg) => {
             const { inflows, outflows } = getFlowsForSegment(seg.segmentName)
+            // 비교 데이터가 있는 경우 타입 체크
+            const segWithComparison = seg as { expectedChange?: number; vsExpected?: number; isBetterThanExpected?: boolean }
             return (
               <SegmentCard
                 key={seg.segmentName}
@@ -905,6 +933,10 @@ function SegmentTab({
                 isNegativeSegment={seg.isNegativeSegment}
                 inflows={inflows}
                 outflows={outflows}
+                hasComparison={hasSegmentComparisonData}
+                expectedChange={segWithComparison.expectedChange}
+                vsExpected={segWithComparison.vsExpected}
+                isBetterThanExpected={segWithComparison.isBetterThanExpected}
               />
             )
           })}
@@ -928,14 +960,27 @@ function SegmentTab({
               {migrations
                 .filter((m) => m.isPositive)
                 .slice(0, 5)
-                .map((m, idx) => (
-                  <div key={idx} className="flex items-center justify-between text-sm bg-white/60 p-2 rounded-lg">
-                    <span className="text-slate-600">
-                      {m.fromSegment} → {m.toSegment}
-                    </span>
-                    <span className="font-semibold text-green-700">{m.count}명</span>
-                  </div>
-                ))}
+                .map((m, idx) => {
+                  const mWithComparison = m as { expectedCount?: number; vsExpected?: number; isBetterThanExpected?: boolean }
+                  return (
+                    <div key={idx} className="text-sm bg-white/60 p-2 rounded-lg">
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-600">
+                          {m.fromSegment} → {m.toSegment}
+                        </span>
+                        <span className="font-semibold text-green-700">{m.count}명</span>
+                      </div>
+                      {hasSegmentComparisonData && mWithComparison.expectedCount !== undefined && (
+                        <div className="mt-1 flex items-center justify-between text-xs">
+                          <span className="text-slate-400">예상: {mWithComparison.expectedCount}명</span>
+                          <span className={mWithComparison.isBetterThanExpected ? 'text-blue-600' : 'text-amber-600'}>
+                            {mWithComparison.isBetterThanExpected ? '✓' : '△'} {mWithComparison.vsExpected! >= 0 ? '+' : ''}{mWithComparison.vsExpected}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
               {migrations.filter((m) => m.isPositive).length === 0 && (
                 <p className="text-sm text-slate-400">데이터 없음</p>
               )}
@@ -954,14 +999,27 @@ function SegmentTab({
               {migrations
                 .filter((m) => !m.isPositive)
                 .slice(0, 5)
-                .map((m, idx) => (
-                  <div key={idx} className="flex items-center justify-between text-sm bg-white/60 p-2 rounded-lg">
-                    <span className="text-slate-600">
-                      {m.fromSegment} → {m.toSegment}
-                    </span>
-                    <span className="font-semibold text-red-700">{m.count}명</span>
-                  </div>
-                ))}
+                .map((m, idx) => {
+                  const mWithComparison = m as { expectedCount?: number; vsExpected?: number; isBetterThanExpected?: boolean }
+                  return (
+                    <div key={idx} className="text-sm bg-white/60 p-2 rounded-lg">
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-600">
+                          {m.fromSegment} → {m.toSegment}
+                        </span>
+                        <span className="font-semibold text-red-700">{m.count}명</span>
+                      </div>
+                      {hasSegmentComparisonData && mWithComparison.expectedCount !== undefined && (
+                        <div className="mt-1 flex items-center justify-between text-xs">
+                          <span className="text-slate-400">예상: {mWithComparison.expectedCount}명</span>
+                          <span className={mWithComparison.isBetterThanExpected ? 'text-blue-600' : 'text-amber-600'}>
+                            {mWithComparison.isBetterThanExpected ? '✓' : '△'} {mWithComparison.vsExpected! >= 0 ? '+' : ''}{mWithComparison.vsExpected}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
               {migrations.filter((m) => !m.isPositive).length === 0 && (
                 <p className="text-sm text-slate-400">데이터 없음</p>
               )}
