@@ -735,60 +735,67 @@ function TicketRevenueItem({ label, after, before, formatCurrency }: { label: st
   )
 }
 
+// 세그먼트별 텍스트 색상 (CRM과 통일)
+const SEGMENT_TEXT_COLORS: Record<string, string> = {
+  'VIP': '#F59E0B',      // amber - CRM visit_over20
+  '단골': '#06B6D4',     // cyan - CRM visit_10_20
+  '일반': '#6B7280',     // gray - CRM visit_under10
+  '신규': '#22C55E',     // green - CRM new_0_7
+  '이탈위험': '#F97316', // orange - CRM at_risk_14
+  '이탈': '#991B1B',     // dark red - CRM churned
+  '복귀': '#8B5CF6',     // purple - CRM returned
+}
+
 // 세그먼트 카드 컴포넌트
 function SegmentCard({
   segmentName,
   countBefore,
   countAfter,
+  expectedCount,
   change,
   changePercent,
+  vsExpected,
+  vsExpectedPercent,
   isNegativeSegment,
   inflows,
   outflows,
-  expectedChange,
-  vsExpected,
   isBetterThanExpected,
   hasComparison,
+  comparisonSource,
 }: {
   segmentName: string
-  countBefore: number
-  countAfter: number
-  change: number
+  countBefore: number | null  // 이전값 (YoY/MoM), SEASONAL이면 null
+  countAfter: number  // 이후값 (실제)
+  expectedCount: number  // 예상값
+  change: number  // 이후 - 이전
   changePercent: number
+  vsExpected: number  // 이후 - 예상
+  vsExpectedPercent: number
   isNegativeSegment: boolean
   inflows: { from: string; count: number }[]
   outflows: { to: string; count: number }[]
-  expectedChange?: number
-  vsExpected?: number
   isBetterThanExpected?: boolean
   hasComparison?: boolean
+  comparisonSource?: 'YOY' | 'MOM' | 'SEASONAL' | null
 }) {
-  // 부정적 세그먼트의 감소는 긍정적 (초록색)
-  // 부정적 세그먼트의 증가는 부정적 (빨간색)
-  // 긍정적 세그먼트의 증가는 긍정적 (초록색)
-  // 긍정적 세그먼트의 감소는 부정적 (빨간색)
-  const isPositiveChange = isNegativeSegment ? change < 0 : change > 0
-  const isNeutralChange = change === 0
+  // 이전값이 있을 때 (YoY/MoM): 이전 vs 이후 변화 색상
+  const isPositiveChange = countBefore !== null
+    ? (isNegativeSegment ? change < 0 : change > 0)
+    : false
+  const isNeutralChange = countBefore !== null ? change === 0 : true
 
-  // 세그먼트별 색상 테마
-  const segmentColors: Record<string, { bg: string; border: string; text: string; light: string }> = {
-    'VIP': { bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-700', light: 'bg-amber-100' },
-    '단골': { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-700', light: 'bg-blue-100' },
-    '일반': { bg: 'bg-slate-50', border: 'border-slate-200', text: 'text-slate-700', light: 'bg-slate-100' },
-    '신규': { bg: 'bg-purple-50', border: 'border-purple-200', text: 'text-purple-700', light: 'bg-purple-100' },
-    '이탈위험': { bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-700', light: 'bg-orange-100' },
-    '이탈': { bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-700', light: 'bg-red-100' },
-    '복귀': { bg: 'bg-teal-50', border: 'border-teal-200', text: 'text-teal-700', light: 'bg-teal-100' },
-  }
+  // 예상 대비 성과 색상
+  const isPositiveVsExpected = isNegativeSegment ? vsExpected < 0 : vsExpected > 0
 
-  const colors = segmentColors[segmentName] || segmentColors['일반']
+  // 세그먼트별 텍스트 색상 (CRM과 통일)
+  const textColor = SEGMENT_TEXT_COLORS[segmentName] || SEGMENT_TEXT_COLORS['일반']
 
   return (
-    <div className={`rounded-2xl ${colors.bg} border ${colors.border} overflow-hidden`}>
+    <div className="rounded-2xl bg-white border border-slate-200 overflow-hidden shadow-sm">
       {/* 헤더 */}
-      <div className={`px-4 py-3 ${colors.light} border-b ${colors.border}`}>
+      <div className="px-4 py-3 border-b border-slate-100">
         <div className="flex items-center justify-between">
-          <span className={`font-semibold ${colors.text}`}>{segmentName}</span>
+          <span className="font-semibold" style={{ color: textColor }}>{segmentName}</span>
           {isNegativeSegment && (
             <span className="text-xs text-slate-500">(감소가 좋음)</span>
           )}
@@ -797,50 +804,91 @@ function SegmentCard({
 
       {/* 본문 */}
       <div className="p-4">
-        {/* 인원 변화 */}
-        <div className="flex items-center justify-between mb-3">
-          <div className="text-center">
-            <p className="text-xs text-slate-500">이전</p>
-            <p className="text-xl font-bold text-slate-700">{countBefore}명</p>
-          </div>
-          <div className="flex flex-col items-center">
-            <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-            </svg>
-          </div>
-          <div className="text-center">
-            <p className="text-xs text-slate-500">이후</p>
-            <p className="text-xl font-bold text-slate-700">{countAfter}명</p>
-          </div>
-        </div>
+        {/* Case 1: YoY/MoM 이전값이 있을 때 - 이전 → 이후 + 예상 대비 성과 */}
+        {countBefore !== null ? (
+          <>
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-center">
+                <p className="text-xs text-slate-500">이전</p>
+                <p className="text-xl font-bold text-slate-700">{countBefore}명</p>
+              </div>
+              <div className="flex flex-col items-center">
+                <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                </svg>
+              </div>
+              <div className="text-center">
+                <p className="text-xs text-slate-500">이후</p>
+                <p className="text-xl font-bold text-slate-700">{countAfter}명</p>
+              </div>
+            </div>
 
-        {/* 변화율 막대 */}
-        <div className={`px-3 py-2 rounded-lg text-center ${
-          isNeutralChange ? 'bg-slate-100' :
-          isPositiveChange ? 'bg-green-100' : 'bg-red-100'
-        }`}>
-          <span className={`text-sm font-semibold ${
-            isNeutralChange ? 'text-slate-600' :
-            isPositiveChange ? 'text-green-700' : 'text-red-700'
-          }`}>
-            {change >= 0 ? '+' : ''}{change}명 ({changePercent >= 0 ? '+' : ''}{changePercent.toFixed(1)}%)
-          </span>
-        </div>
-
-        {/* 예상 대비 비교 */}
-        {hasComparison && expectedChange !== undefined && (
-          <div className={`mt-2 px-3 py-2 rounded-lg text-center ${
-            isBetterThanExpected ? 'bg-blue-50' : 'bg-amber-50'
-          }`}>
-            <p className="text-xs text-slate-500 mb-1">
-              예상: {expectedChange >= 0 ? '+' : ''}{expectedChange}명
-            </p>
-            <span className={`text-xs font-medium ${
-              isBetterThanExpected ? 'text-blue-600' : 'text-amber-600'
+            {/* 실제 변화율 */}
+            <div className={`px-3 py-2 rounded-lg text-center ${
+              isNeutralChange ? 'bg-slate-100' :
+              isPositiveChange ? 'bg-green-100' : 'bg-red-100'
             }`}>
-              {isBetterThanExpected ? '✓ 예상보다 좋음' : '△ 예상보다 저조'}
-              ({vsExpected !== undefined && vsExpected >= 0 ? '+' : ''}{vsExpected}명)
-            </span>
+              <span className={`text-sm font-semibold ${
+                isNeutralChange ? 'text-slate-600' :
+                isPositiveChange ? 'text-green-700' : 'text-red-700'
+              }`}>
+                {change >= 0 ? '+' : ''}{change}명 ({changePercent >= 0 ? '+' : ''}{changePercent.toFixed(1)}%)
+              </span>
+            </div>
+
+            {/* 예상 대비 성과 */}
+            <div className={`mt-2 px-3 py-2 rounded-lg text-center ${
+              isBetterThanExpected ? 'bg-blue-50' : 'bg-amber-50'
+            }`}>
+              <p className="text-xs text-slate-500 mb-1">
+                예상: {expectedCount}명
+              </p>
+              <span className={`text-xs font-medium ${
+                isBetterThanExpected ? 'text-blue-600' : 'text-amber-600'
+              }`}>
+                {isBetterThanExpected ? '✓ 예상보다 좋음' : '△ 예상보다 저조'}
+                ({vsExpected >= 0 ? '+' : ''}{vsExpected}명, {vsExpectedPercent >= 0 ? '+' : ''}{vsExpectedPercent.toFixed(1)}%)
+              </span>
+            </div>
+          </>
+        ) : hasComparison && comparisonSource === 'SEASONAL' ? (
+          /* Case 2: SEASONAL - 예상 vs 이후 */
+          <>
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-center">
+                <p className="text-xs text-slate-500">예상</p>
+                <p className="text-xl font-bold text-slate-500">{expectedCount}명</p>
+              </div>
+              <div className="flex flex-col items-center">
+                <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                </svg>
+              </div>
+              <div className="text-center">
+                <p className="text-xs text-slate-500">실제</p>
+                <p className="text-xl font-bold text-slate-700">{countAfter}명</p>
+              </div>
+            </div>
+
+            {/* 예상 대비 성과 */}
+            <div className={`px-3 py-2 rounded-lg text-center ${
+              vsExpected === 0 ? 'bg-slate-100' :
+              isPositiveVsExpected ? 'bg-green-100' : 'bg-red-100'
+            }`}>
+              <span className={`text-sm font-semibold ${
+                vsExpected === 0 ? 'text-slate-600' :
+                isPositiveVsExpected ? 'text-green-700' : 'text-red-700'
+              }`}>
+                {vsExpected >= 0 ? '+' : ''}{vsExpected}명 ({vsExpectedPercent >= 0 ? '+' : ''}{vsExpectedPercent.toFixed(1)}%)
+              </span>
+            </div>
+          </>
+        ) : (
+          /* Case 3: 비교 데이터 없음 */
+          <div className="text-center">
+            <p className="text-xs text-slate-500 mb-1">현재</p>
+            <p className="text-3xl font-bold text-slate-700">{countAfter}명</p>
+            <p className="text-xs text-slate-400 mt-2">비교 데이터 없음</p>
           </div>
         )}
 
@@ -894,6 +942,7 @@ function SegmentTab({
   const segmentChanges = firstPerf?.segmentChanges || []
   const migrations = firstPerf?.segmentMigrations || []
   const hasSegmentComparisonData = firstPerf?.hasSegmentComparisonData || false
+  const segmentPeriodInfo = firstPerf?.segmentPeriodInfo
 
   // 각 세그먼트별 유입/유출 계산
   const getFlowsForSegment = (segmentName: string) => {
@@ -914,29 +963,99 @@ function SegmentTab({
     <div className="space-y-6">
       {/* 세그먼트별 카드 그리드 */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
-        <h2 className="font-semibold text-slate-800 mb-2">세그먼트별 변화</h2>
-        <p className="text-sm text-slate-500 mb-6">이벤트 전후 각 세그먼트의 고객 수 변화와 유입/유출 현황입니다.</p>
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="font-semibold text-slate-800">세그먼트별 변화</h2>
+          {!hasSegmentComparisonData && (
+            <span className="px-2 py-1 bg-amber-100 text-amber-700 text-xs rounded-full">
+              비교 데이터 없음
+            </span>
+          )}
+        </div>
+
+        {/* 기간 정보 표시 */}
+        {segmentPeriodInfo && (
+          <div className="space-y-2 mb-4">
+            <div className="flex flex-wrap items-center gap-4 text-sm">
+              <div className="flex items-center gap-2">
+                <span className="text-slate-500">실제 기간:</span>
+                <span className="font-medium text-slate-700">
+                  {segmentPeriodInfo.actualPeriod.start} ~ {segmentPeriodInfo.actualPeriod.end}
+                </span>
+              </div>
+              {segmentPeriodInfo.comparisonPeriod ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-slate-500">비교 기간 ({segmentPeriodInfo.comparisonSource}):</span>
+                  <span className="font-medium text-slate-700">
+                    {segmentPeriodInfo.comparisonPeriod.start} ~ {segmentPeriodInfo.comparisonPeriod.end}
+                  </span>
+                </div>
+              ) : segmentPeriodInfo.comparisonSource === 'SEASONAL' ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-slate-500">예상값 산출:</span>
+                  <span className="font-medium text-slate-700">전체 평균 × 시즌 지수 × 추세 계수</span>
+                </div>
+              ) : null}
+            </div>
+            {/* 시즌/추세 계수 표시 */}
+            {segmentPeriodInfo.coefficients && (
+              <div className="text-xs text-slate-500 bg-slate-50 rounded-lg p-3">
+                <div className="mb-1">
+                  <span className="font-medium">데이터 기준:</span> 최근 {segmentPeriodInfo.coefficients.dataMonths}개월
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+                  {Object.entries(segmentPeriodInfo.coefficients.seasonIndex || {}).map(([seg, season]) => {
+                    const trend = segmentPeriodInfo.coefficients?.trendCoeff?.[seg] || 1
+                    return (
+                      <div key={seg} className="flex items-center gap-1">
+                        <span className="font-medium">{seg}:</span>
+                        <span>시즌 {(season as number).toFixed(2)}</span>
+                        <span>×</span>
+                        <span>추세 {(trend as number).toFixed(2)}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        <p className="text-sm text-slate-500 mb-6">
+          {hasSegmentComparisonData
+            ? '이벤트 전후 각 세그먼트의 고객 수 변화와 유입/유출 현황입니다.'
+            : segmentPeriodInfo?.comparisonSource === 'SEASONAL'
+              ? '전년/전월 비교 데이터가 없어 과거 평균 기반 예상값과 비교합니다.'
+              : '전년/전월 비교 데이터가 없어 현재 세그먼트 현황만 표시됩니다.'
+          }
+        </p>
 
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {segmentChanges.map((seg) => {
             const { inflows, outflows } = getFlowsForSegment(seg.segmentName)
-            // 비교 데이터가 있는 경우 타입 체크
-            const segWithComparison = seg as { expectedChange?: number; vsExpected?: number; isBetterThanExpected?: boolean }
+            // 새 타입 구조에 맞게 캐스팅
+            const segData = seg as {
+              expectedCount?: number
+              vsExpected?: number
+              vsExpectedPercent?: number
+              isBetterThanExpected?: boolean
+            }
             return (
               <SegmentCard
                 key={seg.segmentName}
                 segmentName={seg.segmentName}
                 countBefore={seg.countBefore}
                 countAfter={seg.countAfter}
+                expectedCount={segData.expectedCount ?? 0}
                 change={seg.change}
                 changePercent={seg.changePercent}
+                vsExpected={segData.vsExpected ?? 0}
+                vsExpectedPercent={segData.vsExpectedPercent ?? 0}
                 isNegativeSegment={seg.isNegativeSegment}
                 inflows={inflows}
                 outflows={outflows}
                 hasComparison={hasSegmentComparisonData}
-                expectedChange={segWithComparison.expectedChange}
-                vsExpected={segWithComparison.vsExpected}
-                isBetterThanExpected={segWithComparison.isBetterThanExpected}
+                comparisonSource={segmentPeriodInfo?.comparisonSource}
+                isBetterThanExpected={segData.isBetterThanExpected}
               />
             )
           })}
@@ -1044,15 +1163,13 @@ function SegmentTab({
                     {perf.segmentChanges.map((seg) => {
                       const isPositiveChange = seg.isNegativeSegment ? seg.change < 0 : seg.change > 0
                       const isNeutral = seg.change === 0
+                      const segTextColor = SEGMENT_TEXT_COLORS[seg.segmentName] || SEGMENT_TEXT_COLORS['일반']
                       return (
                         <div
                           key={seg.segmentName}
-                          className={`p-2 rounded-lg text-center ${
-                            isNeutral ? 'bg-white' :
-                            isPositiveChange ? 'bg-green-100' : 'bg-red-100'
-                          }`}
+                          className="p-2 rounded-lg text-center bg-white border border-slate-100"
                         >
-                          <p className="text-xs text-slate-500">{seg.segmentName}</p>
+                          <p className="text-xs font-medium" style={{ color: segTextColor }}>{seg.segmentName}</p>
                           <p className={`font-semibold ${
                             isNeutral ? 'text-slate-600' :
                             isPositiveChange ? 'text-green-700' : 'text-red-700'

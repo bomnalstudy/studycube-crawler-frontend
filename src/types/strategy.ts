@@ -317,6 +317,16 @@ export interface EventPerformanceData {
   segmentChanges?: SegmentChangeData[] | SegmentChangeComparison[]
   segmentMigrations?: SegmentMigration[] | SegmentMigrationComparison[]
   hasSegmentComparisonData?: boolean // 세그먼트 비교 데이터 존재 여부
+  segmentPeriodInfo?: {
+    actualPeriod: { start: string; end: string }
+    comparisonPeriod: { start: string; end: string } | null
+    comparisonSource: 'YOY' | 'MOM' | 'SEASONAL' | null
+    coefficients?: {
+      seasonIndex: Record<string, number>
+      trendCoeff: Record<string, number>
+      dataMonths: number
+    }
+  }
 
   // 이용권 업그레이드
   ticketUpgrades?: TicketUpgradeData[]
@@ -511,16 +521,27 @@ export interface SegmentMigration {
 // 세그먼트 변화 비교 데이터 (예상 vs 실제)
 export interface SegmentChangeComparison {
   segmentName: string
-  countBefore: number // 이벤트 전
-  countAfter: number // 이벤트 후
-  change: number // 실제 변화
-  changePercent: number
-  expectedChange: number // 비교 기간 기반 예상 변화
-  expectedChangePercent: number
-  vsExpected: number // 실제 - 예상 (양수면 예상보다 좋음)
-  vsExpectedPercent: number
+  countBefore: number | null // 이전값 (실제 비교 기간 값, YoY/MoM) - null이면 비교 데이터 없음
+  countAfter: number // 이후값 (실제 이벤트 기간 값)
+  expectedCount: number // 예상값 (이전값×추세×시즌 또는 전체평균×추세×시즌)
+  change: number // 이후 - 이전 (실제 변화)
+  changePercent: number // 이후 - 이전 변화율
+  vsExpected: number // 이후 - 예상 (성과)
+  vsExpectedPercent: number // 성과 %
   isNegativeSegment: boolean
   isBetterThanExpected: boolean // 예상보다 좋은 성과인지
+}
+
+// 세그먼트 비교 결과에 기간 정보 포함
+export interface SegmentComparisonResult {
+  segmentChanges: SegmentChangeComparison[]
+  segmentMigrations: SegmentMigrationComparison[]
+  hasComparisonData: boolean
+  periodInfo: {
+    actualPeriod: { start: string; end: string } // 실제 기간 (이벤트 기간)
+    comparisonPeriod: { start: string; end: string } | null // 비교 기간 (전년 동기 등)
+    comparisonSource: 'YOY' | 'MOM' | 'SEASONAL' | null // 비교 데이터 출처
+  }
 }
 
 // 세그먼트 이동 비교 데이터 (예상 vs 실제)

@@ -597,7 +597,7 @@ export async function POST(request: NextRequest) {
         trackTicketUpgrades(branchId, eventStart, eventEnd),
         predictEventImpactWithExternalFactors(branchId, branchFactorTypes, eventStart, eventEnd),
       ])
-      const { segmentChanges, segmentMigrations, hasComparisonData: hasSegmentComparisonData } = segmentComparisonResult
+      const { segmentChanges, segmentMigrations, hasComparisonData: hasSegmentComparisonData, periodInfo: segmentPeriodInfo } = segmentComparisonResult
 
       // 방문 패턴 (비교 데이터 없으면 최근 3개월 사용)
       const visitPattern = await calculateVisitPattern(branchId, eventRange, comparisonRange, hasComparisonData)
@@ -719,6 +719,7 @@ export async function POST(request: NextRequest) {
         segmentChanges,
         segmentMigrations,
         hasSegmentComparisonData,
+        segmentPeriodInfo,
         ticketUpgrades,
         visitPattern,
         isNewBranch,
