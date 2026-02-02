@@ -318,8 +318,10 @@ NEXTAUTH_SECRET="..."
 ```bash
 npm install
 npx prisma generate
-npm run dev
+npx next dev -p 3001
 ```
+
+**중요: 개발 서버는 반드시 3001 포트 사용** (`npm run dev` 대신 `npx next dev -p 3001`)
 
 ---
 

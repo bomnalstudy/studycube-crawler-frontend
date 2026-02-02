@@ -8,6 +8,7 @@ import {
 } from '@/types/crm'
 import { maskPhone, formatPhone } from '@/lib/crm/phone-masker'
 import { formatCurrency } from '@/lib/utils/formatters'
+import './CustomerProfile.css'
 
 interface CustomerProfileProps {
   customer: CustomerDetail
@@ -23,20 +24,14 @@ export function CustomerProfile({ customer }: CustomerProfileProps) {
           </h2>
           <div className="flex gap-1.5 mt-1">
             <span
-              className="inline-block px-2.5 py-0.5 rounded-full text-xs font-medium"
-              style={{
-                backgroundColor: `${VISIT_SEGMENT_COLORS[customer.visitSegment as VisitSegment]}20`,
-                color: VISIT_SEGMENT_COLORS[customer.visitSegment as VisitSegment],
-              }}
+              className="inline-block px-2.5 py-0.5 rounded-full text-xs font-medium segment-badge"
+              style={{ '--segment-color': VISIT_SEGMENT_COLORS[customer.visitSegment as VisitSegment] } as React.CSSProperties}
             >
               {VISIT_SEGMENT_LABELS[customer.visitSegment as VisitSegment]}
             </span>
             <span
-              className="inline-block px-2.5 py-0.5 rounded-full text-xs font-medium"
-              style={{
-                backgroundColor: `${TICKET_SEGMENT_COLORS[customer.ticketSegment as TicketSegment]}20`,
-                color: TICKET_SEGMENT_COLORS[customer.ticketSegment as TicketSegment],
-              }}
+              className="inline-block px-2.5 py-0.5 rounded-full text-xs font-medium segment-badge"
+              style={{ '--segment-color': TICKET_SEGMENT_COLORS[customer.ticketSegment as TicketSegment] } as React.CSSProperties}
             >
               {TICKET_SEGMENT_LABELS[customer.ticketSegment as TicketSegment]}
             </span>

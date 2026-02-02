@@ -9,6 +9,7 @@ import {
 } from '@/types/crm'
 import { maskPhone, isValidPhone } from '@/lib/crm/phone-masker'
 import { formatCurrency, formatNumber } from '@/lib/utils/formatters'
+import './CustomerTable.css'
 
 type SortField = 'lastVisitDate' | 'totalVisits' | 'totalSpent' | 'recentVisits' | 'segmentDays'
 
@@ -100,20 +101,14 @@ export const CustomerTable = memo(function CustomerTable({ items, total, page, t
                   <td className="px-4 py-3">
                     <div className="flex flex-wrap gap-1">
                       <span
-                        className="px-2 py-0.5 rounded-full text-xs font-medium"
-                        style={{
-                          backgroundColor: `${VISIT_SEGMENT_COLORS[item.visitSegment as VisitSegment]}20`,
-                          color: VISIT_SEGMENT_COLORS[item.visitSegment as VisitSegment],
-                        }}
+                        className="px-2 py-0.5 rounded-full text-xs font-medium segment-badge"
+                        style={{ '--segment-color': VISIT_SEGMENT_COLORS[item.visitSegment as VisitSegment] } as React.CSSProperties}
                       >
                         {VISIT_SEGMENT_LABELS[item.visitSegment as VisitSegment]}
                       </span>
                       <span
-                        className="px-2 py-0.5 rounded-full text-xs font-medium"
-                        style={{
-                          backgroundColor: `${TICKET_SEGMENT_COLORS[item.ticketSegment as TicketSegment]}20`,
-                          color: TICKET_SEGMENT_COLORS[item.ticketSegment as TicketSegment],
-                        }}
+                        className="px-2 py-0.5 rounded-full text-xs font-medium segment-badge"
+                        style={{ '--segment-color': TICKET_SEGMENT_COLORS[item.ticketSegment as TicketSegment] } as React.CSSProperties}
                       >
                         {TICKET_SEGMENT_LABELS[item.ticketSegment as TicketSegment]}
                       </span>

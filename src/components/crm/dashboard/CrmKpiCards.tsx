@@ -2,6 +2,7 @@
 
 import { memo, useMemo } from 'react'
 import { formatNumber } from '@/lib/utils/formatters'
+import './CrmKpiCards.css'
 
 interface CrmKpiCardsProps {
   totalCustomers: number
@@ -119,8 +120,8 @@ export const CrmKpiCards = memo(function CrmKpiCards({
         >
           <div className="flex items-center justify-between mb-3">
             <div
-              className="w-10 h-10 rounded-xl flex items-center justify-center"
-              style={{ backgroundColor: card.accentColor + '15', color: card.accentColor }}
+              className="w-10 h-10 rounded-xl flex items-center justify-center kpi-icon-wrapper"
+              style={{ '--accent-color': card.accentColor } as React.CSSProperties}
             >
               {card.icon}
             </div>

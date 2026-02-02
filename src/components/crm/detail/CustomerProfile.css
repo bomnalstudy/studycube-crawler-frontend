@@ -1,0 +1,4 @@
+.segment-badge {
+  background-color: color-mix(in srgb, var(--segment-color) 12%, transparent);
+  color: var(--segment-color);
+}

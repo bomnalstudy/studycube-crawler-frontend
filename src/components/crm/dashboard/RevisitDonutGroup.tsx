@@ -2,6 +2,7 @@
 
 import { memo, useMemo } from 'react'
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts'
+import './RevisitDonutGroup.css'
 
 interface RevisitDonutGroupProps {
   generalRevisitRate: number
@@ -40,7 +41,7 @@ const MiniDonut = memo(function MiniDonut({ rate, label, color, bgColor }: { rat
         </div>
       </div>
       <div className="flex items-center gap-1.5 mt-2">
-        <span className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
+        <span className="w-2 h-2 rounded-full legend-dot" style={{ '--legend-color': color } as React.CSSProperties} />
         <p className="text-xs text-gray-500 font-medium">{label}</p>
       </div>
     </div>

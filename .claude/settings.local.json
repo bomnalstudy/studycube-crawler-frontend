@@ -32,7 +32,8 @@
       "Bash(dir:*)",
       "Bash(bash --norc -c \"cd /c/Users/ghpjh/Desktop/project/studycube-crawler-frontend && npm run build\")",
       "Bash(timeout:*)",
-      "Bash(cmd.exe /c \"taskkill /PID 55996 /F\")"
+      "Bash(cmd.exe /c \"taskkill /PID 55996 /F\")",
+      "Bash(git push:*)"
     ],
     "deny": [],
     "ask": []

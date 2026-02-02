@@ -1,0 +1,4 @@
+.kpi-icon-wrapper {
+  background-color: color-mix(in srgb, var(--accent-color) 15%, transparent);
+  color: var(--accent-color);
+}

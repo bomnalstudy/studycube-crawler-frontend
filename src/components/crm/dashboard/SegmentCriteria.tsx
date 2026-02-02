@@ -6,6 +6,7 @@ import {
   VISIT_SEGMENT_LABELS, VISIT_SEGMENT_COLORS, VISIT_SEGMENT_DESCRIPTIONS,
   TICKET_SEGMENT_LABELS, TICKET_SEGMENT_COLORS, TICKET_SEGMENT_DESCRIPTIONS,
 } from '@/types/crm'
+import './SegmentCriteria.css'
 
 const VISIT_SEGMENTS: VisitSegment[] = [
   'churned', 'at_risk_14', 'returned', 'new_0_7', 'visit_under10', 'visit_10_20', 'visit_over20',
@@ -51,8 +52,8 @@ export function SegmentCriteria() {
                 className="flex items-start gap-2 p-2.5 rounded-lg bg-gray-50"
               >
                 <span
-                  className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5"
-                  style={{ backgroundColor: VISIT_SEGMENT_COLORS[seg] }}
+                  className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 segment-badge"
+                  style={{ '--segment-color': VISIT_SEGMENT_COLORS[seg] } as React.CSSProperties}
                 />
                 <div className="min-w-0">
                   <p className="text-xs font-semibold text-gray-700">{VISIT_SEGMENT_LABELS[seg]}</p>
@@ -71,8 +72,8 @@ export function SegmentCriteria() {
                 className="flex items-start gap-2 p-2.5 rounded-lg bg-gray-50"
               >
                 <span
-                  className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5"
-                  style={{ backgroundColor: TICKET_SEGMENT_COLORS[seg] }}
+                  className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 segment-badge"
+                  style={{ '--segment-color': TICKET_SEGMENT_COLORS[seg] } as React.CSSProperties}
                 />
                 <div className="min-w-0">
                   <p className="text-xs font-semibold text-gray-700">{TICKET_SEGMENT_LABELS[seg]}</p>

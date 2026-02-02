@@ -12,6 +12,7 @@ import {
   Cell,
   LabelList
 } from 'recharts'
+import { formatRevenue } from '@/lib/utils/formatters'
 import './ticket-revenue-chart.css'
 
 interface TicketRevenueData {
@@ -40,14 +41,6 @@ const COLORS = [
   '#c4b5fd', // violet-300
   '#d8b4fe', // violet-200
 ]
-
-// 금액 포맷터
-const formatRevenue = (value: number) => {
-  if (value >= 10000) {
-    return `${(value / 10000).toFixed(0)}만원`
-  }
-  return `${value.toLocaleString('ko-KR')}원`
-}
 
 // 이름이 길 경우 축약
 const truncateName = (name: string, maxLength: number = 12) => {

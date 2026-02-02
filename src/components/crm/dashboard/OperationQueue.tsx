@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { OperationQueueItem } from '@/types/crm'
 import { maskPhone } from '@/lib/crm/phone-masker'
 import { formatCurrency } from '@/lib/utils/formatters'
+import './OperationQueue.css'
 
 interface OperationQueueProps {
   atRisk: OperationQueueItem[]
@@ -90,8 +91,8 @@ export const OperationQueue = memo(function OperationQueue({ atRisk, returned, n
             >
               <div className="flex items-center gap-3">
                 <div
-                  className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-[10px] font-bold"
-                  style={{ backgroundColor: currentTab.color }}
+                  className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-[10px] font-bold tab-indicator"
+                  style={{ '--tab-color': currentTab.color } as React.CSSProperties}
                 >
                   {maskPhone(item.phone).slice(-4)}
                 </div>

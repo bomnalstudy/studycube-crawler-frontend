@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { formatCurrency, formatGrowth } from '@/lib/utils/formatters'
 
 interface BranchAnalysisData {
   branchId: string
@@ -248,17 +249,7 @@ export default function SavedCombinedList({ onSelect }: SavedCombinedListProps) 
     }
   }
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('ko-KR', {
-      style: 'currency',
-      currency: 'KRW',
-      maximumFractionDigits: 0
-    }).format(value)
-  }
-
-  const formatPercent = (value: number) => {
-    return `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`
-  }
+  const formatPercent = (value: number) => formatGrowth(value, 2)
 
   const strategyTypeLabels: Record<string, string> = {
     PRICE_DISCOUNT: '가격 할인',

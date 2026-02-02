@@ -34,3 +34,20 @@ export function decimalToNumber(decimal: any): number {
   if (decimal?.toNumber) return decimal.toNumber()
   return parseFloat(decimal?.toString() || '0')
 }
+
+/**
+ * 매출을 축약 포맷 (억원/만원 단위)
+ */
+export function formatRevenue(value: number): string {
+  if (value >= 100000000) return `${(value / 100000000).toFixed(1)}억원`
+  if (value >= 10000) return `${(value / 10000).toFixed(0)}만원`
+  return `${value.toLocaleString('ko-KR')}원`
+}
+
+/**
+ * 성장률 포맷 (부호 포함)
+ */
+export function formatGrowth(value: number, decimals: number = 1): string {
+  const prefix = value >= 0 ? '+' : ''
+  return `${prefix}${value.toFixed(decimals)}%`
+}

@@ -6,6 +6,7 @@ import {
   SegmentChartItem, VisitSegment, TicketSegment,
   VISIT_SEGMENT_COLORS, TICKET_SEGMENT_COLORS,
 } from '@/types/crm'
+import './SegmentDistributionChart.css'
 
 interface SegmentDistributionChartProps {
   visitData: SegmentChartItem[]
@@ -72,8 +73,8 @@ const DonutChart = memo(function DonutChart({ data, title }: { data: SegmentChar
               <div key={item.segment} className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span
-                    className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                    style={{ backgroundColor: getColor(item.segment) }}
+                    className="w-2.5 h-2.5 rounded-full flex-shrink-0 segment-dot"
+                    style={{ '--segment-color': getColor(item.segment) } as React.CSSProperties}
                   />
                   <span className="text-xs text-gray-600">{item.label}</span>
                 </div>
