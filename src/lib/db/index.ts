@@ -59,6 +59,8 @@ export {
   getHourlyUsage,
   getHourlyUsageBatch,
   findPeakHour,
+  getAverageUsageTime,
+  getAverageUsageTimeBatch,
   compareVisitorStats,
 } from './visitors'
 

@@ -307,7 +307,7 @@ src/
 
 ```env
 POSTGRES_URL="postgresql://..."
-NEXTAUTH_URL="http://localhost:3000"
+NEXTAUTH_URL="http://localhost:3001"
 NEXTAUTH_SECRET="..."
 ```
 

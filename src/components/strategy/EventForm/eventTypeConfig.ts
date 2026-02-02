@@ -1,4 +1,4 @@
-import type { EventMainType, EventSubType } from '@/types/strategy'
+import type { EventMainType, EventSubType, OperationSubType } from '@/types/strategy'
 
 interface TypeOption {
   value: EventMainType
@@ -7,6 +7,11 @@ interface TypeOption {
 
 interface SubTypeOption {
   value: EventSubType
+  label: string
+}
+
+interface OperationTypeOption {
+  value: OperationSubType
   label: string
 }
 
@@ -19,7 +24,7 @@ export const EVENT_TYPES: TypeOption[] = [
 ]
 
 // 운영 변경용 유형 (영구적)
-export const OPERATION_TYPES: SubTypeOption[] = [
+export const OPERATION_TYPES: OperationTypeOption[] = [
   { value: 'NEW_SERVICE', label: '신규 서비스 도입' },
   { value: 'FACILITY_UPGRADE', label: '시설 개선' },
   { value: 'SEAT_CHANGE', label: '좌석 구성 변경' },
@@ -51,11 +56,6 @@ export const EVENT_SUB_TYPES: Record<EventMainType, SubTypeOption[]> = {
     { value: 'GIVEAWAY', label: '굿즈/경품 증정' },
     { value: 'PHOTO_EVENT', label: '포토존/인증샷' },
     { value: 'COMMUNITY', label: '커뮤니티 활동' },
-  ],
-  OPERATION: [
-    { value: 'NEW_SERVICE', label: '신규 서비스' },
-    { value: 'FACILITY_UPGRADE', label: '시설 개선' },
-    { value: 'SEAT_CHANGE', label: '좌석 구성 변경' },
   ],
 }
 

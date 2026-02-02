@@ -38,6 +38,7 @@ export default function FactorsPage() {
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
 
   const [typeFilter, setTypeFilter] = useState<string>('ALL')
 
@@ -133,8 +134,13 @@ export default function FactorsPage() {
 
     setSaving(true)
     try {
-      const res = await fetch('/api/strategy/factors', {
-        method: 'POST',
+      const url = editingId
+        ? `/api/strategy/factors/${editingId}`
+        : '/api/strategy/factors'
+      const method = editingId ? 'PATCH' : 'POST'
+
+      const res = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
       })
@@ -142,6 +148,7 @@ export default function FactorsPage() {
 
       if (data.success) {
         setDialogOpen(false)
+        setEditingId(null)
         resetForm()
         fetchFactors()
       } else {
@@ -153,6 +160,22 @@ export default function FactorsPage() {
     } finally {
       setSaving(false)
     }
+  }
+
+  const handleEdit = (factor: ExternalFactorListItem) => {
+    setEditingId(factor.id)
+    setFormData({
+      type: factor.type,
+      name: factor.name,
+      startDate: factor.startDate,
+      endDate: factor.endDate,
+      branchIds: factor.branches.map((b) => b.id),
+      impactEstimate: factor.impactEstimate || 'NEUTRAL',
+      description: '',
+      isRecurring: factor.isRecurring,
+      recurringRule: undefined,
+    })
+    setDialogOpen(true)
   }
 
   const handleDelete = async (factorId: string, factorName: string) => {
@@ -262,13 +285,18 @@ export default function FactorsPage() {
               className="absolute inset-0 bg-black/50 backdrop-blur-sm"
               onClick={() => {
                 setDialogOpen(false)
+                setEditingId(null)
                 resetForm()
               }}
             />
             <div className="relative bg-white rounded-2xl shadow-2xl max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
               <div className="p-6 border-b border-slate-100">
-                <h2 className="text-lg font-semibold text-slate-800">외부 요인 등록</h2>
-                <p className="text-sm text-slate-500 mt-1">이벤트 분석에 영향을 주는 외부 요인을 등록합니다</p>
+                <h2 className="text-lg font-semibold text-slate-800">
+                  {editingId ? '외부 요인 수정' : '외부 요인 등록'}
+                </h2>
+                <p className="text-sm text-slate-500 mt-1">
+                  {editingId ? '외부 요인 정보를 수정합니다' : '이벤트 분석에 영향을 주는 외부 요인을 등록합니다'}
+                </p>
               </div>
               <form onSubmit={handleSubmit} className="p-6 space-y-5">
                 <div>
@@ -393,6 +421,7 @@ export default function FactorsPage() {
                     type="button"
                     onClick={() => {
                       setDialogOpen(false)
+                      setEditingId(null)
                       resetForm()
                     }}
                     className="px-5 py-2.5 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors"
@@ -404,7 +433,7 @@ export default function FactorsPage() {
                     disabled={saving}
                     className="px-5 py-2.5 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl hover:from-orange-600 hover:to-orange-700 disabled:opacity-50 transition-all"
                   >
-                    {saving ? '저장 중...' : '등록하기'}
+                    {saving ? '저장 중...' : editingId ? '수정하기' : '등록하기'}
                   </button>
                 </div>
               </form>
@@ -491,11 +520,20 @@ export default function FactorsPage() {
                           </p>
                         )}
                       </div>
-                      <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-3">
                         {getImpactBadge(factor.impactEstimate)}
                         <button
+                          onClick={() => handleEdit(factor)}
+                          className="p-2 text-slate-500 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
+                          title="수정"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+                        <button
                           onClick={() => handleDelete(factor.id, factor.name)}
-                          className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                          className="p-2 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                           title="삭제"
                         >
                           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -115,7 +115,7 @@ export async function POST(request: NextRequest) {
         impactEstimate: body.impactEstimate,
         description: body.description,
         isRecurring: body.isRecurring ?? false,
-        recurringRule: body.recurringRule,
+        recurringRule: body.recurringRule ? JSON.parse(JSON.stringify(body.recurringRule)) : undefined,
         createdBy: session.user.id,
         branches: {
           create: body.branchIds.map((branchId) => ({

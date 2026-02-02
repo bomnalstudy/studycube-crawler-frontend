@@ -239,6 +239,54 @@ export function findPeakHour(hourlyUsage: Map<number, number>): number {
 }
 
 /**
+ * 기간 내 평균 이용시간 조회 (분 단위)
+ */
+export async function getAverageUsageTime(
+  branchId: string,
+  range: DateRange
+): Promise<number> {
+  const result = await prisma.dailyVisitor.aggregate({
+    where: {
+      branchId,
+      visitDate: { gte: range.start, lte: range.end },
+      duration: { not: null, gt: 0 },
+    },
+    _avg: { duration: true },
+  })
+
+  return result._avg.duration || 0
+}
+
+/**
+ * 여러 지점 평균 이용시간 일괄 조회 (배치)
+ */
+export async function getAverageUsageTimeBatch(
+  branchIds: string[],
+  range: DateRange
+): Promise<Map<string, number>> {
+  const results = await prisma.dailyVisitor.groupBy({
+    by: ['branchId'],
+    where: {
+      branchId: { in: branchIds },
+      visitDate: { gte: range.start, lte: range.end },
+      duration: { not: null, gt: 0 },
+    },
+    _avg: { duration: true },
+  })
+
+  const result = new Map<string, number>()
+  for (const branchId of branchIds) {
+    result.set(branchId, 0)
+  }
+
+  for (const r of results) {
+    result.set(r.branchId, r._avg.duration || 0)
+  }
+
+  return result
+}
+
+/**
  * 방문 통계 비교 (두 기간)
  */
 export async function compareVisitorStats(

@@ -1,7 +1,13 @@
 import { prisma } from '@/lib/prisma'
 import { calculateVisitSegment } from '@/lib/crm/segment-calculator'
 import { db, type DateRange } from '@/lib/db'
-import type { SegmentChangeData, SegmentMigration } from '@/types/strategy'
+import type {
+  SegmentChangeData,
+  SegmentMigration,
+  SegmentChangePrediction,
+  TicketUpgradePrediction,
+  ExternalFactorImpactPrediction,
+} from '@/types/strategy'
 
 // 세그먼트 코드 → 표시 이름 매핑
 const SEGMENT_NAMES: Record<string, string> = {
@@ -19,6 +25,18 @@ const SEGMENT_ORDER = ['단골', 'VIP', '일반', '신규', '이탈위험', '이
 
 // 부정적 세그먼트 (감소가 긍정적인 것들)
 const NEGATIVE_SEGMENTS = ['이탈위험', '이탈']
+
+// 세그먼트 계층 순위 (VIP > 단골 > 일반)
+// 숫자가 높을수록 좋은 세그먼트
+const SEGMENT_HIERARCHY: Record<string, number> = {
+  'VIP': 3,
+  '단골': 2,
+  '일반': 1,
+  '신규': 0,
+  '복귀': 0,
+  '이탈위험': -1,
+  '이탈': -2,
+}
 
 // 유효한 세그먼트 이동 규칙
 // 복귀는 오직 이탈/이탈위험에서만 가능
@@ -74,15 +92,16 @@ export async function trackSegmentChanges(
   segmentChanges: SegmentChangeData[]
   segmentMigrations: SegmentMigration[]
 }> {
-  // 30일 간의 이전 기간 정의
+  // 이벤트 날 포함한 이전 30일 기간 정의
+  // before: 이벤트 시작일 포함 이전 30일
   const beforeStart = new Date(eventStart)
-  beforeStart.setDate(beforeStart.getDate() - 30)
-  const beforeEnd = new Date(eventStart)
-  beforeEnd.setDate(beforeEnd.getDate() - 1)
+  beforeStart.setDate(beforeStart.getDate() - 29) // 이벤트 시작일 포함 30일
+  const beforeEnd = new Date(eventStart) // 이벤트 시작일 포함
 
-  // 이벤트 기간 이후 30일
+  // 이벤트 종료일 포함 이후 30일
+  const afterStart = new Date(eventEnd) // 이벤트 종료일 포함
   const afterEnd = new Date(eventEnd)
-  afterEnd.setDate(afterEnd.getDate() + 30)
+  afterEnd.setDate(afterEnd.getDate() + 29) // 이벤트 종료일 포함 30일
 
   // 전체 고객 목록 조회 (이 지점을 한 번이라도 방문한 모든 고객)
   // 이탈/이탈위험 고객도 포함해야 정확한 카운트 가능
@@ -177,13 +196,13 @@ export async function trackSegmentChanges(
     beforeVisitCounts.map((v) => [v.customerId!, v._count.customerId])
   )
 
-  // 4. 이벤트 후 기간 방문 수 (배치 groupBy)
+  // 4. 이벤트 후 기간 방문 수 (이벤트 종료일 포함 이후 30일)
   const afterVisitCounts = await prisma.dailyVisitor.groupBy({
     by: ['customerId'],
     where: {
       branchId,
       customerId: { in: sampledIds },
-      visitDate: { gte: eventEnd, lte: afterEnd },
+      visitDate: { gte: afterStart, lte: afterEnd },
     },
     _count: { customerId: true },
   })
@@ -255,7 +274,7 @@ export async function trackSegmentChanges(
         null,
         hasFixedSeatSet.has(customerId),
         afterEnd,
-        eventEnd
+        afterStart // 이벤트 종료일 포함 이후 30일
       )
       segmentCountAfter[segmentAfter] = (segmentCountAfter[segmentAfter] || 0) + 1
       continue
@@ -280,7 +299,7 @@ export async function trackSegmentChanges(
       previousVisitMap.get(customerId) || null,
       hasFixedSeatSet.has(customerId),
       afterEnd,
-      eventEnd
+      afterStart // 이벤트 종료일 포함 이후 30일
     )
 
     segmentCountBefore[segmentBefore] = (segmentCountBefore[segmentBefore] || 0) + 1
@@ -323,29 +342,31 @@ export async function trackSegmentChanges(
       continue
     }
 
-    // 긍정/부정 판단
+    // 긍정/부정 판단 (사용자 정의 규칙)
+    // 긍정적: VIP > 단골 > 일반 계층 상승 OR 이탈위험/이탈에서 다른 곳으로 이동
+    // 부정적: 이탈위험/이탈로 이동 OR 계층 하락 (VIP→단골, 단골→일반)
     let isPositive = false
 
-    // 복귀는 항상 긍정적 (이탈/이탈위험에서만 올 수 있음)
-    if (toSegment === '복귀') {
+    const fromRank = SEGMENT_HIERARCHY[fromSegment] ?? 0
+    const toRank = SEGMENT_HIERARCHY[toSegment] ?? 0
+
+    // 이탈위험/이탈에서 다른 세그먼트로 이동은 무조건 긍정적 (복귀 포함)
+    if (NEGATIVE_SEGMENTS.includes(fromSegment) && !NEGATIVE_SEGMENTS.includes(toSegment)) {
       isPositive = true
     }
-    // VIP/단골로 이동은 긍정적
-    else if (['VIP', '단골'].includes(toSegment)) {
+    // 복귀는 항상 긍정적
+    else if (toSegment === '복귀') {
       isPositive = true
     }
-    // 이탈위험/이탈에서 벗어남은 긍정적
-    else if (NEGATIVE_SEGMENTS.includes(fromSegment) && !NEGATIVE_SEGMENTS.includes(toSegment)) {
+    // VIP > 단골 > 일반 계층에서 상승은 긍정적
+    else if (toRank > fromRank && toRank >= 1) {
+      // toRank >= 1 : 일반(1), 단골(2), VIP(3) 중 하나로 상승
       isPositive = true
     }
-    // 이탈위험/이탈로 이동은 부정적
-    else if (NEGATIVE_SEGMENTS.includes(toSegment)) {
-      isPositive = false
-    }
-    // VIP/단골에서 일반으로 이동은 부정적
-    else if (['VIP', '단골'].includes(fromSegment) && toSegment === '일반') {
-      isPositive = false
-    }
+    // 그 외는 전부 부정적:
+    // - 이탈위험/이탈로 이동 (isPositive = false)
+    // - 이탈위험 → 이탈 (더 부정적, isPositive = false)
+    // - VIP→단골, 단골→일반 등 계층 하락 (isPositive = false)
 
     segmentMigrations.push({
       fromSegment,
@@ -481,4 +502,208 @@ function inferTicketTypeSimple(ticketName: string): string {
   if (lower.includes('당일') || lower.includes('일일')) return '당일권'
 
   return '시간권'
+}
+
+// ===== 외부요인 기반 예측 함수 =====
+
+/**
+ * 과거 외부요인 기간의 세그먼트 변화 패턴을 학습하여 예측
+ */
+export async function getExternalFactorSegmentImpact(
+  branchId: string,
+  factorTypes: string[],
+  eventStart: Date,
+  eventEnd: Date
+): Promise<{
+  predictions: SegmentChangePrediction[]
+  confidence: 'HIGH' | 'MEDIUM' | 'LOW'
+  factorCount: number
+}> {
+  if (factorTypes.length === 0) {
+    return { predictions: [], confidence: 'LOW', factorCount: 0 }
+  }
+
+  // 과거 동일 유형 외부요인 조회 (최대 5개)
+  const pastFactors = await prisma.externalFactor.findMany({
+    where: {
+      type: { in: factorTypes },
+      endDate: { lt: eventStart },
+      branches: { some: { branchId } },
+    },
+    orderBy: { endDate: 'desc' },
+    take: 5,
+  })
+
+  if (pastFactors.length === 0) {
+    return { predictions: [], confidence: 'LOW', factorCount: 0 }
+  }
+
+  // 세그먼트별 변화율 수집
+  const allChanges: Map<string, number[]> = new Map()
+  for (const segment of SEGMENT_ORDER) {
+    allChanges.set(segment, [])
+  }
+
+  // 각 과거 요인 기간의 세그먼트 변화 계산
+  for (const factor of pastFactors) {
+    try {
+      const { segmentChanges } = await trackSegmentChanges(
+        branchId,
+        factor.startDate,
+        factor.endDate
+      )
+
+      for (const change of segmentChanges) {
+        const existing = allChanges.get(change.segmentName) || []
+        existing.push(change.changePercent)
+        allChanges.set(change.segmentName, existing)
+      }
+    } catch {
+      // 데이터 부족 등의 오류 시 건너뜀
+      continue
+    }
+  }
+
+  // 평균 예측값 계산
+  const predictions: SegmentChangePrediction[] = []
+
+  for (const [segmentName, changes] of allChanges) {
+    if (changes.length === 0) continue
+
+    const avgChange = changes.reduce((sum, c) => sum + c, 0) / changes.length
+
+    predictions.push({
+      segmentName,
+      expectedChangePercent: Math.round(avgChange * 10) / 10,
+      confidence: changes.length >= 4 ? 'HIGH' : changes.length >= 2 ? 'MEDIUM' : 'LOW',
+      basedOnFactorCount: changes.length,
+      reason: `과거 ${factorTypes.join(', ')} ${changes.length}회 평균 ${avgChange > 0 ? '+' : ''}${avgChange.toFixed(1)}%`,
+    })
+  }
+
+  const confidence = pastFactors.length >= 4 ? 'HIGH' : pastFactors.length >= 2 ? 'MEDIUM' : 'LOW'
+
+  return { predictions, confidence, factorCount: pastFactors.length }
+}
+
+/**
+ * 과거 외부요인 기간의 이용권 업그레이드 패턴을 학습하여 예측
+ */
+export async function getExternalFactorTicketUpgradeImpact(
+  branchId: string,
+  factorTypes: string[],
+  eventStart: Date,
+  eventEnd: Date
+): Promise<{
+  predictions: TicketUpgradePrediction[]
+  confidence: 'HIGH' | 'MEDIUM' | 'LOW'
+  factorCount: number
+}> {
+  if (factorTypes.length === 0) {
+    return { predictions: [], confidence: 'LOW', factorCount: 0 }
+  }
+
+  // 과거 동일 유형 외부요인 조회 (최대 5개)
+  const pastFactors = await prisma.externalFactor.findMany({
+    where: {
+      type: { in: factorTypes },
+      endDate: { lt: eventStart },
+      branches: { some: { branchId } },
+    },
+    orderBy: { endDate: 'desc' },
+    take: 5,
+  })
+
+  if (pastFactors.length === 0) {
+    return { predictions: [], confidence: 'LOW', factorCount: 0 }
+  }
+
+  // 업그레이드 패턴 수집
+  const upgradePatterns: Map<string, { counts: number[]; rates: number[] }> = new Map()
+
+  for (const factor of pastFactors) {
+    try {
+      const upgrades = await trackTicketUpgrades(
+        branchId,
+        factor.startDate,
+        factor.endDate
+      )
+
+      for (const upgrade of upgrades) {
+        const key = `${upgrade.fromTicket}->${upgrade.toTicket}`
+        const existing = upgradePatterns.get(key) || { counts: [], rates: [] }
+        existing.counts.push(upgrade.count)
+        existing.rates.push(upgrade.upgradeRate)
+        upgradePatterns.set(key, existing)
+      }
+    } catch {
+      continue
+    }
+  }
+
+  // 평균 예측값 계산
+  const predictions: TicketUpgradePrediction[] = []
+
+  for (const [key, data] of upgradePatterns) {
+    const [fromTicket, toTicket] = key.split('->')
+    const avgCount = data.counts.reduce((sum, c) => sum + c, 0) / data.counts.length
+    const avgRate = data.rates.reduce((sum, r) => sum + r, 0) / data.rates.length
+
+    predictions.push({
+      fromTicket,
+      toTicket,
+      expectedCount: Math.round(avgCount),
+      expectedRate: Math.round(avgRate * 10) / 10,
+      confidence: data.counts.length >= 4 ? 'HIGH' : data.counts.length >= 2 ? 'MEDIUM' : 'LOW',
+      basedOnFactorCount: data.counts.length,
+      reason: `과거 ${factorTypes.join(', ')} ${data.counts.length}회 평균`,
+    })
+  }
+
+  predictions.sort((a, b) => b.expectedCount - a.expectedCount)
+
+  const confidence = pastFactors.length >= 4 ? 'HIGH' : pastFactors.length >= 2 ? 'MEDIUM' : 'LOW'
+
+  return { predictions, confidence, factorCount: pastFactors.length }
+}
+
+/**
+ * 외부요인 기반 통합 예측 (세그먼트 + 이용권 업그레이드)
+ */
+export async function predictEventImpactWithExternalFactors(
+  branchId: string,
+  factorTypes: string[],
+  eventStart: Date,
+  eventEnd: Date
+): Promise<ExternalFactorImpactPrediction | null> {
+  if (factorTypes.length === 0) {
+    return null
+  }
+
+  // 세그먼트 예측과 이용권 업그레이드 예측 병렬 실행
+  const [segmentResult, ticketResult] = await Promise.all([
+    getExternalFactorSegmentImpact(branchId, factorTypes, eventStart, eventEnd),
+    getExternalFactorTicketUpgradeImpact(branchId, factorTypes, eventStart, eventEnd),
+  ])
+
+  // 데이터가 전혀 없으면 null 반환
+  if (segmentResult.factorCount === 0 && ticketResult.factorCount === 0) {
+    return null
+  }
+
+  // 전체 신뢰도 결정 (더 낮은 쪽 기준)
+  const confidenceOrder = { HIGH: 3, MEDIUM: 2, LOW: 1 }
+  const minConfidence = Math.min(
+    confidenceOrder[segmentResult.confidence],
+    confidenceOrder[ticketResult.confidence]
+  )
+  const overallConfidence: 'HIGH' | 'MEDIUM' | 'LOW' =
+    minConfidence >= 3 ? 'HIGH' : minConfidence >= 2 ? 'MEDIUM' : 'LOW'
+
+  return {
+    factorTypes,
+    segmentPredictions: segmentResult.predictions,
+    ticketUpgradePredictions: ticketResult.predictions,
+    overallConfidence,
+  }
 }

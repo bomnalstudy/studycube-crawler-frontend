@@ -33,7 +33,7 @@ async function main() {
 
     console.log('\n=== DB에서 찾은 고객 ===')
     console.log(`${customers.length}명 찾음`)
-    customers.forEach(c => console.log(`- ${c.phone}: ${c.name}`))
+    customers.forEach(c => console.log(`- ${c.phone}`))
 
     if (customers.length === 0) {
       console.log('\n⚠️ 문제: 입력한 전화번호가 DB customers 테이블에 없거나, 해당 지점 고객이 아님')

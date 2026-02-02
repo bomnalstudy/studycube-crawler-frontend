@@ -352,6 +352,9 @@ export interface EventPerformanceData {
   // 점수 계산 상세
   scoreBreakdown?: ScoreBreakdown
 
+  // 외부요인 기반 예측
+  externalFactorPredictions?: ExternalFactorImpactPrediction
+
   // 종합
   performanceScore?: number
   verdict?: VerdictType
@@ -582,4 +585,34 @@ export interface OperationPerformanceData {
   performanceScore?: number
   verdict?: VerdictType
   insights?: string[]
+}
+
+// ===== 외부요인 기반 예측 타입 =====
+
+// 세그먼트 변화 예측
+export interface SegmentChangePrediction {
+  segmentName: string
+  expectedChangePercent: number // 예: 12.5 = 12.5% 증가 예상
+  confidence: 'HIGH' | 'MEDIUM' | 'LOW'
+  basedOnFactorCount: number
+  reason: string
+}
+
+// 이용권 업그레이드 예측
+export interface TicketUpgradePrediction {
+  fromTicket: string
+  toTicket: string
+  expectedCount: number
+  expectedRate: number
+  confidence: 'HIGH' | 'MEDIUM' | 'LOW'
+  basedOnFactorCount: number
+  reason: string
+}
+
+// 통합 예측 결과
+export interface ExternalFactorImpactPrediction {
+  factorTypes: string[]
+  segmentPredictions: SegmentChangePrediction[]
+  ticketUpgradePredictions: TicketUpgradePrediction[]
+  overallConfidence: 'HIGH' | 'MEDIUM' | 'LOW'
 }

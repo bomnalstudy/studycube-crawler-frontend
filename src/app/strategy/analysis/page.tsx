@@ -137,6 +137,21 @@ function AnalysisContent() {
     (p) => selectedBranchId === 'all' || p.branchId === selectedBranchId
   ) || []
 
+  // 지점 필터링에 따른 요약 계산
+  const filteredSummary = {
+    avgRevenueGrowth: filteredPerformances.length > 0
+      ? filteredPerformances.reduce((sum, p) => sum + p.revenueGrowth, 0) / filteredPerformances.length
+      : 0,
+    avgVisitsGrowth: filteredPerformances.length > 0
+      ? filteredPerformances.reduce((sum, p) => sum + p.visitsGrowth, 0) / filteredPerformances.length
+      : 0,
+    avgPerformanceScore: filteredPerformances.length > 0
+      ? filteredPerformances.reduce((sum, p) => sum + (p.performanceScore || 0), 0) / filteredPerformances.length
+      : 0,
+    totalNewCustomers: filteredPerformances.reduce((sum, p) => sum + p.newCustomers, 0),
+    totalReturnedCustomers: filteredPerformances.reduce((sum, p) => sum + p.returnedCustomers, 0),
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50/30">
       <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
@@ -253,36 +268,51 @@ function AnalysisContent() {
               </div>
             )}
 
-            {/* 전체 요약 */}
+            {/* 전체 요약 (지점 필터링 적용) */}
             {analysisData.summary && (
               <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
                 <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
-                  <p className="text-sm text-slate-500 mb-1">매출 성장률</p>
-                  <p className={`text-2xl font-bold ${analysisData.summary.avgRevenueGrowth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    {formatGrowth(analysisData.summary.avgRevenueGrowth)}
+                  <p className="text-sm text-slate-500 mb-1">
+                    매출 성장률
+                    {selectedBranchId !== 'all' && <span className="text-xs text-blue-500 ml-1">(선택 지점)</span>}
+                  </p>
+                  <p className={`text-2xl font-bold ${filteredSummary.avgRevenueGrowth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {formatGrowth(filteredSummary.avgRevenueGrowth)}
                   </p>
                 </div>
 
                 <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
-                  <p className="text-sm text-slate-500 mb-1">방문 성장률</p>
-                  <p className={`text-2xl font-bold ${analysisData.summary.avgVisitsGrowth >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
-                    {formatGrowth(analysisData.summary.avgVisitsGrowth)}
+                  <p className="text-sm text-slate-500 mb-1">
+                    방문 성장률
+                    {selectedBranchId !== 'all' && <span className="text-xs text-blue-500 ml-1">(선택 지점)</span>}
+                  </p>
+                  <p className={`text-2xl font-bold ${filteredSummary.avgVisitsGrowth >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
+                    {formatGrowth(filteredSummary.avgVisitsGrowth)}
                   </p>
                 </div>
 
                 <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
-                  <p className="text-sm text-slate-500 mb-1">신규 고객</p>
-                  <p className="text-2xl font-bold text-purple-600">{analysisData.summary.totalNewCustomers}명</p>
+                  <p className="text-sm text-slate-500 mb-1">
+                    신규 고객
+                    {selectedBranchId !== 'all' && <span className="text-xs text-blue-500 ml-1">(선택 지점)</span>}
+                  </p>
+                  <p className="text-2xl font-bold text-purple-600">{filteredSummary.totalNewCustomers}명</p>
                 </div>
 
                 <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
-                  <p className="text-sm text-slate-500 mb-1">복귀 고객</p>
-                  <p className="text-2xl font-bold text-teal-600">{analysisData.summary.totalReturnedCustomers}명</p>
+                  <p className="text-sm text-slate-500 mb-1">
+                    복귀 고객
+                    {selectedBranchId !== 'all' && <span className="text-xs text-blue-500 ml-1">(선택 지점)</span>}
+                  </p>
+                  <p className="text-2xl font-bold text-teal-600">{filteredSummary.totalReturnedCustomers}명</p>
                 </div>
 
                 <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
-                  <p className="text-sm text-slate-500 mb-1">평균 성과 점수</p>
-                  <p className="text-2xl font-bold text-slate-800">{analysisData.summary.avgPerformanceScore.toFixed(0)}점</p>
+                  <p className="text-sm text-slate-500 mb-1">
+                    평균 성과 점수
+                    {selectedBranchId !== 'all' && <span className="text-xs text-blue-500 ml-1">(선택 지점)</span>}
+                  </p>
+                  <p className="text-2xl font-bold text-slate-800">{filteredSummary.avgPerformanceScore.toFixed(0)}점</p>
                 </div>
               </div>
             )}

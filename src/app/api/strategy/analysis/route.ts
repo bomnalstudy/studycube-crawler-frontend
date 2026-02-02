@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { requireAdmin } from '@/lib/auth-helpers'
 import { tTest, cohensD, calculateGrowthRate } from '@/lib/strategy/statistics'
 import { forecastRevenue, forecastRevenueByTicketType, calculatePerformanceVsForecast, type ForecastResult, type TicketTypeForecast } from '@/lib/strategy/forecast'
-import { trackSegmentChanges, trackTicketUpgrades } from '@/lib/strategy/segment-tracker'
+import { trackSegmentChanges, trackTicketUpgrades, predictEventImpactWithExternalFactors } from '@/lib/strategy/segment-tracker'
 import { db, type DateRange } from '@/lib/db'
 import type {
   AnalysisRequest,
@@ -19,6 +19,7 @@ import type {
   TicketUpgradeData,
   VisitPatternData,
   ScoreBreakdown,
+  ExternalFactorImpactPrediction,
 } from '@/types/strategy'
 
 // 방문 패턴 계산 (DB 유틸리티 사용)
@@ -39,8 +40,8 @@ async function calculateVisitPattern(
     actualComparisonRange = { start: threeMonthsAgo, end: beforeEventStart }
   }
 
-  // 병렬로 모든 데이터 조회
-  const [eventVisitors, comparisonVisitors, eventHourly, comparisonHourly] = await Promise.all([
+  // 병렬로 모든 데이터 조회 (평균 이용시간 포함)
+  const [eventVisitors, comparisonVisitors, eventHourly, comparisonHourly, avgUsageTimeAfter, avgUsageTimeBefore] = await Promise.all([
     prisma.dailyVisitor.findMany({
       where: {
         branchId,
@@ -57,6 +58,8 @@ async function calculateVisitPattern(
     }),
     db.visitors.getHourlyUsage(branchId, eventRange),
     db.visitors.getHourlyUsage(branchId, actualComparisonRange),
+    db.visitors.getAverageUsageTime(branchId, eventRange),
+    db.visitors.getAverageUsageTime(branchId, actualComparisonRange),
   ])
 
   // 고객별 방문 수 계산
@@ -95,6 +98,11 @@ async function calculateVisitPattern(
     ? ((avgVisitsAfter - avgVisitsBefore) / avgVisitsBefore) * 100
     : (avgVisitsAfter > 0 ? 100 : 0)
 
+  // 평균 이용시간 변화율 계산
+  const usageTimeChange = avgUsageTimeBefore > 0
+    ? ((avgUsageTimeAfter - avgUsageTimeBefore) / avgUsageTimeBefore) * 100
+    : (avgUsageTimeAfter > 0 ? 100 : 0)
+
   // 피크 시간 찾기 (이미 병렬로 조회됨)
   const peakHourAfter = db.visitors.findPeakHour(eventHourly)
   const peakHourBefore = db.visitors.findPeakHour(comparisonHourly)
@@ -103,9 +111,9 @@ async function calculateVisitPattern(
     avgVisitsPerCustomerBefore: Math.round(avgVisitsBefore * 10) / 10,
     avgVisitsPerCustomerAfter: Math.round(avgVisitsAfter * 10) / 10,
     visitFrequencyChange: Math.round(visitFrequencyChange * 10) / 10,
-    avgUsageTimeBefore: 150,
-    avgUsageTimeAfter: 150,
-    usageTimeChange: 0,
+    avgUsageTimeBefore: Math.round(avgUsageTimeBefore),
+    avgUsageTimeAfter: Math.round(avgUsageTimeAfter),
+    usageTimeChange: Math.round(usageTimeChange * 10) / 10,
     peakHourBefore,
     peakHourAfter,
   }
@@ -567,10 +575,25 @@ export async function POST(request: NextRequest) {
       ])
       const returnedCustomers = returnedCustomerIds.length
 
-      // 세그먼트 및 이용권 변화 병렬 추적
-      const [{ segmentChanges, segmentMigrations }, ticketUpgrades] = await Promise.all([
+      // 해당 지점의 외부요인 타입 조회 (예측용)
+      const branchFactors = await prisma.externalFactor.findMany({
+        where: {
+          OR: [
+            { startDate: { gte: eventStart, lte: eventEnd } },
+            { endDate: { gte: eventStart, lte: eventEnd } },
+            { AND: [{ startDate: { lte: eventStart } }, { endDate: { gte: eventEnd } }] },
+          ],
+          branches: { some: { branchId } },
+        },
+        select: { type: true },
+      })
+      const branchFactorTypes = branchFactors.map((f) => f.type)
+
+      // 세그먼트 및 이용권 변화 + 외부요인 기반 예측 병렬 추적
+      const [{ segmentChanges, segmentMigrations }, ticketUpgrades, externalFactorPredictions] = await Promise.all([
         trackSegmentChanges(branchId, eventStart, eventEnd),
         trackTicketUpgrades(branchId, eventStart, eventEnd),
+        predictEventImpactWithExternalFactors(branchId, branchFactorTypes, eventStart, eventEnd),
       ])
 
       // 방문 패턴 (비교 데이터 없으면 최근 3개월 사용)
@@ -710,6 +733,7 @@ export async function POST(request: NextRequest) {
         pValue: stats.pValue,
         effectSize: effect.d,
         scoreBreakdown,
+        externalFactorPredictions: externalFactorPredictions || undefined,
         performanceScore,
         verdict,
         insights,
