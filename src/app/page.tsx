@@ -99,6 +99,33 @@ export default function Home() {
               </p>
             </div>
           </Link>
+
+          {/* 매장 전략 & 이벤트 측정 - ADMIN 전용 */}
+          {isAdmin && (
+            <Link
+              href="/strategy"
+              className="group bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-lg hover:border-purple-300 transition-all"
+            >
+              <div className="h-32 bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center">
+                <svg className="w-12 h-12 text-white/90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+              </div>
+              <div className="p-5">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-base font-bold text-gray-800 group-hover:text-purple-600 transition-colors">
+                    매장 전략 & 이벤트 측정
+                  </h2>
+                  <span className="px-1.5 py-0.5 text-[10px] font-medium bg-purple-100 text-purple-700 rounded">
+                    ADMIN
+                  </span>
+                </div>
+                <p className="text-xs text-gray-500 mt-1.5 leading-relaxed">
+                  이벤트/프로모션 성과를 체계적으로 측정하고, 계절성 보정 분석을 수행합니다.
+                </p>
+              </div>
+            </Link>
+          )}
         </div>
       </div>
     </div>

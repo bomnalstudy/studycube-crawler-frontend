@@ -32,12 +32,12 @@ export async function GET(request: NextRequest) {
     const rangeEndRaw = endDateParam ? kstEndOfDay(endDateParam) : yesterday
     const rangeEnd = rangeEndRaw > yesterday ? yesterday : rangeEndRaw
 
-    // 병렬 쿼리
+    // 병렬 쿼리 (필요한 필드만 select하여 데이터 전송 최소화)
     const [
       allCustomers,
       recentVisitors,
       recentPurchases,
-      preRangeVisitors,
+      preRangeLastVisits,
     ] = await Promise.all([
       // 전체 고객
       prisma.customer.findMany({
@@ -78,18 +78,16 @@ export async function GET(request: NextRequest) {
           amount: true,
         }
       }),
-      // 기간 시작 전 마지막 방문 (복귀 고객 판별용)
-      prisma.dailyVisitor.findMany({
+      // 기간 시작 전 고객별 마지막 방문일 (DB에서 그룹핑하여 성능 최적화)
+      // 원래: 모든 이전 방문을 가져와 메모리에서 그룹핑 → 변경: DB에서 groupBy로 집계
+      prisma.dailyVisitor.groupBy({
+        by: ['customerId'],
         where: {
           ...branchFilter,
           visitDate: { lt: rangeStart },
           customerId: { not: null },
         },
-        select: {
-          customerId: true,
-          visitDate: true,
-        },
-        orderBy: { visitDate: 'desc' },
+        _max: { visitDate: true },
       }),
     ])
 
@@ -149,12 +147,13 @@ export async function GET(request: NextRequest) {
       })
     })
 
-    // 기간 시작 전 고객별 마지막 방문일 (복귀 판별용)
+    // 기간 시작 전 고객별 마지막 방문일 (복귀 판별용) - groupBy 결과를 Map으로 변환
     const preRangeLastVisit = new Map<string, Date>()
-    preRangeVisitors.forEach(v => {
-      if (!v.customerId || preRangeLastVisit.has(v.customerId)) return
-      preRangeLastVisit.set(v.customerId, v.visitDate)
-    })
+    for (const v of preRangeLastVisits) {
+      if (v.customerId && v._max.visitDate) {
+        preRangeLastVisit.set(v.customerId, v._max.visitDate)
+      }
+    }
 
     // 고객별 구매 데이터
     const customerPurchases = new Map<string, { ticketName: string; amount: number }[]>()

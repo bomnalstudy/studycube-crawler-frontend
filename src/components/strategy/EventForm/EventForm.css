@@ -1,0 +1,37 @@
+.event-type-group {
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.event-type-group:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.event-type-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  background-color: white;
+  font-size: 0.875rem;
+  color: #4b5563;
+  transition: all 0.15s ease;
+}
+
+.event-type-button:hover {
+  background-color: #f9fafb;
+  border-color: #d1d5db;
+}
+
+.event-type-button.selected {
+  background-color: #dbeafe;
+  border-color: #3b82f6;
+  color: #1d4ed8;
+}
+
+.event-type-button.selected:hover {
+  background-color: #bfdbfe;
+}

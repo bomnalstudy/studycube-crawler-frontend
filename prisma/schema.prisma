@@ -13,6 +13,12 @@ model Branch {
   index              Int
   createdAt          DateTime             @default(now())
   updatedAt          DateTime             @updatedAt
+  // 지점 특성 (Strategy 대조군 비교용)
+  region             String?              // 수도권/경기/지방
+  size               String?              // 소형/중형/대형
+  targetAudience     String?              // 학생가/주거지/오피스
+  openedAt           DateTime?            @db.Date  // 오픈일 (maturity 계산용)
+  // Relations
   campaignBranches   CampaignBranch[]
   combinedBranches   CombinedBranch[]
   customerPurchases  CustomerPurchase[]
@@ -25,6 +31,10 @@ model Branch {
   users              User[]
   customerClaims     CustomerClaim[]
   automationFlows    AutomationFlow[]
+  // Strategy 관련
+  eventBranches          EventBranch[]
+  externalFactorBranches ExternalFactorBranch[]
+  eventPerformances      EventPerformance[]
 
   @@map("branches")
 }
@@ -312,6 +322,9 @@ model User {
   claims            CustomerClaim[]
   savedFilters      SavedFilter[]
   automationFlows   AutomationFlow[]
+  // Strategy 관련
+  events            Event[]
+  externalFactors   ExternalFactor[]
 
   @@map("users")
 }
@@ -491,4 +504,229 @@ model AiMessage {
 
   @@index([conversationId])
   @@map("ai_messages")
+}
+
+// ===== 매장 전략 & 이벤트 측정 모듈 =====
+
+model Event {
+  id              String   @id @default(cuid())
+  name            String
+  startDate       DateTime @db.Date
+  endDate         DateTime @db.Date
+  cost            Decimal? @db.Decimal(12, 2)
+  description     String?
+  hypothesis      String?  // 가설: 왜 이 이벤트가 효과가 있을 것인가
+  primaryKpi      String?  // 주요 측정 지표
+  secondaryKpis   Json?    // 보조 지표 배열
+  status          EventStatus @default(PLANNED)
+  createdBy       String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  author          User     @relation(fields: [createdBy], references: [id])
+  types           EventType[]
+  branches        EventBranch[]
+  targets         EventTarget[]
+  performances    EventPerformance[]
+  cohorts         EventCohort[]
+
+  @@index([startDate, endDate])
+  @@index([status])
+  @@index([createdBy])
+  @@map("events")
+}
+
+model EventType {
+  id        String @id @default(cuid())
+  eventId   String
+  type      String // PRICING, PROMOTION, MARKETING, ENGAGEMENT, OPERATION
+  subType   String // DISCOUNT_GENERAL, POINT_EVENT, SMS_CAMPAIGN, etc.
+
+  event     Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId])
+  @@index([type])
+  @@map("event_types")
+}
+
+model EventBranch {
+  id        String   @id @default(cuid())
+  eventId   String
+  branchId  String
+  createdAt DateTime @default(now())
+
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  branch    Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, branchId])
+  @@index([eventId])
+  @@index([branchId])
+  @@map("event_branches")
+}
+
+model EventTarget {
+  id           String @id @default(cuid())
+  eventId      String
+  segmentType  String // VISIT, TICKET, AGE, GENDER
+  segmentValue String // churned, at_risk_14, fixed_ticket, 20대, 남 등
+
+  event        Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId])
+  @@map("event_targets")
+}
+
+model EventPerformance {
+  id                String   @id @default(cuid())
+  eventId           String
+  branchId          String
+  calculatedAt      DateTime @default(now())
+  comparisonType    String   // YOY (전년동기), MOM (전월), CONTROL (대조군)
+
+  // 매출 지표
+  revenueBefore         Decimal? @db.Decimal(12, 2)
+  revenueAfter          Decimal? @db.Decimal(12, 2)
+  revenueGrowth         Decimal? @db.Decimal(8, 4)
+  revenueGrowthAdjusted Decimal? @db.Decimal(8, 4) // 보정된 성장률
+
+  // 고객 지표
+  newCustomers      Int?
+  returnedCustomers Int?
+  churnedCustomers  Int?
+  segmentTransitions Json? // 세그먼트 이동 데이터
+
+  // 방문 지표
+  visitsBefore      Int?
+  visitsAfter       Int?
+  visitsGrowth      Decimal? @db.Decimal(8, 4)
+
+  // 이용권별 매출
+  dayTicketRevenue  Decimal? @db.Decimal(12, 2)
+  timeTicketRevenue Decimal? @db.Decimal(12, 2)
+  termTicketRevenue Decimal? @db.Decimal(12, 2)
+  fixedTicketRevenue Decimal? @db.Decimal(12, 2)
+
+  // 통계 분석
+  isSignificant     Boolean?
+  pValue            Decimal? @db.Decimal(8, 6)
+  effectSize        Decimal? @db.Decimal(8, 4) // Cohen's d
+
+  // 종합 점수
+  performanceScore  Int?     // 0-100
+  verdict           String?  // EXCELLENT, GOOD, NEUTRAL, POOR, FAILED
+  scoreBreakdown    Json?    // 점수 계산 상세 내역
+
+  // 세그먼트/이용권/방문패턴 상세
+  segmentChanges    Json?    // 세그먼트별 변화 데이터
+  ticketUpgrades    Json?    // 이용권 업그레이드 데이터
+  visitPattern      Json?    // 방문 패턴 데이터
+
+  // AI 인사이트
+  insights          Json?
+
+  event             Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  branch            Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@index([eventId])
+  @@index([branchId])
+  @@index([calculatedAt])
+  @@map("event_performance")
+}
+
+// 코호트 (장기 추적용 - Phase 2)
+model EventCohort {
+  id          String   @id @default(cuid())
+  eventId     String
+  cohortType  String   // NEW (신규), RETURNED (복귀), PARTICIPATED (참여)
+  customerIds Json     // 고객 ID 배열
+  createdAt   DateTime @default(now())
+
+  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  snapshots   EventCohortSnapshot[]
+
+  @@index([eventId])
+  @@map("event_cohorts")
+}
+
+model EventCohortSnapshot {
+  id             String   @id @default(cuid())
+  cohortId       String
+  snapshotMonth  Int      // 1, 3, 6 (개월 후)
+  activeCount    Int?     // 활성 고객 수
+  revisitRate    Decimal? @db.Decimal(5, 2) // 재방문율 %
+  avgLtv         Decimal? @db.Decimal(12, 2) // 평균 LTV
+  upgradedCount  Int?     // 이용권 업그레이드 수
+  churnedCount   Int?     // 이탈 수
+  calculatedAt   DateTime @default(now())
+
+  cohort         EventCohort @relation(fields: [cohortId], references: [id], onDelete: Cascade)
+
+  @@unique([cohortId, snapshotMonth])
+  @@index([cohortId])
+  @@map("event_cohort_snapshots")
+}
+
+// 외부 요인
+model ExternalFactor {
+  id              String   @id @default(cuid())
+  type            String   // EXAM, VACATION, HOLIDAY, WEATHER, COMPETITOR
+  name            String
+  startDate       DateTime @db.Date
+  endDate         DateTime @db.Date
+  impactEstimate  String?  // POSITIVE, NEGATIVE, NEUTRAL
+  description     String?
+  isRecurring     Boolean  @default(false)
+  recurringRule   Json?    // 반복 규칙 (매년 4월 3주 등)
+  source          String   @default("MANUAL") // MANUAL, API
+  createdBy       String?
+  createdAt       DateTime @default(now())
+
+  author          User?    @relation(fields: [createdBy], references: [id])
+  branches        ExternalFactorBranch[]
+
+  @@index([startDate, endDate])
+  @@index([type])
+  @@map("external_factors")
+}
+
+model ExternalFactorBranch {
+  id        String   @id @default(cuid())
+  factorId  String
+  branchId  String
+  createdAt DateTime @default(now())
+
+  factor    ExternalFactor @relation(fields: [factorId], references: [id], onDelete: Cascade)
+  branch    Branch         @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@unique([factorId, branchId])
+  @@index([factorId])
+  @@index([branchId])
+  @@map("external_factor_branches")
+}
+
+// 날씨 데이터 (Phase 2 - 기상청 API 연동)
+model WeatherData {
+  id            String   @id @default(cuid())
+  date          DateTime @db.Date
+  regionCode    String   // 지역 코드
+  avgTemp       Decimal? @db.Decimal(4, 1)
+  maxTemp       Decimal? @db.Decimal(4, 1)
+  minTemp       Decimal? @db.Decimal(4, 1)
+  precipitation Decimal? @db.Decimal(6, 1) // 강수량 mm
+  weatherCode   String?  // 맑음, 흐림, 비 등
+  isExtreme     Boolean  @default(false) // 폭염, 한파, 장마 등
+  extremeType   String?  // HEATWAVE, COLDWAVE, MONSOON 등
+  collectedAt   DateTime @default(now())
+
+  @@unique([date, regionCode])
+  @@index([date])
+  @@index([regionCode])
+  @@map("weather_data")
+}
+
+enum EventStatus {
+  PLANNED
+  ONGOING
+  COMPLETED
+  CANCELLED
 }

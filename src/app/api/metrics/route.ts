@@ -35,59 +35,76 @@ export async function GET(request: NextRequest) {
     const branchFilter = getBranchFilter(session, requestedBranchId)
 
     // 모든 쿼리를 병렬로 실행하여 로딩 시간 단축
+    // 필요한 필드만 select하여 데이터 전송량 최소화
     const [
       currentMetrics,
       previousMetrics,
       latestMetric,
       hourlyUsageRecords,
       ticketRevenueRecords,
-      ticketSalesCountRecords
+      ticketSalesCountRecords,
+      periodVisitors
     ] = await Promise.all([
-      // 현재 기간 데이터 조회
+      // 현재 기간 데이터 조회 (필요한 필드만)
       prisma.dailyMetric.findMany({
         where: {
           ...branchFilter,
-          date: {
-            gte: startDate,
-            lte: endDate
-          }
+          date: { gte: startDate, lte: endDate }
+        },
+        select: {
+          totalRevenue: true,
+          dayTicketRevenue: true,
+          timeTicketRevenue: true,
+          termTicketRevenue: true,
+          newUsers: true,
+          seatUsage: true,
+          newUsersMale: true,
+          newUsersFemale: true,
+          newUsers10s: true,
+          newUsers20s: true,
+          newUsers30s: true,
+          newUsers40s: true,
+          newUsers50s: true,
+          newUsers60plus: true,
         }
       }),
-      // 이전 기간 데이터 조회
+      // 이전 기간 데이터 조회 (매출 비교용 필드만)
       prisma.dailyMetric.findMany({
         where: {
           ...branchFilter,
-          date: {
-            gte: prevStartDate,
-            lte: prevEndDate
-          }
+          date: { gte: prevStartDate, lte: prevEndDate }
+        },
+        select: {
+          totalRevenue: true,
         }
       }),
       // 마지막 데이터 날짜 찾기
       prisma.dailyMetric.findFirst({
         where: branchFilter,
-        orderBy: {
-          date: 'desc'
-        }
+        orderBy: { date: 'desc' },
+        select: { date: true }
       }),
-      // 시간대별 이용자 데이터 조회
+      // 시간대별 이용자 데이터 조회 (필요한 필드만)
       prisma.hourlyUsage.findMany({
         where: {
           ...branchFilter,
-          date: {
-            gte: startDate,
-            lte: endDate
-          }
+          date: { gte: startDate, lte: endDate }
+        },
+        select: {
+          hour: true,
+          usageCount: true,
+          date: true,
         }
       }),
-      // 이용권별 매출 조회
+      // 이용권별 매출 조회 (필요한 필드만)
       prisma.ticketRevenue.findMany({
         where: {
           ...branchFilter,
-          date: {
-            gte: startDate,
-            lte: endDate
-          }
+          date: { gte: startDate, lte: endDate }
+        },
+        select: {
+          ticketName: true,
+          revenue: true,
         }
       }),
       // 이용권별 판매 건수 조회
@@ -95,13 +112,19 @@ export async function GET(request: NextRequest) {
         by: ['ticketName'],
         where: {
           ...branchFilter,
-          date: {
-            gte: startDate,
-            lte: endDate
-          }
+          date: { gte: startDate, lte: endDate }
         },
-        _count: {
-          id: true
+        _count: { id: true }
+      }),
+      // 선택한 기간의 방문자 데이터 조회 (재방문 분석용 - phone, visitDate만)
+      prisma.dailyVisitor.findMany({
+        where: {
+          ...branchFilter,
+          visitDate: { gte: startDate, lte: endDate }
+        },
+        select: {
+          phone: true,
+          visitDate: true,
         }
       })
     ])
@@ -181,43 +204,25 @@ export async function GET(request: NextRequest) {
       { ageGroup: '60대+', gender: '전체', count: total60plus }
     ].filter(item => item.count > 0) // count가 0인 항목 제거
 
-    // 재방문자 데이터 계산 (선택한 기간 전체)
-    let weeklyRevisitData: Array<{ visitCount: number; count: number }> = []
-
-    // 선택한 기간의 방문자 데이터 조회
-    const periodVisitors = await prisma.dailyVisitor.findMany({
-      where: {
-        ...branchFilter,
-        visitDate: {
-          gte: startDate,
-          lte: endDate
-        }
-      }
-    })
-
-    // phone별로 서로 다른 방문 날짜를 Set으로 관리
+    // 재방문자 데이터 계산 (phone별 방문 일수 집계)
     const phoneVisitDates = new Map<string, Set<string>>()
-    periodVisitors.forEach(visitor => {
-      const dateStr = visitor.visitDate.toISOString().split('T')[0] // YYYY-MM-DD
+    for (const visitor of periodVisitors) {
+      const dateStr = visitor.visitDate.toISOString().split('T')[0]
       if (!phoneVisitDates.has(visitor.phone)) {
         phoneVisitDates.set(visitor.phone, new Set())
       }
       phoneVisitDates.get(visitor.phone)!.add(dateStr)
-    })
+    }
 
-    // 방문 횟수별 집계 (실제 횟수 그대로 표시)
+    // 방문 횟수별 집계
     const visitCountMap = new Map<number, number>()
-    phoneVisitDates.forEach((dates) => {
-      const visitCount = dates.size // 서로 다른 날짜의 수
-      const current = visitCountMap.get(visitCount) || 0
-      visitCountMap.set(visitCount, current + 1)
-    })
+    for (const dates of phoneVisitDates.values()) {
+      const visitCount = dates.size
+      visitCountMap.set(visitCount, (visitCountMap.get(visitCount) || 0) + 1)
+    }
 
-    weeklyRevisitData = Array.from(visitCountMap.entries())
-      .map(([visitCount, count]) => ({
-        visitCount,
-        count
-      }))
+    const weeklyRevisitData = Array.from(visitCountMap.entries())
+      .map(([visitCount, count]) => ({ visitCount, count }))
       .sort((a, b) => a.visitCount - b.visitCount)
 
     // 시간대별 평균 이용자 수 계산
