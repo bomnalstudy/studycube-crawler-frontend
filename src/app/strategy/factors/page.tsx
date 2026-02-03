@@ -7,11 +7,18 @@ import type {
   ExternalFactorType,
   ImpactEstimate,
   CreateExternalFactorInput,
+  SeasonalityCoefficient,
+  ConfidenceLevel,
 } from '@/types/strategy'
 
 interface Branch {
   id: string
   name: string
+}
+
+// 계수 포함된 외부 요인 타입
+interface FactorWithCoefficient extends ExternalFactorListItem {
+  coefficient?: SeasonalityCoefficient | null
 }
 
 const FACTOR_TYPES: { value: ExternalFactorType; label: string }[] = [
@@ -33,12 +40,13 @@ const IMPACT_OPTIONS: { value: ImpactEstimate; label: string }[] = [
 ]
 
 export default function FactorsPage() {
-  const [factors, setFactors] = useState<ExternalFactorListItem[]>([])
+  const [factors, setFactors] = useState<FactorWithCoefficient[]>([])
   const [branches, setBranches] = useState<Branch[]>([])
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [calculatingId, setCalculatingId] = useState<string | null>(null)
 
   const [typeFilter, setTypeFilter] = useState<string>('ALL')
 
@@ -63,6 +71,7 @@ export default function FactorsPage() {
     try {
       const params = new URLSearchParams()
       if (typeFilter !== 'ALL') params.set('type', typeFilter)
+      params.set('includeCoefficients', 'true')
 
       const res = await fetch(`/api/strategy/factors?${params.toString()}`)
       const data = await res.json()
@@ -74,6 +83,62 @@ export default function FactorsPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  // 시즌성 계수 계산
+  const handleCalculateCoefficient = async (factorId: string) => {
+    if (calculatingId) return
+    setCalculatingId(factorId)
+
+    try {
+      const res = await fetch(`/api/strategy/factors/${factorId}/coefficient`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ forceRecalculate: true }),
+      })
+
+      const data = await res.json()
+      if (data.success) {
+        // 목록 새로고침
+        fetchFactors()
+        alert('시즌성 계수가 계산되었습니다.')
+      } else {
+        alert(data.error || '계수 계산에 실패했습니다.')
+      }
+    } catch (error) {
+      console.error('Failed to calculate coefficient:', error)
+      alert('계수 계산에 실패했습니다.')
+    } finally {
+      setCalculatingId(null)
+    }
+  }
+
+  // 계수 배지 렌더링
+  const getCoefficientBadge = (coefficient?: SeasonalityCoefficient | null) => {
+    if (!coefficient) {
+      return (
+        <span className="text-xs text-slate-400 italic">계수 미계산</span>
+      )
+    }
+
+    const revenueChange = ((coefficient.revenueCoefficient - 1) * 100).toFixed(1)
+    const isPositive = coefficient.revenueCoefficient >= 1
+    const confidenceColors: Record<ConfidenceLevel, string> = {
+      HIGH: 'bg-emerald-100 text-emerald-700',
+      MEDIUM: 'bg-amber-100 text-amber-700',
+      LOW: 'bg-slate-100 text-slate-600',
+    }
+
+    return (
+      <div className="flex items-center gap-2">
+        <span className={`text-sm font-semibold ${isPositive ? 'text-emerald-600' : 'text-red-600'}`}>
+          매출 {isPositive ? '+' : ''}{revenueChange}%
+        </span>
+        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${confidenceColors[coefficient.confidence]}`}>
+          {coefficient.confidence === 'HIGH' ? '높음' : coefficient.confidence === 'MEDIUM' ? '중간' : '낮음'}
+        </span>
+      </div>
+    )
   }
 
   const fetchBranches = async () => {
@@ -521,6 +586,33 @@ export default function FactorsPage() {
                         )}
                       </div>
                       <div className="flex items-center gap-3">
+                        {/* 시즌성 계수 */}
+                        <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 rounded-lg">
+                          {getCoefficientBadge(factor.coefficient)}
+                        </div>
+                        {/* 계수 계산 버튼 */}
+                        <button
+                          onClick={() => handleCalculateCoefficient(factor.id)}
+                          disabled={calculatingId === factor.id}
+                          className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                            calculatingId === factor.id
+                              ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                              : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
+                          }`}
+                          title="시즌성 계수 계산"
+                        >
+                          {calculatingId === factor.id ? (
+                            <span className="flex items-center gap-1">
+                              <svg className="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                              </svg>
+                              계산중
+                            </span>
+                          ) : (
+                            '계수 계산'
+                          )}
+                        </button>
                         {getImpactBadge(factor.impactEstimate)}
                         <button
                           onClick={() => handleEdit(factor)}

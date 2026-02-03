@@ -32,9 +32,10 @@ model Branch {
   customerClaims     CustomerClaim[]
   automationFlows    AutomationFlow[]
   // Strategy 관련
-  eventBranches          EventBranch[]
-  externalFactorBranches ExternalFactorBranch[]
-  eventPerformances      EventPerformance[]
+  eventBranches            EventBranch[]
+  externalFactorBranches   ExternalFactorBranch[]
+  eventPerformances        EventPerformance[]
+  seasonalityCoefficients  SeasonalityCoefficient[]
 
   @@map("branches")
 }
@@ -683,6 +684,7 @@ model ExternalFactor {
 
   author          User?    @relation(fields: [createdBy], references: [id])
   branches        ExternalFactorBranch[]
+  coefficients    SeasonalityCoefficient[]
 
   @@index([startDate, endDate])
   @@index([type])
@@ -702,6 +704,36 @@ model ExternalFactorBranch {
   @@index([factorId])
   @@index([branchId])
   @@map("external_factor_branches")
+}
+
+// 외부 요인 시즌성 계수 (자동 계산)
+model SeasonalityCoefficient {
+  id                  String    @id @default(cuid())
+  factorId            String
+  branchId            String?   // NULL = 전체 매장 기준
+  factorType          String    // EXAM, VACATION, HOLIDAY, WEATHER, COMPETITOR
+
+  // 매출 계수 (1.0 = 변화없음, 1.35 = 35% 증가)
+  revenueCoefficient  Decimal   @db.Decimal(6, 4)
+  // 방문 계수
+  visitsCoefficient   Decimal   @db.Decimal(6, 4)
+  // 세그먼트별 계수 { "VIP": 1.2, "단골": 1.1, ... }
+  segmentCoefficients Json
+
+  // 메타데이터
+  sampleCount         Int       // 계산에 사용된 샘플 수 (과거 동일 유형 외부요인 횟수)
+  confidence          String    // HIGH (5+), MEDIUM (2-4), LOW (1)
+  calculationSource   String    // INDIVIDUAL, ALL_BRANCHES
+  calculatedAt        DateTime  @default(now())
+
+  factor              ExternalFactor @relation(fields: [factorId], references: [id], onDelete: Cascade)
+  branch              Branch?        @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@unique([factorId, branchId])
+  @@index([factorId])
+  @@index([branchId])
+  @@index([factorType])
+  @@map("seasonality_coefficients")
 }
 
 // 날씨 데이터 (Phase 2 - 기상청 API 연동)

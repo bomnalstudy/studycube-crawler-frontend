@@ -19,13 +19,16 @@ export const DonutChart = memo(function DonutChart({
   height = 300,
   colors = DEFAULT_COLORS
 }: DonutChartProps) {
+  // 값 기준 내림차순 정렬 (큰 값이 먼저 오도록)
+  const sortedData = [...data].sort((a, b) => b.value - a.value)
+
   return (
     <div className="bg-white p-6 rounded-lg shadow-md">
       <h3 className="text-lg font-semibold mb-4 text-gray-800">{title}</h3>
       <ResponsiveContainer width="100%" height={height}>
         <PieChart>
           <Pie
-            data={data}
+            data={sortedData}
             cx="50%"
             cy="50%"
             innerRadius={60}
@@ -33,9 +36,11 @@ export const DonutChart = memo(function DonutChart({
             fill="#8884d8"
             paddingAngle={5}
             dataKey="value"
+            startAngle={90}
+            endAngle={-270}
             label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
           >
-            {data.map((_, index) => (
+            {sortedData.map((_, index) => (
               <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
             ))}
           </Pie>

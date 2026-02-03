@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
@@ -441,7 +441,7 @@ export default function CustomerAnalyticsPage() {
                       <ResponsiveContainer width="100%" height={300}>
                         <PieChart>
                           <Pie
-                            data={analytics.ltvByGender}
+                            data={[...analytics.ltvByGender].sort((a, b) => b.totalCustomers - a.totalCustomers)}
                             cx="50%"
                             cy="50%"
                             labelLine={false}
@@ -451,8 +451,10 @@ export default function CustomerAnalyticsPage() {
                             outerRadius={80}
                             fill="#8884d8"
                             dataKey="totalCustomers"
+                            startAngle={90}
+                            endAngle={-270}
                           >
-                            {analytics.ltvByGender.map((_, index) => (
+                            {[...analytics.ltvByGender].sort((a, b) => b.totalCustomers - a.totalCustomers).map((_, index) => (
                               <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                             ))}
                           </Pie>
@@ -551,7 +553,7 @@ export default function CustomerAnalyticsPage() {
                     <ResponsiveContainer width="100%" height={400}>
                       <PieChart>
                         <Pie
-                          data={analytics.customerSegments}
+                          data={[...analytics.customerSegments].sort((a, b) => b.count - a.count)}
                           cx="50%"
                           cy="50%"
                           labelLine={false}
@@ -561,8 +563,10 @@ export default function CustomerAnalyticsPage() {
                           outerRadius={120}
                           fill="#8884d8"
                           dataKey="count"
+                          startAngle={90}
+                          endAngle={-270}
                         >
-                          {analytics.customerSegments.map((_, index) => (
+                          {[...analytics.customerSegments].sort((a, b) => b.count - a.count).map((_, index) => (
                             <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                           ))}
                         </Pie>

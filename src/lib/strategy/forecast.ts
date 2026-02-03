@@ -1,4 +1,8 @@
 import { prisma } from '@/lib/prisma'
+import {
+  getOverlappingFactorCoefficients,
+  calculateOverlappingCoefficient,
+} from './seasonality-calculator'
 
 /**
  * 기대 매출 예측 시스템
@@ -96,42 +100,66 @@ function calculateSeasonIndex(
 
 /**
  * 외부 요인의 과거 영향 계산
+ * - 저장된 계수가 있으면 우선 사용
+ * - 없으면 기존 로직으로 계산
  */
 async function getExternalFactorImpact(
   branchId: string,
   factorTypes: string[],
   eventStart: Date,
   eventEnd: Date
-): Promise<{ index: number; reason: string }> {
+): Promise<{ index: number; reason: string; fromStoredCoefficient: boolean }> {
   if (factorTypes.length === 0) {
-    return { index: 1.0, reason: '외부 요인 없음' }
+    return { index: 1.0, reason: '외부 요인 없음', fromStoredCoefficient: false }
   }
 
-  // 과거 동일 유형의 외부 요인 기간과 그 기간의 매출 변동 조회
+  // 1. 먼저 저장된 계수 조회 시도
+  try {
+    const storedCoefficients = await getOverlappingFactorCoefficients(
+      branchId,
+      eventStart,
+      eventEnd
+    )
+
+    if (storedCoefficients.length > 0) {
+      const merged = calculateOverlappingCoefficient(storedCoefficients)
+      const percentDiff = ((merged.revenueCoefficient - 1) * 100).toFixed(1)
+      const direction = merged.revenueCoefficient >= 1 ? '상승' : '하락'
+
+      return {
+        index: merged.revenueCoefficient,
+        reason: `저장된 시즌성 계수 적용: ${Math.abs(Number(percentDiff))}% ${direction} (${storedCoefficients.length}개 외부요인)`,
+        fromStoredCoefficient: true,
+      }
+    }
+  } catch {
+    // 저장된 계수 조회 실패 시 기존 로직으로 fallback
+  }
+
+  // 2. 저장된 계수가 없으면 기존 로직으로 계산
   const pastFactors = await prisma.externalFactor.findMany({
     where: {
       type: { in: factorTypes },
-      endDate: { lt: eventStart }, // 이벤트 이전에 종료된 것만
+      endDate: { lt: eventStart },
       branches: {
         some: { branchId },
       },
     },
     orderBy: { endDate: 'desc' },
-    take: 5, // 최근 5개
+    take: 5,
   })
 
   if (pastFactors.length === 0) {
     return {
       index: 1.0,
-      reason: `과거 ${factorTypes.join(', ')} 데이터 없음, 외부 요인 지수 1.0 적용`
+      reason: `과거 ${factorTypes.join(', ')} 데이터 없음, 외부 요인 지수 1.0 적용`,
+      fromStoredCoefficient: false,
     }
   }
 
-  // 각 과거 외부 요인 기간의 매출과 그 전후 매출 비교
   const impacts: number[] = []
 
   for (const factor of pastFactors) {
-    // 외부 요인 기간 매출
     const factorMetrics = await prisma.dailyMetric.findMany({
       where: {
         branchId,
@@ -139,7 +167,6 @@ async function getExternalFactorImpact(
       },
     })
 
-    // 외부 요인 직전 기간 매출 (같은 일수)
     const durationDays = Math.ceil((factor.endDate.getTime() - factor.startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1
     const beforeStart = new Date(factor.startDate)
     beforeStart.setDate(beforeStart.getDate() - durationDays)
@@ -164,7 +191,8 @@ async function getExternalFactorImpact(
   if (impacts.length === 0) {
     return {
       index: 1.0,
-      reason: `${factorTypes.join(', ')} 과거 영향 데이터 부족`
+      reason: `${factorTypes.join(', ')} 과거 영향 데이터 부족`,
+      fromStoredCoefficient: false,
     }
   }
 
@@ -175,6 +203,7 @@ async function getExternalFactorImpact(
   return {
     index: avgImpact,
     reason: `과거 ${factorTypes.join(', ')} 기간 평균 ${Math.abs(Number(percentDiff))}% ${direction} (${impacts.length}회 기준)`,
+    fromStoredCoefficient: false,
   }
 }
 

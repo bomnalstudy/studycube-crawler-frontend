@@ -6,7 +6,16 @@ import type {
   ExternalFactorListItem,
   ExternalFactorType,
   ImpactEstimate,
+  SeasonalityCoefficient,
+  SegmentCoefficients,
+  ConfidenceLevel,
+  CalculationSource,
 } from '@/types/strategy'
+
+// 계수 포함 응답 타입
+interface ExternalFactorWithCoefficient extends ExternalFactorListItem {
+  coefficient?: SeasonalityCoefficient | null
+}
 
 // GET: 외부 요인 목록 조회
 export async function GET(request: NextRequest) {
@@ -21,6 +30,7 @@ export async function GET(request: NextRequest) {
     const branchId = searchParams.get('branchId')
     const startDate = searchParams.get('startDate')
     const endDate = searchParams.get('endDate')
+    const includeCoefficients = searchParams.get('includeCoefficients') === 'true'
 
     // 필터 조건 구성
     const where: Record<string, unknown> = {}
@@ -60,23 +70,72 @@ export async function GET(request: NextRequest) {
             branch: { select: { id: true, name: true } },
           },
         },
+        ...(includeCoefficients && {
+          coefficients: {
+            where: branchId
+              ? { OR: [{ branchId: null }, { branchId }] }
+              : { branchId: null },
+            orderBy: { branchId: 'desc' as const },
+            take: 1,
+          },
+        }),
       },
       orderBy: { startDate: 'desc' },
     })
 
-    const result: ExternalFactorListItem[] = factors.map((factor) => ({
-      id: factor.id,
-      type: factor.type as ExternalFactorType,
-      name: factor.name,
-      startDate: factor.startDate.toISOString().split('T')[0],
-      endDate: factor.endDate.toISOString().split('T')[0],
-      impactEstimate: factor.impactEstimate as ImpactEstimate | undefined,
-      isRecurring: factor.isRecurring,
-      branches: factor.branches.map((b) => ({
-        id: b.branch.id,
-        name: b.branch.name,
-      })),
-    }))
+    const result: ExternalFactorWithCoefficient[] = factors.map((factor) => {
+      const base: ExternalFactorListItem = {
+        id: factor.id,
+        type: factor.type as ExternalFactorType,
+        name: factor.name,
+        startDate: factor.startDate.toISOString().split('T')[0],
+        endDate: factor.endDate.toISOString().split('T')[0],
+        impactEstimate: factor.impactEstimate as ImpactEstimate | undefined,
+        isRecurring: factor.isRecurring,
+        branches: factor.branches.map((b) => ({
+          id: b.branch.id,
+          name: b.branch.name,
+        })),
+      }
+
+      // 계수 포함 요청 시
+      if (includeCoefficients && 'coefficients' in factor) {
+        const coef = (factor.coefficients as Array<{
+          id: string
+          factorId: string
+          branchId: string | null
+          factorType: string
+          revenueCoefficient: unknown
+          visitsCoefficient: unknown
+          segmentCoefficients: unknown
+          sampleCount: number
+          confidence: string
+          calculationSource: string
+          calculatedAt: Date
+        }>)[0]
+
+        return {
+          ...base,
+          coefficient: coef
+            ? {
+                id: coef.id,
+                factorId: coef.factorId,
+                branchId: coef.branchId,
+                factorType: coef.factorType as ExternalFactorType,
+                revenueCoefficient: Number(coef.revenueCoefficient),
+                visitsCoefficient: Number(coef.visitsCoefficient),
+                segmentCoefficients: coef.segmentCoefficients as SegmentCoefficients,
+                sampleCount: coef.sampleCount,
+                confidence: coef.confidence as ConfidenceLevel,
+                calculationSource: coef.calculationSource as CalculationSource,
+                calculatedAt: coef.calculatedAt.toISOString(),
+              }
+            : null,
+        }
+      }
+
+      return base
+    })
 
     return NextResponse.json({ success: true, data: result })
   } catch (error) {

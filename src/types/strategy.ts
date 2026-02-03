@@ -84,6 +84,71 @@ export const IMPACT_ESTIMATES = {
 
 export type ImpactEstimate = keyof typeof IMPACT_ESTIMATES
 
+// ===== 시즌성 계수 =====
+
+export const CONFIDENCE_LEVELS = {
+  HIGH: '높음',    // 5개 이상 샘플
+  MEDIUM: '중간',  // 2-4개 샘플
+  LOW: '낮음',     // 1개 샘플
+} as const
+
+export type ConfidenceLevel = keyof typeof CONFIDENCE_LEVELS
+
+export const CALCULATION_SOURCES = {
+  INDIVIDUAL: '개별 매장',
+  ALL_BRANCHES: '전체 매장',
+} as const
+
+export type CalculationSource = keyof typeof CALCULATION_SOURCES
+
+// 세그먼트별 계수 타입
+export interface SegmentCoefficients {
+  VIP?: number
+  단골?: number
+  일반?: number
+  신규?: number
+  이탈위험?: number
+  이탈?: number
+  복귀?: number
+}
+
+// 시즌성 계수 인터페이스
+export interface SeasonalityCoefficient {
+  id: string
+  factorId: string
+  branchId: string | null  // null = 전체 매장 기준
+  factorType: ExternalFactorType
+  revenueCoefficient: number  // 매출 계수 (1.0 = 변화없음, 1.35 = 35% 증가)
+  visitsCoefficient: number   // 방문 계수
+  segmentCoefficients: SegmentCoefficients  // 세그먼트별 계수
+  sampleCount: number         // 계산에 사용된 샘플 수
+  confidence: ConfidenceLevel // 신뢰도
+  calculationSource: CalculationSource  // 계산 기준
+  calculatedAt: string        // ISO 날짜
+}
+
+// 계수 계산 요청
+export interface CalculateCoefficientRequest {
+  branchIds?: string[]  // 비어있으면 전체 매장 기준
+  forceRecalculate?: boolean  // true면 기존 계수 덮어쓰기
+}
+
+// 계수 계산 응답
+export interface CalculateCoefficientResponse {
+  factorId: string
+  factorType: ExternalFactorType
+  coefficients: SeasonalityCoefficient[]
+}
+
+// 중첩 계수 (여러 외부 요인이 겹칠 때)
+export interface MergedCoefficient {
+  revenueCoefficient: number
+  visitsCoefficient: number
+  segmentCoefficients: SegmentCoefficients
+  factorIds: string[]  // 적용된 외부 요인 ID들
+  factorNames: string[] // 적용된 외부 요인 이름들
+}
+
 // ===== 이벤트 상태 =====
 
 export const EVENT_STATUS = {

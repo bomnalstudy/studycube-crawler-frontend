@@ -21,6 +21,8 @@ function getColor(segment: string): string {
 
 const DonutChart = memo(function DonutChart({ data, title }: { data: SegmentChartItem[]; title: string }) {
   const total = useMemo(() => data.reduce((sum, item) => sum + item.value, 0), [data])
+  // 값 기준 내림차순 정렬 (큰 값이 먼저 오도록)
+  const sortedData = useMemo(() => [...data].sort((a, b) => b.value - a.value), [data])
 
   if (data.length === 0 || total === 0) {
     return (
@@ -44,15 +46,17 @@ const DonutChart = memo(function DonutChart({ data, title }: { data: SegmentChar
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
-                data={data}
+                data={sortedData}
                 cx="50%"
                 cy="50%"
                 innerRadius={35}
                 outerRadius={65}
                 dataKey="value"
+                startAngle={90}
+                endAngle={-270}
                 stroke="none"
               >
-                {data.map((entry) => (
+                {sortedData.map((entry) => (
                   <Cell key={entry.segment} fill={getColor(entry.segment)} />
                 ))}
               </Pie>
@@ -67,7 +71,7 @@ const DonutChart = memo(function DonutChart({ data, title }: { data: SegmentChar
           </ResponsiveContainer>
         </div>
         <div className="flex-1 space-y-1">
-          {data.map((item) => {
+          {sortedData.map((item) => {
             const pct = total > 0 ? ((item.value / total) * 100).toFixed(1) : '0'
             return (
               <div key={item.segment} className="flex items-center justify-between">
