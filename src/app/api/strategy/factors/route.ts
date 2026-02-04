@@ -100,6 +100,7 @@ export async function GET(request: NextRequest) {
 
       // 계수 포함 요청 시
       if (includeCoefficients && 'coefficients' in factor) {
+        console.log(`[조회] factorId=${factor.id}, name=${factor.name}, coefficients count=${(factor.coefficients as unknown[])?.length}`)
         const coef = (factor.coefficients as Array<{
           id: string
           factorId: string

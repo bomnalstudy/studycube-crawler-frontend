@@ -112,7 +112,9 @@ async function getFactorPeriods(
     // 과거 5년간의 같은 기간 추가
     for (let year = factorYear - 1; year >= currentYear - 5 && year >= 2020; year--) {
       const pastStart = new Date(year, startMonth, startDay)
-      const pastEnd = new Date(year, endMonth, endDay)
+      // 종료 월이 시작 월보다 작으면 (연도를 넘어가는 경우) 종료 연도를 +1
+      const endYear = endMonth < startMonth ? year + 1 : year
+      const pastEnd = new Date(endYear, endMonth, endDay)
 
       // 현재보다 과거인 경우만
       if (pastEnd < now) {
@@ -128,6 +130,12 @@ async function getFactorPeriods(
         }
       }
     }
+  }
+
+  // 기간 로그 출력
+  console.log(`[기간생성] "${factor.name}" 기간 목록:`)
+  for (const period of result) {
+    console.log(`  - ${formatDateLocal(period.startDate)} ~ ${formatDateLocal(period.endDate)}`)
   }
 
   return { periods: result, factorName: factor.name }
@@ -351,7 +359,40 @@ export async function calculateRevenueCoefficient(
     }
 
     // 유효한 기간이 1개도 없으면 이 매장은 제외
-    if (validPeriods === 0 || factorDays === 0) continue
+    if (validPeriods === 0 || factorDays === 0) {
+      // 잠실새내점인 경우 더 자세한 로그
+      if (branchNames.get(branchId)?.includes('잠실')) {
+        console.log(`[매출계수] 잠실새내점 상세 분석:`)
+        for (const period of factorPeriods) {
+          let periodDays = 0
+          const missingDates: string[] = []
+          const foundDates: string[] = []
+          for (const dateStr of period.dates) {
+            if (metricsDateMap.has(dateStr)) {
+              periodDays++
+              foundDates.push(dateStr)
+            } else {
+              missingDates.push(dateStr)
+            }
+          }
+          const coverage = (periodDays / period.expectedDays * 100).toFixed(1)
+          const startStr = [...period.dates][0]
+          const endStr = [...period.dates][period.dates.size - 1]
+          console.log(`  - ${startStr}~${endStr}: ${periodDays}/${period.expectedDays}일 (${coverage}%)`)
+          if (missingDates.length > 0 && missingDates.length <= 20) {
+            console.log(`    [누락된 날짜] ${missingDates.join(', ')}`)
+          } else if (missingDates.length > 20) {
+            console.log(`    [누락된 날짜] ${missingDates.slice(0, 10).join(', ')} ... 등 ${missingDates.length}개`)
+          }
+        }
+        // DB에서 조회한 날짜 샘플 출력
+        const dbDates = [...metricsDateMap.keys()].sort()
+        const mayJuneDates = dbDates.filter(d => d.startsWith('2024-05') || d.startsWith('2024-06'))
+        console.log(`  [DB 2024-05~06 날짜 샘플] ${mayJuneDates.slice(0, 10).join(', ')} ... (총 ${mayJuneDates.length}개)`)
+      }
+      console.log(`[매출계수] 매장 제외: ${branchNames.get(branchId)}, 유효기간=0 (총 ${factorPeriods.length}개 기간 중)`)
+      continue
+    }
 
     const factorDailyAvg = factorTotal / factorDays
 

@@ -13,39 +13,73 @@ import {
 
 /**
  * 시즌성 계수 저장 (upsert)
+ * Prisma에서 nullable unique field로 upsert할 때는 findFirst + create/update 패턴 사용
  */
 export async function saveSeasonalityCoefficient(
   data: Omit<SeasonalityCoefficient, 'id' | 'calculatedAt'>
 ): Promise<SeasonalityCoefficient> {
-  const result = await prisma.seasonalityCoefficient.upsert({
+  // branchId가 null인 경우 Prisma upsert가 제대로 작동하지 않으므로 직접 처리
+  // 중복 레코드가 있을 수 있으므로 모두 조회
+  const existingRecords = await prisma.seasonalityCoefficient.findMany({
     where: {
-      factorId_branchId: {
-        factorId: data.factorId,
-        branchId: data.branchId ?? 'NULL_PLACEHOLDER', // Prisma unique constraint workaround
-      },
-    },
-    update: {
-      factorType: data.factorType,
-      revenueCoefficient: data.revenueCoefficient,
-      visitsCoefficient: data.visitsCoefficient,
-      segmentCoefficients: data.segmentCoefficients as Record<string, number>,
-      sampleCount: data.sampleCount,
-      confidence: data.confidence,
-      calculationSource: data.calculationSource,
-      calculatedAt: new Date(),
-    },
-    create: {
       factorId: data.factorId,
-      branchId: data.branchId,
-      factorType: data.factorType,
-      revenueCoefficient: data.revenueCoefficient,
-      visitsCoefficient: data.visitsCoefficient,
-      segmentCoefficients: data.segmentCoefficients as Record<string, number>,
-      sampleCount: data.sampleCount,
-      confidence: data.confidence,
-      calculationSource: data.calculationSource,
+      branchId: data.branchId ?? null,
     },
   })
+
+  console.log(`[DB조회] factorId=${data.factorId}, 기존 레코드 수=${existingRecords.length}`)
+
+  // 중복 레코드가 있으면 가장 최근 것만 남기고 삭제
+  let existing = existingRecords[0]
+  if (existingRecords.length > 1) {
+    console.log(`[DB정리] 중복 레코드 ${existingRecords.length}개 발견, 정리 중...`)
+    // calculatedAt 기준 정렬 (최신 먼저)
+    const sorted = [...existingRecords].sort((a, b) =>
+      b.calculatedAt.getTime() - a.calculatedAt.getTime()
+    )
+    existing = sorted[0] // 가장 최근 레코드를 사용
+    const toDelete = sorted.slice(1) // 첫 번째(최신)를 제외한 나머지 삭제
+
+    for (const record of toDelete) {
+      await prisma.seasonalityCoefficient.delete({ where: { id: record.id } })
+    }
+    console.log(`[DB정리] ${toDelete.length}개 중복 레코드 삭제 완료`)
+  }
+
+  let result
+  if (existing) {
+    console.log(`[DB저장] 기존 계수 업데이트: factorId=${data.factorId}, 매출계수=${data.revenueCoefficient}`)
+    result = await prisma.seasonalityCoefficient.update({
+      where: { id: existing.id },
+      data: {
+        factorType: data.factorType,
+        revenueCoefficient: data.revenueCoefficient,
+        visitsCoefficient: data.visitsCoefficient,
+        segmentCoefficients: data.segmentCoefficients as Record<string, number>,
+        sampleCount: data.sampleCount,
+        confidence: data.confidence,
+        calculationSource: data.calculationSource,
+        calculatedAt: new Date(),
+      },
+    })
+    console.log(`[DB저장] 업데이트 완료: id=${result.id}, 저장된매출계수=${result.revenueCoefficient}`)
+  } else {
+    console.log(`[DB저장] 새 계수 생성: factorId=${data.factorId}, 매출계수=${data.revenueCoefficient}`)
+    result = await prisma.seasonalityCoefficient.create({
+      data: {
+        factorId: data.factorId,
+        branchId: data.branchId,
+        factorType: data.factorType,
+        revenueCoefficient: data.revenueCoefficient,
+        visitsCoefficient: data.visitsCoefficient,
+        segmentCoefficients: data.segmentCoefficients as Record<string, number>,
+        sampleCount: data.sampleCount,
+        confidence: data.confidence,
+        calculationSource: data.calculationSource,
+      },
+    })
+    console.log(`[DB저장] 생성 완료: id=${result.id}, 저장된매출계수=${result.revenueCoefficient}`)
+  }
 
   return {
     id: result.id,
