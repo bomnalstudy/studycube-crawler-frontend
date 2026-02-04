@@ -36,6 +36,8 @@ model Branch {
   externalFactorBranches   ExternalFactorBranch[]
   eventPerformances        EventPerformance[]
   seasonalityCoefficients  SeasonalityCoefficient[]
+  operationBranches        OperationBranch[]
+  operationPerformances    OperationPerformance[]
 
   @@map("branches")
 }
@@ -326,6 +328,7 @@ model User {
   // Strategy 관련
   events            Event[]
   externalFactors   ExternalFactor[]
+  operations        Operation[]
 
   @@map("users")
 }
@@ -601,11 +604,23 @@ model EventPerformance {
   visitsAfter       Int?
   visitsGrowth      Decimal? @db.Decimal(8, 4)
 
-  // 이용권별 매출
+  // 이용권별 매출 (이후)
   dayTicketRevenue  Decimal? @db.Decimal(12, 2)
   timeTicketRevenue Decimal? @db.Decimal(12, 2)
   termTicketRevenue Decimal? @db.Decimal(12, 2)
   fixedTicketRevenue Decimal? @db.Decimal(12, 2)
+
+  // 이용권별 매출 (이전/비교)
+  dayTicketRevenueBefore  Decimal? @db.Decimal(12, 2)
+  timeTicketRevenueBefore Decimal? @db.Decimal(12, 2)
+  termTicketRevenueBefore Decimal? @db.Decimal(12, 2)
+  fixedTicketRevenueBefore Decimal? @db.Decimal(12, 2)
+
+  // 기대 매출 예측
+  useForecast       Boolean?
+  forecastData      Json?    // 기대 매출 예측 상세 (expectedRevenue, seasonIndex, breakdown 등)
+  isNewBranch       Boolean?
+  noYoyDataReason   String?
 
   // 통계 분석
   isSignificant     Boolean?
@@ -621,6 +636,9 @@ model EventPerformance {
   segmentChanges    Json?    // 세그먼트별 변화 데이터
   ticketUpgrades    Json?    // 이용권 업그레이드 데이터
   visitPattern      Json?    // 방문 패턴 데이터
+
+  // 외부요인 예측
+  externalFactorPredictions Json?
 
   // AI 인사이트
   insights          Json?
@@ -761,4 +779,132 @@ enum EventStatus {
   ONGOING
   COMPLETED
   CANCELLED
+}
+
+// ===== 운영 변경 모듈 =====
+
+model Operation {
+  id              String          @id @default(cuid())
+  name            String
+  subType         String          // NEW_SERVICE, FACILITY_UPGRADE, SEAT_CHANGE
+  implementedAt   DateTime        @db.Date
+  status          OperationStatus @default(PLANNED)
+  cost            Decimal?        @db.Decimal(12, 2)
+  description     String?
+  expectedEffect  String?
+  createdBy       String
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  author          User            @relation(fields: [createdBy], references: [id])
+  branches        OperationBranch[]
+  performances    OperationPerformance[]
+
+  @@index([implementedAt])
+  @@index([status])
+  @@index([createdBy])
+  @@map("operations")
+}
+
+model OperationBranch {
+  id          String   @id @default(cuid())
+  operationId String
+  branchId    String
+  createdAt   DateTime @default(now())
+
+  operation   Operation @relation(fields: [operationId], references: [id], onDelete: Cascade)
+  branch      Branch    @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@unique([operationId, branchId])
+  @@index([operationId])
+  @@index([branchId])
+  @@map("operation_branches")
+}
+
+enum OperationStatus {
+  PLANNED
+  IMPLEMENTED
+  CANCELLED
+}
+
+model OperationPerformance {
+  id                 String   @id @default(cuid())
+  operationId        String
+  branchId           String
+  calculatedAt       DateTime @default(now())
+  comparisonType     String   // YOY, MOM
+
+  // 1개월 매출 지표
+  revenueBefore1m    Decimal? @db.Decimal(12, 2)
+  revenueAfter1m     Decimal? @db.Decimal(12, 2)
+  revenueGrowth1m    Decimal? @db.Decimal(8, 4)
+
+  // 3개월 매출 지표
+  revenueBefore3m    Decimal? @db.Decimal(12, 2)
+  revenueAfter3m     Decimal? @db.Decimal(12, 2)
+  revenueGrowth3m    Decimal? @db.Decimal(8, 4)
+
+  // 6개월 매출 지표
+  revenueBefore6m    Decimal? @db.Decimal(12, 2)
+  revenueAfter6m     Decimal? @db.Decimal(12, 2)
+  revenueGrowth6m    Decimal? @db.Decimal(8, 4)
+
+  // 고객 지표
+  avgCustomersBefore Decimal? @db.Decimal(10, 2)
+  avgCustomersAfter  Decimal? @db.Decimal(10, 2)
+  customerGrowth     Decimal? @db.Decimal(8, 4)
+  newCustomers       Int?
+  returnedCustomers  Int?
+
+  // 방문 지표
+  visitsBefore       Int?
+  visitsAfter        Int?
+  visitsGrowth       Decimal? @db.Decimal(8, 4)
+
+  // 이용권별 매출
+  dayTicketRevenue         Decimal? @db.Decimal(12, 2)
+  dayTicketRevenueBefore   Decimal? @db.Decimal(12, 2)
+  timeTicketRevenue        Decimal? @db.Decimal(12, 2)
+  timeTicketRevenueBefore  Decimal? @db.Decimal(12, 2)
+  termTicketRevenue        Decimal? @db.Decimal(12, 2)
+  termTicketRevenueBefore  Decimal? @db.Decimal(12, 2)
+  fixedTicketRevenue       Decimal? @db.Decimal(12, 2)
+  fixedTicketRevenueBefore Decimal? @db.Decimal(12, 2)
+
+  // 기대 매출 예측
+  useForecast        Boolean?
+  forecastData       Json?
+  isNewBranch        Boolean?
+  noYoyDataReason    String?
+
+  // 통계 분석
+  isSignificant      Boolean?
+  pValue             Decimal? @db.Decimal(8, 6)
+  effectSize         Decimal? @db.Decimal(8, 4)
+
+  // 종합 점수
+  performanceScore   Int?
+  verdict            String?
+  insights           Json?
+  scoreBreakdown     Json?
+
+  // 세그먼트 비교 메타데이터
+  hasSegmentComparisonData Boolean?
+  segmentPeriodInfo  Json?
+
+  // 복합 데이터 (JSON)
+  segmentChanges     Json?
+  segmentMigrations  Json?
+  ticketTypeChanges  Json?
+  ticketUpgrades     Json?
+  visitPattern       Json?
+
+  operation          Operation @relation(fields: [operationId], references: [id], onDelete: Cascade)
+  branch             Branch    @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@unique([operationId, branchId])
+  @@index([operationId])
+  @@index([branchId])
+  @@index([calculatedAt])
+  @@map("operation_performance")
 }

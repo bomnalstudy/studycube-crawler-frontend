@@ -9,6 +9,7 @@ export interface OperationInfo {
 }
 
 export interface AnalysisSummary {
+  avgRevenueGrowth1m: number
   avgRevenueGrowth3m: number
   avgRevenueGrowth6m: number
   avgCustomerGrowth: number
@@ -25,4 +26,6 @@ export interface AnalysisData {
   operation: OperationInfo
   performances: import('@/types/strategy').OperationPerformanceData[]
   summary: AnalysisSummary
+  fromCache?: boolean
+  calculatedAt?: string
 }

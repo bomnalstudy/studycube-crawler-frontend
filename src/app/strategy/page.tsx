@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import type { EventListItem, ExternalFactorListItem, EventStatus, OperationListItem, OperationStatus } from '@/types/strategy'
 import { OPERATION_SUB_TYPES, OPERATION_STATUS } from '@/types/strategy'
+import { isAnalysisReady } from '@/lib/strategy/analysis-helpers'
 
 interface DashboardStats {
   totalEvents: number
@@ -217,7 +218,7 @@ export default function StrategyDashboard() {
         </div>
 
         {/* 빠른 액션 */}
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <Link
             href="/strategy/events"
             className="group bg-white rounded-2xl p-5 shadow-sm border border-slate-100 hover:border-purple-200 hover:shadow-md transition-all"
@@ -243,19 +244,6 @@ export default function StrategyDashboard() {
             </div>
             <p className="font-semibold text-slate-700 mt-3 group-hover:text-amber-700 transition-colors">운영 변경</p>
             <p className="text-xs text-slate-400 mt-1">시설 개선, 좌석 변경</p>
-          </Link>
-
-          <Link
-            href="/strategy/analysis"
-            className="group bg-white rounded-2xl p-5 shadow-sm border border-slate-100 hover:border-blue-200 hover:shadow-md transition-all"
-          >
-            <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center group-hover:bg-blue-500 group-hover:text-white transition-colors">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-              </svg>
-            </div>
-            <p className="font-semibold text-slate-700 mt-3 group-hover:text-blue-700 transition-colors">성과 분석</p>
-            <p className="text-xs text-slate-400 mt-1">이벤트별 성과 측정</p>
           </Link>
 
           <Link
@@ -325,6 +313,11 @@ export default function StrategyDashboard() {
                           <span className={`w-1.5 h-1.5 rounded-full ${statusStyle.dot}`} />
                           {getStatusLabel(event.status)}
                         </span>
+                        {isAnalysisReady(event.startDate, event.endDate, event.status) && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-blue-100 text-blue-700">
+                            분석 가능
+                          </span>
+                        )}
                       </div>
                     </Link>
                   )

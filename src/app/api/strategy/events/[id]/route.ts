@@ -96,6 +96,11 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
     // 트랜잭션으로 업데이트
     const event = await prisma.$transaction(async (tx) => {
+      // 기간 또는 지점 변경 시 저장된 분석 결과 무효화
+      if (body.startDate || body.endDate || body.branchIds) {
+        await tx.eventPerformance.deleteMany({ where: { eventId: id } })
+      }
+
       // types 업데이트 (있는 경우)
       if (body.types) {
         await tx.eventType.deleteMany({ where: { eventId: id } })

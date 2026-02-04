@@ -499,9 +499,9 @@ export async function forecastRevenue(
   )
 
   // 기대 매출 계산
-  // 공식: 전체 평균 × 시즌 지수 × 외부 요인 × 추세 계수 × 일수
-  // (최근 평균이 아닌 전체 평균 사용 → 시즌 지수와의 이중 계산 방지)
-  const expectedDailyRevenue = overallAvg * seasonIndex * externalFactorIndex * trendCoefficient
+  // 공식: 전체 평균 × 시즌 지수 × 일수
+  // 추세 계수와 외부 요인 지수는 참고용으로만 반환 (계산에 미포함)
+  const expectedDailyRevenue = overallAvg * seasonIndex
   const expectedRevenue = expectedDailyRevenue * eventDays
 
   // 신뢰도 결정

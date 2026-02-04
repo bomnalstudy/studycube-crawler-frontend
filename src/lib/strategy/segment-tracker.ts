@@ -101,6 +101,7 @@ export async function trackSegmentChanges(
 ): Promise<{
   segmentChanges: SegmentChangeData[]
   segmentMigrations: SegmentMigration[]
+  customerSegments: Map<string, string>
 }> {
   // 이벤트 기간을 그대로 사용 (CRM과 동일)
   const rangeStart = new Date(eventStart)
@@ -138,6 +139,7 @@ export async function trackSegmentChanges(
         isNegativeSegment: NEGATIVE_SEGMENTS.includes(name),
       })),
       segmentMigrations: [],
+      customerSegments: new Map(),
     }
   }
 
@@ -202,6 +204,9 @@ export async function trackSegmentChanges(
     segmentCounts[segment] = 0
   }
 
+  // 고객별 세그먼트 매핑 (이동 추적용)
+  const customerSegments = new Map<string, string>()
+
   for (const customerId of customerIds) {
     const customerData = customerMap.get(customerId)
     if (!customerData) continue
@@ -224,6 +229,7 @@ export async function trackSegmentChanges(
     )
 
     segmentCounts[segment] = (segmentCounts[segment] || 0) + 1
+    customerSegments.set(customerId, segment)
   }
 
   // countBefore는 0으로 설정 (비교는 trackSegmentChangesWithComparison에서 처리)
@@ -250,7 +256,7 @@ export async function trackSegmentChanges(
     ),
   })
 
-  return { segmentChanges, segmentMigrations }
+  return { segmentChanges, segmentMigrations, customerSegments }
 }
 
 /**
@@ -1139,21 +1145,20 @@ export async function trackSegmentChangesWithComparison(
   let expectedCounts: Map<string, number> = new Map()  // 예상값 (이전값 기반 예측)
   let hasComparisonData = false
   let comparisonSource: 'YOY' | 'MOM' | 'SEASONAL' | null = null
+  let comparisonCustomerSegments: Map<string, string> | null = null  // 비교 기간 고객별 세그먼트
 
-  // 시즌/추세 계수 계산 (세그먼트별로 개별 계산)
+  // 시즌 계수 계산 (세그먼트별 - 추세 계수는 시즌 노이즈가 섞여 제거)
   const targetMonth = eventStart.getMonth() + 1
   const seasonIndex: Map<string, number> = new Map()
-  const trendCoeff: Map<string, number> = new Map()
+  const trendCoeff: Map<string, number> = new Map()  // 호환성용 (모두 1.0)
   let validDataMonths = 0
   let monthlySegmentCounts: Map<number, Map<string, { total: number; count: number }>> = new Map()
 
-  // YoY 데이터가 없을 때만 시즌/추세 계수 계산
+  // YoY 데이터가 없을 때만 시즌 계수 계산
   if (!yoyDataCheck) {
-    // 세그먼트별 월별 인원수 수집
     const { data: branchData, monthsWithData } = await getMonthlySegmentCountsForBranch(branchId)
     validDataMonths = monthsWithData
 
-    // 데이터 부족 시 전체 지점 데이터 fallback
     if (monthsWithData < MIN_MONTHS_FOR_INDIVIDUAL) {
       monthlySegmentCounts = await getAllBranchesMonthlySegmentCounts()
       console.log('[세그먼트 비교] 개별 지점 데이터 부족 - 전체 지점 데이터 사용')
@@ -1161,30 +1166,23 @@ export async function trackSegmentChangesWithComparison(
       monthlySegmentCounts = branchData
     }
 
-    // 세그먼트별 시즌 지수 계산
+    // 세그먼트별 시즌 지수만 계산 (추세 제거)
     const perSegmentSeasonIndex = calculatePerSegmentSeasonIndex(monthlySegmentCounts, targetMonth)
 
-    // 세그먼트별 추세 계수 계산
-    const perSegmentTrendCoeff = calculatePerSegmentTrendCoeff(eventStart, monthlySegmentCounts)
-
-    // Map에 세그먼트별 값 적용
     for (const seg of SEGMENT_ORDER) {
       seasonIndex.set(seg, perSegmentSeasonIndex.get(seg)?.index ?? 1.0)
-      trendCoeff.set(seg, perSegmentTrendCoeff.get(seg)?.coeff ?? 1.0)
+      trendCoeff.set(seg, 1.0)  // 추세 미적용
     }
 
-    console.log('[세그먼트 비교] 세그먼트별 시즌/추세 계수:', {
+    console.log('[세그먼트 비교] 세그먼트별 시즌 계수 (추세 제거):', {
       targetMonth,
       validDataMonths,
       seasonIndex: Object.fromEntries(
         Array.from(seasonIndex.entries()).map(([k, v]) => [k, v.toFixed(3)])
       ),
-      trendCoeff: Object.fromEntries(
-        Array.from(trendCoeff.entries()).map(([k, v]) => [k, v.toFixed(3)])
-      ),
     })
   } else {
-    // YoY 데이터가 있으면 시즌/추세 = 1.0 (실제 비교 데이터 사용)
+    // YoY 데이터 있으면 시즌/추세 불필요
     for (const seg of SEGMENT_ORDER) {
       seasonIndex.set(seg, 1.0)
       trendCoeff.set(seg, 1.0)
@@ -1193,88 +1191,115 @@ export async function trackSegmentChangesWithComparison(
   }
 
   if (yoyDataCheck) {
-    // YoY 데이터가 있으면 사용
+    // YoY: 전년 동기 값을 그대로 예상치로 사용 (시즌성이 이미 반영됨)
     comparisonStart = yoyStart
     comparisonEnd = yoyEnd
     const comparisonResult = await trackSegmentChanges(branchId, comparisonStart, comparisonEnd)
+    comparisonCustomerSegments = comparisonResult.customerSegments
     for (const seg of comparisonResult.segmentChanges) {
       beforeCounts.set(seg.segmentName, seg.countAfter)
-      // 예상값 = 이전값 × 시즌 × 추세
-      const before = seg.countAfter
-      const season = seasonIndex.get(seg.segmentName) || 1.0
-      const trend = trendCoeff.get(seg.segmentName) || 1.0
-      expectedCounts.set(seg.segmentName, Math.round(before * season * trend))
+      expectedCounts.set(seg.segmentName, seg.countAfter)  // 그대로 사용
     }
     hasComparisonData = true
     comparisonSource = 'YOY'
-    console.log('[세그먼트 비교] YoY 데이터 사용:', {
+    console.log('[세그먼트 비교] YoY 데이터 사용 (직접):', {
       start: comparisonStart.toISOString().split('T')[0],
       end: comparisonEnd.toISOString().split('T')[0],
-      before: Object.fromEntries(beforeCounts),
       expected: Object.fromEntries(expectedCounts),
     })
   } else if (momDataCheck) {
-    // YoY 없으면 MoM 데이터 사용
+    // MoM: 월간 전환 비율 기반 예상 (전체 고객수 제약)
     comparisonStart = momStart
     comparisonEnd = momEnd
     const comparisonResult = await trackSegmentChanges(branchId, comparisonStart, comparisonEnd)
+    comparisonCustomerSegments = comparisonResult.customerSegments
+
+    const comparisonMonth = momStart.getMonth() + 1
+
+    // 1. 기준 기간 세그먼트 수 수집
+    let totalBefore = 0
+    const rawCounts = new Map<string, number>()
     for (const seg of comparisonResult.segmentChanges) {
       beforeCounts.set(seg.segmentName, seg.countAfter)
-      // 예상값 = 이전값 × 시즌 × 추세
-      const before = seg.countAfter
-      const season = seasonIndex.get(seg.segmentName) || 1.0
-      const trend = trendCoeff.get(seg.segmentName) || 1.0
-      expectedCounts.set(seg.segmentName, Math.round(before * season * trend))
+      rawCounts.set(seg.segmentName, seg.countAfter)
+      totalBefore += seg.countAfter
     }
+
+    // 2. 월간 전환 비율: 타겟월 평균 / 비교월 평균 (2월→3월 변환)
+    const targetMonthData = monthlySegmentCounts.get(targetMonth)
+    const compMonthData = monthlySegmentCounts.get(comparisonMonth)
+
+    let adjustedTotal = 0
+    const adjustedRaw = new Map<string, number>()
+    for (const seg of SEGMENT_ORDER) {
+      const count = rawCounts.get(seg) || 0
+      const targetAvg = targetMonthData?.get(seg)
+      const compAvg = compMonthData?.get(seg)
+      const tAvg = targetAvg && targetAvg.count > 0 ? targetAvg.total / targetAvg.count : 0
+      const cAvg = compAvg && compAvg.count > 0 ? compAvg.total / compAvg.count : 0
+
+      // 월간 전환 비율 적용 (데이터 없으면 1.0)
+      const monthRatio = (cAvg > 0 && tAvg > 0) ? tAvg / cAvg : 1.0
+      const adjusted = count * monthRatio
+      adjustedRaw.set(seg, adjusted)
+      adjustedTotal += adjusted
+    }
+
+    // 3. 전체 고객수 제약: 비율 기반으로 분배
+    for (const seg of SEGMENT_ORDER) {
+      const adjusted = adjustedRaw.get(seg) || 0
+      const ratio = adjustedTotal > 0 ? adjusted / adjustedTotal : 0
+      expectedCounts.set(seg, Math.round(ratio * totalBefore))
+    }
+
     hasComparisonData = true
     comparisonSource = 'MOM'
-    console.log('[세그먼트 비교] MoM 데이터 사용 (YoY 없음):', {
-      start: comparisonStart.toISOString().split('T')[0],
-      end: comparisonEnd.toISOString().split('T')[0],
-      before: Object.fromEntries(beforeCounts),
+    console.log('[세그먼트 비교] MoM 월간전환비율 기반:', {
+      comparisonMonth,
+      targetMonth,
+      totalBefore,
       expected: Object.fromEntries(expectedCounts),
     })
   } else {
-    // 둘 다 없으면 SEASONAL fallback (이전값 없이 예상값만)
-    comparisonStart = yoyStart  // 기간 정보용
+    // SEASONAL: 타겟 월 평균을 직접 사용
+    comparisonStart = yoyStart
     comparisonEnd = yoyEnd
 
-    // 세그먼트별 연평균 계산 (monthlySegmentCounts에서)
-    const overallAvg = new Map<string, number>()
-    for (const segment of SEGMENT_ORDER) {
-      let totalSum = 0
-      let totalCount = 0
-      for (const [, segmentData] of monthlySegmentCounts) {
-        const data = segmentData.get(segment)
-        if (data && data.count > 0) {
-          totalSum += data.total
-          totalCount += data.count
-        }
-      }
-      overallAvg.set(segment, totalCount > 0 ? totalSum / totalCount : 0)
+    // 타겟 월의 세그먼트별 평균을 직접 사용 (가장 정확)
+    const targetMonthData = monthlySegmentCounts.get(targetMonth)
+    let totalExpected = 0
+    let hasAnyData = false
+
+    for (const seg of SEGMENT_ORDER) {
+      const data = targetMonthData?.get(seg)
+      const avg = data && data.count > 0 ? data.total / data.count : 0
+      expectedCounts.set(seg, Math.round(avg))
+      totalExpected += avg
+      if (avg > 0) hasAnyData = true
     }
 
-    // 예상값 계산: 전체 평균 × 시즌 지수 × 추세 계수
-    let hasAnyData = false
-    for (const segmentName of SEGMENT_ORDER) {
-      const avg = overallAvg.get(segmentName) || 0
-      const season = seasonIndex.get(segmentName) || 1.0
-      const trend = trendCoeff.get(segmentName) || 1.0
-
-      const expected = Math.round(avg * season * trend)
-      expectedCounts.set(segmentName, expected)
-      // beforeCounts는 비워둠 (이전값 없음)
-
-      if (avg > 0) hasAnyData = true
+    // 타겟 월 데이터 없으면 연평균으로 fallback
+    if (!hasAnyData) {
+      for (const segment of SEGMENT_ORDER) {
+        let totalSum = 0
+        let totalCount = 0
+        for (const [, segmentData] of monthlySegmentCounts) {
+          const data = segmentData.get(segment)
+          if (data && data.count > 0) {
+            totalSum += data.total
+            totalCount += data.count
+          }
+        }
+        const avg = totalCount > 0 ? totalSum / totalCount : 0
+        expectedCounts.set(segment, Math.round(avg))
+        if (avg > 0) hasAnyData = true
+      }
     }
 
     if (hasAnyData) {
       hasComparisonData = true
       comparisonSource = 'SEASONAL'
-      console.log('[세그먼트 비교] SEASONAL fallback - 전체평균×시즌×추세:', {
-        overallAvg: Object.fromEntries(overallAvg),
-        seasonIndex: Object.fromEntries(seasonIndex),
-        trendCoeff: Object.fromEntries(trendCoeff),
+      console.log('[세그먼트 비교] SEASONAL 비율 기반:', {
         expected: Object.fromEntries(expectedCounts),
       })
     } else {
@@ -1358,8 +1383,50 @@ export async function trackSegmentChangesWithComparison(
     }
   })
 
-  // 세그먼트 이동은 단일 기간이므로 빈 배열
+  // 세그먼트 이동 계산: 비교 기간 고객과 현재 기간 고객의 세그먼트를 비교
   const segmentMigrations: SegmentMigrationComparison[] = []
+
+  if (comparisonCustomerSegments && comparisonCustomerSegments.size > 0) {
+    const currentCustomerSegments = currentResult.customerSegments
+    const migrationCounts = new Map<string, { count: number; fromSegment: string; toSegment: string }>()
+
+    // 비교 기간 고객 중 현재 기간에도 존재하는 고객의 세그먼트 이동 추적
+    for (const [customerId, beforeSegment] of comparisonCustomerSegments) {
+      const afterSegment = currentCustomerSegments.get(customerId)
+      if (!afterSegment || beforeSegment === afterSegment) continue
+
+      const key = `${beforeSegment}→${afterSegment}`
+      const existing = migrationCounts.get(key)
+      if (existing) {
+        existing.count++
+      } else {
+        migrationCounts.set(key, { count: 1, fromSegment: beforeSegment, toSegment: afterSegment })
+      }
+    }
+
+    // 이동 데이터 생성
+    for (const [, migration] of migrationCounts) {
+      if (migration.count === 0) continue
+
+      const fromRank = SEGMENT_HIERARCHY[migration.fromSegment] ?? 0
+      const toRank = SEGMENT_HIERARCHY[migration.toSegment] ?? 0
+      const isPositive = toRank > fromRank
+
+      // 예상 이동 수는 비교 데이터 기반 0으로 설정 (비율 기반 예측은 복잡하므로)
+      segmentMigrations.push({
+        fromSegment: migration.fromSegment,
+        toSegment: migration.toSegment,
+        count: migration.count,
+        expectedCount: 0,
+        vsExpected: migration.count,
+        isPositive,
+        isBetterThanExpected: isPositive,
+      })
+    }
+
+    // 이동 수 기준 내림차순 정렬
+    segmentMigrations.sort((a, b) => b.count - a.count)
+  }
 
   return {
     segmentChanges,
