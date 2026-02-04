@@ -1,12 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { Session } from 'next-auth'
-import { getAuthSession, getBranchFilter } from '@/lib/auth-helpers'
+import { getAuthSession } from '@/lib/auth-helpers'
 import { ChatRequest, ChatResponse } from '@/types/ai-chat'
-import { prisma } from '@/lib/prisma'
-import { decimalToNumber } from '@/lib/utils/formatters'
-import { kstStartOfDay, kstEndOfDay, getKSTYesterdayStr, getKSTDaysAgoStr } from '@/lib/utils/kst-date'
-import { calculateVisitSegment, calculateTicketSegment } from '@/lib/crm/segment-calculator'
-import { VisitSegment, TicketSegment, VISIT_SEGMENT_LABELS, TICKET_SEGMENT_LABELS } from '@/types/crm'
+import { fetchAnalyticsData, MonthlyRevenue } from '@/lib/ai/fetch-analytics'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,6 +16,11 @@ const SYSTEM_PROMPT = `# 봄날의서재 스터디카페 - AI 슈퍼바이저
 1. **매출 분석 전문가**: 일별/주별/월별 매출 트렌드, 이용권 유형별 매출 구조, 매출 상승/하락 원인 진단
 2. **고객 행동 분석가**: 고객 세그먼트별 이용 패턴, 신규 고객 유입, LTV 및 재방문율 분석
 3. **CRM 전략가**: 이탈 위험 고객 식별, 휴면 고객 재활성화, 충성 고객 리텐션, 타겟 마케팅 제안
+
+## 데이터 활용
+- 전체 기간의 **월별 집계 매출 데이터**가 제공됩니다 (전체 합산 + 지점별)
+- 전년 동기 비교, 계절별 추세, 장기 트렌드 분석에 적극 활용하세요
+- "데이터일수" 컬럼은 해당 월에 실제 매출 데이터가 존재하는 일수입니다 (월 중 오픈한 매장 등 참고)
 
 ## 고객 세그먼트 분류
 
@@ -76,199 +76,30 @@ const SYSTEM_PROMPT = `# 봄날의서재 스터디카페 - AI 슈퍼바이저
 - 개인정보 보호: 개별 고객 전화번호 등 식별 정보 노출 금지
 - 과도한 낙관/비관 지양
 - 데이터로 확인 불가한 외부 요인은 가능성으로만 언급
-- 스터디카페는 시험/학사일정에 민감 - 전년 동기 비교가 유의미
+- 스터디카페는 시험/학사일정에 민감 - 전년 동기 비교 데이터가 제공되므로 적극 활용할 것
 
 ## 시작 인사
 안녕하세요, 봄날의서재 AI 슈퍼바이저입니다. 매장 데이터를 기반으로 매출 분석, 고객 관리, 운영 개선에 대해 도움드릴 수 있어요.
 `
 
-// 실제 데이터 조회 함수
-async function fetchAnalyticsData(session: Session, branchId?: string) {
-  const requestedBranchId = branchId || 'all'
-  const branchFilter = getBranchFilter(session, requestedBranchId)
+/**
+ * 월별 매출 데이터를 마크다운 테이블로 포맷
+ */
+function formatMonthlyTable(months: MonthlyRevenue[], includeDataDays = false): string {
+  const fmt = (n: number) => n.toLocaleString('ko-KR')
+  const header = includeDataDays
+    ? '| 월 | 총매출 | 당일권 | 시간권 | 기간권 | 사물함 | 신규 | 일수 |'
+    : '| 월 | 총매출 | 당일권 | 시간권 | 기간권 | 사물함 | 신규 |'
+  const separator = includeDataDays
+    ? '|------|------:|------:|------:|------:|------:|-----:|-----:|'
+    : '|------|------:|------:|------:|------:|------:|-----:|'
 
-  // 기간 설정: 이번 달
-  const today = new Date()
-  const currentYear = today.getFullYear()
-  const currentMonth = today.getMonth()
-  const thisMonthStart = kstStartOfDay(`${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-01`)
-  const yesterdayStr = getKSTYesterdayStr()
-  const thisMonthEnd = kstEndOfDay(yesterdayStr)
-
-  // 지난 달
-  const lastMonthYear = currentMonth === 0 ? currentYear - 1 : currentYear
-  const lastMonth = currentMonth === 0 ? 12 : currentMonth
-  const lastMonthStart = kstStartOfDay(`${lastMonthYear}-${String(lastMonth).padStart(2, '0')}-01`)
-  const lastMonthEnd = kstEndOfDay(`${lastMonthYear}-${String(lastMonth).padStart(2, '0')}-${new Date(lastMonthYear, lastMonth, 0).getDate()}`)
-
-  // 30일 전 기준
-  const thirtyDaysAgo = kstStartOfDay(getKSTDaysAgoStr(30))
-
-  const [
-    branches,
-    thisMonthMetrics,
-    lastMonthMetrics,
-    allCustomers,
-    recentVisitors,
-    thisMonthPurchases,
-    lastMonthPurchases,
-  ] = await Promise.all([
-    // 지점 목록
-    prisma.branch.findMany({ select: { id: true, name: true } }),
-    // 이번 달 매출
-    prisma.dailyMetric.findMany({
-      where: { ...branchFilter, date: { gte: thisMonthStart, lte: thisMonthEnd } },
-      select: { totalRevenue: true, dayTicketRevenue: true, timeTicketRevenue: true, termTicketRevenue: true, lockerRevenue: true, newUsers: true },
-    }),
-    // 지난 달 매출
-    prisma.dailyMetric.findMany({
-      where: { ...branchFilter, date: { gte: lastMonthStart, lte: lastMonthEnd } },
-      select: { totalRevenue: true, dayTicketRevenue: true, timeTicketRevenue: true, termTicketRevenue: true, lockerRevenue: true, newUsers: true },
-    }),
-    // 전체 고객
-    prisma.customer.findMany({
-      where: branchFilter.branchId ? { mainBranchId: branchFilter.branchId } : {},
-      select: { id: true, phone: true, firstVisitDate: true, lastVisitDate: true, totalVisits: true, totalSpent: true },
-    }),
-    // 최근 30일 방문자
-    prisma.dailyVisitor.findMany({
-      where: { ...branchFilter, visitDate: { gte: thirtyDaysAgo, lte: thisMonthEnd } },
-      select: { phone: true, customerId: true, visitDate: true, remainingTermTicket: true, remainingTimePackage: true, remainingFixedSeat: true },
-    }),
-    // 이번 달 구매
-    prisma.customerPurchase.findMany({
-      where: { ...branchFilter, purchaseDate: { gte: thisMonthStart, lte: thisMonthEnd } },
-      select: { customerId: true, ticketName: true, amount: true },
-    }),
-    // 지난 달 구매
-    prisma.customerPurchase.findMany({
-      where: { ...branchFilter, purchaseDate: { gte: lastMonthStart, lte: lastMonthEnd } },
-      select: { customerId: true, ticketName: true, amount: true },
-    }),
-  ])
-
-  // 지점명
-  const branchName = branchFilter.branchId
-    ? branches.find(b => b.id === branchFilter.branchId)?.name || '알 수 없음'
-    : '전체 지점'
-
-  // 매출 집계
-  const sumMetrics = (metrics: typeof thisMonthMetrics) => ({
-    total: metrics.reduce((sum, m) => sum + decimalToNumber(m.totalRevenue), 0),
-    day: metrics.reduce((sum, m) => sum + decimalToNumber(m.dayTicketRevenue), 0),
-    time: metrics.reduce((sum, m) => sum + decimalToNumber(m.timeTicketRevenue), 0),
-    term: metrics.reduce((sum, m) => sum + decimalToNumber(m.termTicketRevenue), 0),
-    locker: metrics.reduce((sum, m) => sum + decimalToNumber(m.lockerRevenue), 0),
-    newUsers: metrics.reduce((sum, m) => sum + (m.newUsers || 0), 0),
+  const rows = months.map(m => {
+    const base = `| ${m.month} | ${fmt(m.totalRevenue)} | ${fmt(m.dayTicketRevenue)} | ${fmt(m.timeTicketRevenue)} | ${fmt(m.termTicketRevenue)} | ${fmt(m.lockerRevenue)} | ${m.newUsers} |`
+    return includeDataDays ? `${base} ${m.days} |` : base
   })
 
-  const thisMonth = sumMetrics(thisMonthMetrics)
-  const lastMonthData = sumMetrics(lastMonthMetrics)
-
-  // 구매 금액 집계
-  const sumPurchases = (purchases: typeof thisMonthPurchases) =>
-    purchases.reduce((sum, p) => sum + decimalToNumber(p.amount), 0)
-  const thisMonthPurchaseTotal = sumPurchases(thisMonthPurchases)
-  const lastMonthPurchaseTotal = sumPurchases(lastMonthPurchases)
-
-  // 고객 세그먼트 계산
-  const phoneToCustomerId = new Map<string, string>()
-  allCustomers.forEach(c => phoneToCustomerId.set(c.phone, c.id))
-
-  const customerVisitDates = new Map<string, Set<string>>()
-  const customerLatestVisit = new Map<string, {
-    remainingTermTicket: string | null
-    remainingTimePackage: string | null
-    remainingFixedSeat: string | null
-  }>()
-
-  recentVisitors.forEach(v => {
-    const custId = v.customerId || phoneToCustomerId.get(v.phone)
-    if (!custId) return
-    const dateStr = v.visitDate.toISOString().split('T')[0]
-    if (!customerVisitDates.has(custId)) customerVisitDates.set(custId, new Set())
-    customerVisitDates.get(custId)!.add(dateStr)
-
-    const existing = customerLatestVisit.get(custId)
-    if (!existing) {
-      customerLatestVisit.set(custId, {
-        remainingTermTicket: v.remainingTermTicket,
-        remainingTimePackage: v.remainingTimePackage,
-        remainingFixedSeat: v.remainingFixedSeat,
-      })
-    }
-  })
-
-  const visitSegmentCounts: Record<VisitSegment, number> = {
-    churned: 0, at_risk_14: 0, returned: 0, new_0_7: 0,
-    visit_under10: 0, visit_10_20: 0, visit_over20: 0,
-  }
-  const ticketSegmentCounts: Record<TicketSegment, number> = {
-    day_ticket: 0, time_ticket: 0, term_ticket: 0, fixed_ticket: 0,
-  }
-
-  allCustomers.forEach(customer => {
-    const recentVisits = customerVisitDates.get(customer.id)?.size || 0
-    const remaining = customerLatestVisit.get(customer.id)
-
-    const visitSeg = calculateVisitSegment({
-      lastVisitDate: customer.lastVisitDate,
-      firstVisitDate: customer.firstVisitDate,
-      recentVisits,
-      referenceDate: thisMonthEnd,
-      rangeStart: thirtyDaysAgo,
-      previousLastVisitDate: null,
-      hasRemainingFixedSeat: !!(remaining?.remainingFixedSeat?.trim()),
-    })
-    const ticketSeg = calculateTicketSegment({
-      hasRemainingTermTicket: !!(remaining?.remainingTermTicket?.trim()),
-      hasRemainingTimePackage: !!(remaining?.remainingTimePackage?.trim()),
-      hasRemainingFixedSeat: !!(remaining?.remainingFixedSeat?.trim()),
-    })
-
-    visitSegmentCounts[visitSeg]++
-    ticketSegmentCounts[ticketSeg]++
-  })
-
-  // 변화율 계산
-  const calcChange = (current: number, previous: number) => {
-    if (previous === 0) return current > 0 ? 100 : 0
-    return Math.round(((current - previous) / previous) * 100)
-  }
-
-  return {
-    branchName,
-    period: {
-      thisMonth: `${currentYear}년 ${currentMonth + 1}월`,
-      lastMonth: `${lastMonthYear}년 ${lastMonth}월`,
-    },
-    revenue: {
-      thisMonth,
-      lastMonth: lastMonthData,
-      change: {
-        total: calcChange(thisMonth.total, lastMonthData.total),
-        day: calcChange(thisMonth.day, lastMonthData.day),
-        time: calcChange(thisMonth.time, lastMonthData.time),
-        term: calcChange(thisMonth.term, lastMonthData.term),
-      },
-    },
-    purchase: {
-      thisMonth: thisMonthPurchaseTotal,
-      lastMonth: lastMonthPurchaseTotal,
-      change: calcChange(thisMonthPurchaseTotal, lastMonthPurchaseTotal),
-    },
-    customers: {
-      total: allCustomers.length,
-      visitSegments: Object.entries(visitSegmentCounts).map(([seg, count]) => ({
-        segment: VISIT_SEGMENT_LABELS[seg as VisitSegment],
-        count,
-      })),
-      ticketSegments: Object.entries(ticketSegmentCounts).map(([seg, count]) => ({
-        segment: TICKET_SEGMENT_LABELS[seg as TicketSegment],
-        count,
-      })),
-    },
-  }
+  return [header, separator, ...rows].join('\n')
 }
 
 export async function POST(request: NextRequest) {
@@ -293,42 +124,36 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // 실제 데이터 조회
-    const analyticsData = await fetchAnalyticsData(
-      session,
-      context?.branchId
-    )
+    // 실제 데이터 조회 (전체 기간 월별 집계)
+    const data = await fetchAnalyticsData(session, context?.branchId)
 
-    // 컨텍스트 정보 + 실제 데이터
     const today = new Date()
     const currentYear = today.getFullYear()
     const currentMonth = today.getMonth() + 1
+    const fmt = (n: number) => n.toLocaleString('ko-KR')
 
-    const formatNumber = (n: number) => n.toLocaleString('ko-KR')
-
+    // 컨텍스트 정보 구성 (전체 기간 월별 데이터)
     let contextInfo = `
-## 현재 데이터 (실시간 조회)
+## 현재 데이터 (실시간 DB 조회 - 전체 기간 월별 집계)
 
 **오늘 날짜**: ${currentYear}년 ${currentMonth}월 ${today.getDate()}일
-**분석 대상**: ${analyticsData.branchName}
+**분석 대상**: ${data.branchName}
 
-### 매출 현황
-| 항목 | ${analyticsData.period.thisMonth} | ${analyticsData.period.lastMonth} | 변화율 |
-|------|------:|------:|------:|
-| 총 매출 | ${formatNumber(analyticsData.revenue.thisMonth.total)}원 | ${formatNumber(analyticsData.revenue.lastMonth.total)}원 | ${analyticsData.revenue.change.total > 0 ? '+' : ''}${analyticsData.revenue.change.total}% |
-| 당일권 | ${formatNumber(analyticsData.revenue.thisMonth.day)}원 | ${formatNumber(analyticsData.revenue.lastMonth.day)}원 | ${analyticsData.revenue.change.day > 0 ? '+' : ''}${analyticsData.revenue.change.day}% |
-| 시간권 | ${formatNumber(analyticsData.revenue.thisMonth.time)}원 | ${formatNumber(analyticsData.revenue.lastMonth.time)}원 | ${analyticsData.revenue.change.time > 0 ? '+' : ''}${analyticsData.revenue.change.time}% |
-| 기간권 | ${formatNumber(analyticsData.revenue.thisMonth.term)}원 | ${formatNumber(analyticsData.revenue.lastMonth.term)}원 | ${analyticsData.revenue.change.term > 0 ? '+' : ''}${analyticsData.revenue.change.term}% |
-| 사물함 | ${formatNumber(analyticsData.revenue.thisMonth.locker)}원 | ${formatNumber(analyticsData.revenue.lastMonth.locker)}원 | - |
-| 신규가입 | ${analyticsData.revenue.thisMonth.newUsers}명 | ${analyticsData.revenue.lastMonth.newUsers}명 | - |
+### 전체 지점 합산 월별 매출
+${formatMonthlyTable(data.totalMonthly, true)}
 
-### 고객 세그먼트 현황 (전체 ${formatNumber(analyticsData.customers.total)}명)
+### 지점별 월별 매출
+${data.branchMonthly.map(b =>
+  `#### ${b.branchName}\n${formatMonthlyTable(b.months)}`
+).join('\n\n')}
+
+### 고객 세그먼트 현황 (전체 ${fmt(data.customers.total)}명)
 
 **방문 기준**:
-${analyticsData.customers.visitSegments.map(s => `- ${s.segment}: ${formatNumber(s.count)}명`).join('\n')}
+${data.customers.visitSegments.map(s => `- ${s.segment}: ${fmt(s.count)}명`).join('\n')}
 
 **이용권 기준**:
-${analyticsData.customers.ticketSegments.map(s => `- ${s.segment}: ${formatNumber(s.count)}명`).join('\n')}
+${data.customers.ticketSegments.map(s => `- ${s.segment}: ${fmt(s.count)}명`).join('\n')}
 `
 
     if (context?.branchName) {
@@ -359,7 +184,7 @@ ${analyticsData.customers.ticketSegments.map(s => `- ${s.segment}: ${formatNumbe
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
-        max_tokens: 1024,
+        max_tokens: 2048,
         system: SYSTEM_PROMPT,
         messages,
       }),
@@ -369,7 +194,6 @@ ${analyticsData.customers.ticketSegments.map(s => `- ${s.segment}: ${formatNumbe
       const errorData = await response.text()
       console.error('Claude API error:', response.status, errorData)
 
-      // 에러 상세 메시지
       let errorMessage = 'AI 응답 생성에 실패했습니다.'
       if (response.status === 401) {
         errorMessage = 'API 키가 유효하지 않습니다.'
@@ -385,8 +209,8 @@ ${analyticsData.customers.ticketSegments.map(s => `- ${s.segment}: ${formatNumbe
       }, { status: 500 })
     }
 
-    const data = await response.json()
-    const assistantMessage = data.content?.[0]?.text || '응답을 생성할 수 없습니다.'
+    const responseData = await response.json()
+    const assistantMessage = responseData.content?.[0]?.text || '응답을 생성할 수 없습니다.'
 
     return NextResponse.json<ChatResponse>({
       success: true,
