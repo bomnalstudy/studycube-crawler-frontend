@@ -80,15 +80,37 @@ export default function OperationDetailPage() {
 
   // 분석 실행 (첫 분석 및 재분석 공용)
   const fetchAnalysis = async () => {
+    console.log('[재분석] 시작 - operationId:', operationId)
     setAnalysisLoading(true)
+    setError(null)
     try {
+      console.log('[재분석] GET 요청 전송 중...')
       const res = await fetch(`/api/strategy/operations/${operationId}/analysis?compute=true`)
+
+      console.log('[재분석] 응답 받음:', res.status, res.statusText)
+
+      if (!res.ok) {
+        throw new Error(`분석 요청 실패: ${res.status} ${res.statusText}`)
+      }
+
       const result = await res.json()
+      console.log('[재분석] 응답 데이터:', result)
+
+      if (result.error) {
+        setError(result.error)
+        return
+      }
+
       if (result.operation) {
+        console.log('[재분석] 데이터 업데이트 중...')
         setAnalysisData(result)
+        console.log('[재분석] 완료!')
+      } else {
+        setError('분석 결과를 불러오는 데 실패했습니다.')
       }
     } catch (err) {
-      console.error('Failed to fetch analysis:', err)
+      console.error('[재분석] 에러 발생:', err)
+      setError(err instanceof Error ? err.message : '분석 중 오류가 발생했습니다.')
     } finally {
       setAnalysisLoading(false)
     }
@@ -313,6 +335,27 @@ export default function OperationDetailPage() {
             </div>
           ) : null}
         </div>
+
+        {/* 에러 메시지 */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3">
+            <svg className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <div>
+              <p className="font-medium text-red-800">분석 오류</p>
+              <p className="text-sm text-red-700 mt-1">{error}</p>
+            </div>
+            <button
+              onClick={() => setError(null)}
+              className="ml-auto text-red-400 hover:text-red-600 transition-colors"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        )}
 
         {/* 분석 결과 */}
         {analysisData && (

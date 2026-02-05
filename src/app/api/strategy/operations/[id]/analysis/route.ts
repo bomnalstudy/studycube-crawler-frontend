@@ -235,7 +235,21 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           growth = calculateGrowthRate(revenueBefore, revenueAfter)
         } else {
           // 비교 데이터 없으면 forecast 사용
-          const forecast = await forecastRevenue(branchId, afterRange.start, afterRange.end)
+          // 해당 기간의 외부 요인 타입 조회 (이벤트와 동일한 로직)
+          const overlappingFactors = await prisma.externalFactor.findMany({
+            where: {
+              OR: [
+                { startDate: { gte: afterRange.start, lte: afterRange.end } },
+                { endDate: { gte: afterRange.start, lte: afterRange.end } },
+                { AND: [{ startDate: { lte: afterRange.start } }, { endDate: { gte: afterRange.end } }] },
+              ],
+              branches: { some: { branchId } },
+            },
+            select: { type: true },
+          })
+          const factorTypes = overlappingFactors.map((f) => f.type)
+
+          const forecast = await forecastRevenue(branchId, afterRange.start, afterRange.end, factorTypes)
           if (forecast.expectedRevenue > 0) {
             const vs = calculatePerformanceVsForecast(revenueAfter, forecast)
             growth = vs.vsExpected

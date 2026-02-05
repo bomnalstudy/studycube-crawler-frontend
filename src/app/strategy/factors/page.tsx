@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { ExternalFactorCalendar } from '@/components/strategy/ExternalFactorCalendar'
 import type {
   ExternalFactorListItem,
   ExternalFactorType,
@@ -47,6 +48,7 @@ export default function FactorsPage() {
   const [saving, setSaving] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [calculatingId, setCalculatingId] = useState<string | null>(null)
+  const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list')
 
   const [typeFilter, setTypeFilter] = useState<string>('ALL')
 
@@ -332,15 +334,45 @@ export default function FactorsPage() {
             <h1 className="text-2xl font-bold text-slate-800">외부 요인 관리</h1>
             <p className="text-sm text-slate-500 mt-1">이벤트 성과에 영향을 미치는 외부 요인을 관리하세요</p>
           </div>
-          <button
-            onClick={() => setDialogOpen(true)}
-            className="inline-flex items-center px-4 py-2.5 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl hover:from-orange-600 hover:to-orange-700 shadow-lg shadow-orange-200 transition-all hover:shadow-xl hover:shadow-orange-300"
-          >
-            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            외부 요인 등록
-          </button>
+          <div className="flex gap-2">
+            <div className="flex gap-1 bg-white rounded-xl p-1 border border-slate-200">
+              <button
+                onClick={() => setViewMode('list')}
+                className={`inline-flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                  viewMode === 'list'
+                    ? 'bg-orange-500 text-white shadow-md'
+                    : 'text-slate-600 hover:text-slate-800'
+                }`}
+              >
+                <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+                리스트
+              </button>
+              <button
+                onClick={() => setViewMode('calendar')}
+                className={`inline-flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                  viewMode === 'calendar'
+                    ? 'bg-orange-500 text-white shadow-md'
+                    : 'text-slate-600 hover:text-slate-800'
+                }`}
+              >
+                <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                캘린더
+              </button>
+            </div>
+            <button
+              onClick={() => setDialogOpen(true)}
+              className="inline-flex items-center px-4 py-2.5 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl hover:from-orange-600 hover:to-orange-700 shadow-lg shadow-orange-200 transition-all hover:shadow-xl hover:shadow-orange-300"
+            >
+              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              외부 요인 등록
+            </button>
+          </div>
         </div>
 
         {/* 모달 */}
@@ -507,26 +539,37 @@ export default function FactorsPage() {
         )}
 
         {/* 필터 */}
-        <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
-          <div className="flex items-center gap-3">
-            <span className="text-sm font-medium text-slate-600">유형 필터:</span>
-            <select
-              value={typeFilter}
-              onChange={(e) => setTypeFilter(e.target.value)}
-              className="px-4 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white transition-all"
-            >
-              <option value="ALL">전체 유형</option>
-              {FACTOR_TYPES.map((type) => (
-                <option key={type.value} value={type.value}>
-                  {type.label}
-                </option>
-              ))}
-            </select>
+        {viewMode === 'list' && (
+          <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-medium text-slate-600">유형 필터:</span>
+              <select
+                value={typeFilter}
+                onChange={(e) => setTypeFilter(e.target.value)}
+                className="px-4 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white transition-all"
+              >
+                <option value="ALL">전체 유형</option>
+                {FACTOR_TYPES.map((type) => (
+                  <option key={type.value} value={type.value}>
+                    {type.label}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
-        </div>
+        )}
 
-        {/* 목록 */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+        {/* 캘린더 뷰 */}
+        {viewMode === 'calendar' && !loading && (
+          <ExternalFactorCalendar
+            factors={factors}
+            onEventClick={(factor) => handleEdit(factor)}
+          />
+        )}
+
+        {/* 목록 뷰 */}
+        {viewMode === 'list' && (
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
           <div className="p-5 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white">
             <h2 className="font-semibold text-slate-800">
               외부 요인 목록
@@ -640,6 +683,7 @@ export default function FactorsPage() {
             )}
           </div>
         </div>
+        )}
       </div>
     </div>
   )
