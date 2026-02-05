@@ -17,7 +17,7 @@ export function OperationAnalysisContent() {
   const [data, setData] = useState<AnalysisData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [selectedPeriod, setSelectedPeriod] = useState<'3m' | '6m'>('3m')
+  const [selectedPeriod, setSelectedPeriod] = useState<'1m' | '3m' | '6m'>('1m')
   const [activeTab, setActiveTab] = useState<'overview' | 'segment' | 'ticket' | 'visit'>('overview')
 
   useEffect(() => {
@@ -140,27 +140,24 @@ export function OperationAnalysisContent() {
         {/* 기간 선택 & 탭 */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex gap-2">
-            <button
-              onClick={() => setSelectedPeriod('3m')}
-              className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                selectedPeriod === '3m'
-                  ? 'bg-orange-500 text-white shadow-lg shadow-orange-200'
-                  : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
-              }`}
-            >
-              3개월 비교
-            </button>
-            <button
-              onClick={() => setSelectedPeriod('6m')}
-              disabled={monthsSince < 6}
-              className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                selectedPeriod === '6m'
-                  ? 'bg-orange-500 text-white shadow-lg shadow-orange-200'
-                  : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed'
-              }`}
-            >
-              6개월 비교
-            </button>
+            {[
+              { id: '1m' as const, label: '1개월', minMonths: 1 },
+              { id: '3m' as const, label: '3개월', minMonths: 3 },
+              { id: '6m' as const, label: '6개월', minMonths: 6 },
+            ].map((period) => (
+              <button
+                key={period.id}
+                onClick={() => setSelectedPeriod(period.id)}
+                disabled={monthsSince < period.minMonths}
+                className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                  selectedPeriod === period.id
+                    ? 'bg-orange-500 text-white shadow-lg shadow-orange-200'
+                    : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed'
+                }`}
+              >
+                {period.label} 비교
+              </button>
+            ))}
           </div>
 
           <div className="flex gap-1 bg-white rounded-lg p-1 border border-slate-200">
@@ -189,8 +186,16 @@ export function OperationAnalysisContent() {
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
           <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100">
             <p className="text-sm text-slate-500 mb-1">매출 성장률</p>
-            <p className={`text-2xl font-bold ${(selectedPeriod === '3m' ? summary.avgRevenueGrowth3m : summary.avgRevenueGrowth6m) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-              {formatGrowth(selectedPeriod === '3m' ? summary.avgRevenueGrowth3m : summary.avgRevenueGrowth6m)}
+            <p className={`text-2xl font-bold ${(
+              selectedPeriod === '1m' ? summary.avgRevenueGrowth1m
+              : selectedPeriod === '3m' ? summary.avgRevenueGrowth3m
+              : summary.avgRevenueGrowth6m
+            ) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              {formatGrowth(
+                selectedPeriod === '1m' ? summary.avgRevenueGrowth1m
+                : selectedPeriod === '3m' ? summary.avgRevenueGrowth3m
+                : summary.avgRevenueGrowth6m
+              )}
             </p>
           </div>
 
@@ -228,7 +233,6 @@ export function OperationAnalysisContent() {
         {activeTab === 'segment' && (
           <SegmentTab
             performances={performances}
-            summary={summary}
           />
         )}
 

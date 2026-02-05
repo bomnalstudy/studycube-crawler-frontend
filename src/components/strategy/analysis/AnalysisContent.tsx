@@ -307,7 +307,6 @@ export function AnalysisContent() {
             {activeTab === 'segment' && (
               <SegmentTab
                 performances={filteredPerformances}
-                summary={analysisData.summary}
               />
             )}
 

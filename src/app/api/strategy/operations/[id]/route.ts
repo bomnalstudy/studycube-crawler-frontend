@@ -1,52 +1,63 @@
 import { NextRequest, NextResponse } from 'next/server'
-import type { OperationDetail, UpdateOperationInput } from '@/types/strategy'
+import { prisma } from '@/lib/prisma'
+import { requireAdmin } from '@/lib/auth-helpers'
+import type { OperationDetail, UpdateOperationInput, OperationSubType, OperationStatus } from '@/types/strategy'
 
-// 임시 더미 데이터
-const DUMMY_OPERATIONS: Record<string, OperationDetail> = {
-  '1': {
-    id: '1',
-    name: '프리미엄 좌석 도입',
-    subType: 'NEW_SERVICE',
-    implementedAt: '2025-01-15',
-    status: 'IMPLEMENTED',
-    branches: [{ id: '1', name: '강남점' }],
-    createdAt: '2025-01-10',
-    cost: 5000000,
-    description: '고급 의자와 개인 조명을 갖춘 프리미엄 좌석 10석 도입',
-    expectedEffect: '객단가 10% 상승, 프리미엄 고객 유치',
-    createdBy: { id: '1', name: '관리자' },
-  },
-  '2': {
-    id: '2',
-    name: '조명 시스템 개선',
-    subType: 'FACILITY_UPGRADE',
-    implementedAt: '2025-02-01',
-    status: 'PLANNED',
-    branches: [
-      { id: '1', name: '강남점' },
-      { id: '2', name: '홍대점' },
-    ],
-    createdAt: '2025-01-20',
-    cost: 3000000,
-    description: 'LED 조명으로 교체 및 개인 조명 조절 기능 추가',
-    expectedEffect: '전력 비용 절감, 고객 만족도 향상',
-    createdBy: { id: '1', name: '관리자' },
-  },
+interface RouteParams {
+  params: Promise<{ id: string }>
 }
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: RouteParams
 ) {
   try {
+    const session = await requireAdmin()
+    if (!session) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
     const { id } = await params
-    const operation = DUMMY_OPERATIONS[id]
+
+    const operation = await prisma.operation.findUnique({
+      where: { id },
+      include: {
+        branches: {
+          include: {
+            branch: { select: { id: true, name: true } },
+          },
+        },
+        author: {
+          select: { id: true, name: true },
+        },
+      },
+    })
 
     if (!operation) {
       return NextResponse.json({ error: '운영 변경을 찾을 수 없습니다' }, { status: 404 })
     }
 
-    return NextResponse.json({ operation })
+    const result: OperationDetail = {
+      id: operation.id,
+      name: operation.name,
+      subType: operation.subType as OperationSubType,
+      implementedAt: operation.implementedAt.toISOString().split('T')[0],
+      status: operation.status as OperationStatus,
+      cost: operation.cost ? Number(operation.cost) : undefined,
+      description: operation.description ?? undefined,
+      expectedEffect: operation.expectedEffect ?? undefined,
+      branches: operation.branches.map((b) => ({
+        id: b.branch.id,
+        name: b.branch.name,
+      })),
+      createdBy: {
+        id: operation.author.id,
+        name: operation.author.name,
+      },
+      createdAt: operation.createdAt.toISOString(),
+    }
+
+    return NextResponse.json({ operation: result })
   } catch (error) {
     console.error('Error fetching operation:', error)
     return NextResponse.json({ error: 'Failed to fetch operation' }, { status: 500 })
@@ -55,31 +66,84 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: RouteParams
 ) {
   try {
+    const session = await requireAdmin()
+    if (!session) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
     const { id } = await params
     const body: UpdateOperationInput = await request.json()
 
-    const operation = DUMMY_OPERATIONS[id]
+    const existing = await prisma.operation.findUnique({ where: { id } })
 
-    if (!operation) {
+    if (!existing) {
       return NextResponse.json({ error: '운영 변경을 찾을 수 없습니다' }, { status: 404 })
     }
 
-    // TODO: 실제 DB 업데이트 로직 구현
-    // const updated = await prisma.operation.update({
-    //   where: { id },
-    //   data: body,
-    // })
+    const operation = await prisma.$transaction(async (tx) => {
+      // 적용일 또는 지점 변경 시 저장된 분석 결과 무효화
+      if (body.implementedAt || body.branchIds) {
+        await tx.operationPerformance.deleteMany({ where: { operationId: id } })
+      }
 
-    const updatedOperation: OperationDetail = {
-      ...operation,
-      ...body,
-      subType: body.subType || operation.subType,
+      if (body.branchIds) {
+        await tx.operationBranch.deleteMany({ where: { operationId: id } })
+        await tx.operationBranch.createMany({
+          data: body.branchIds.map((branchId) => ({
+            operationId: id,
+            branchId,
+          })),
+        })
+      }
+
+      return tx.operation.update({
+        where: { id },
+        data: {
+          name: body.name,
+          subType: body.subType,
+          implementedAt: body.implementedAt ? new Date(body.implementedAt) : undefined,
+          status: body.status,
+          cost: body.cost,
+          description: body.description,
+          expectedEffect: body.expectedEffect,
+        },
+        include: {
+          branches: {
+            include: {
+              branch: { select: { id: true, name: true } },
+            },
+          },
+          author: {
+            select: { id: true, name: true },
+          },
+        },
+      })
+    })
+
+    const result: OperationDetail = {
+      id: operation.id,
+      name: operation.name,
+      subType: operation.subType as OperationSubType,
+      implementedAt: operation.implementedAt.toISOString().split('T')[0],
+      status: operation.status as OperationStatus,
+      cost: operation.cost ? Number(operation.cost) : undefined,
+      description: operation.description ?? undefined,
+      expectedEffect: operation.expectedEffect ?? undefined,
+      branches: operation.branches.map((b) => ({
+        id: b.branch.id,
+        name: b.branch.name,
+      })),
+      createdBy: {
+        id: operation.author.id,
+        name: operation.author.name,
+      },
+      createdAt: operation.createdAt.toISOString(),
     }
 
-    return NextResponse.json({ operation: updatedOperation })
+    return NextResponse.json({ success: true, operation: result })
   } catch (error) {
     console.error('Error updating operation:', error)
     return NextResponse.json({ error: 'Failed to update operation' }, { status: 500 })
@@ -88,18 +152,23 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: RouteParams
 ) {
   try {
-    const { id } = await params
-    const operation = DUMMY_OPERATIONS[id]
+    const session = await requireAdmin()
+    if (!session) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
 
-    if (!operation) {
+    const { id } = await params
+
+    const existing = await prisma.operation.findUnique({ where: { id } })
+
+    if (!existing) {
       return NextResponse.json({ error: '운영 변경을 찾을 수 없습니다' }, { status: 404 })
     }
 
-    // TODO: 실제 DB 삭제 로직 구현
-    // await prisma.operation.delete({ where: { id } })
+    await prisma.operation.delete({ where: { id } })
 
     return NextResponse.json({ success: true })
   } catch (error) {

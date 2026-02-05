@@ -1,0 +1,263 @@
+/* React Big Calendar 기본 스타일 import */
+@import 'react-big-calendar/lib/css/react-big-calendar.css';
+
+.external-factor-calendar {
+  background: white;
+  border-radius: 16px;
+  padding: 24px;
+  border: 1px solid #e2e8f0;
+}
+
+.calendar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.calendar-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nav-button {
+  padding: 8px;
+  border: 1px solid #e2e8f0;
+  background: white;
+  color: #64748b;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.nav-button:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  color: #334155;
+}
+
+.nav-button svg {
+  width: 20px;
+  height: 20px;
+}
+
+.today-button {
+  padding: 8px 16px;
+  border: 1px solid #e2e8f0;
+  background: white;
+  color: #64748b;
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.today-button:hover {
+  background: #f97316;
+  color: white;
+  border-color: #f97316;
+}
+
+.current-date {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1e293b;
+  margin-left: 8px;
+}
+
+.view-buttons {
+  display: flex;
+  gap: 8px;
+  background: #f8fafc;
+  padding: 4px;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+}
+
+.view-buttons button {
+  padding: 6px 16px;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.view-buttons button:hover {
+  color: #334155;
+  background: white;
+}
+
+.view-buttons button.active {
+  background: #f97316;
+  color: white;
+  box-shadow: 0 4px 12px rgba(249, 115, 22, 0.25);
+}
+
+.legend {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.legend-label {
+  font-size: 13px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+/* 캘린더 커스터마이징 */
+.rbc-calendar {
+  font-family: inherit;
+}
+
+.rbc-header {
+  padding: 12px 4px;
+  font-weight: 600;
+  color: #334155;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.rbc-today {
+  background-color: #fef3c7;
+}
+
+.rbc-off-range-bg {
+  background-color: #f8fafc;
+}
+
+.rbc-event {
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.rbc-event:hover {
+  opacity: 1 !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.rbc-event-label {
+  font-size: 11px;
+}
+
+.rbc-toolbar {
+  padding: 16px 0;
+  margin-bottom: 16px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.rbc-toolbar button {
+  padding: 8px 16px;
+  border: 1px solid #e2e8f0;
+  background: white;
+  color: #334155;
+  font-weight: 500;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.rbc-toolbar button:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+.rbc-toolbar button:active,
+.rbc-toolbar button.rbc-active {
+  background: #f97316;
+  color: white;
+  border-color: #f97316;
+}
+
+.rbc-toolbar-label {
+  font-weight: 700;
+  font-size: 18px;
+  color: #1e293b;
+}
+
+.rbc-month-view,
+.rbc-time-view,
+.rbc-agenda-view {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.rbc-time-slot {
+  min-height: 40px;
+}
+
+.rbc-current-time-indicator {
+  background-color: #f97316;
+}
+
+/* 목록 뷰 스타일 */
+.rbc-agenda-view table {
+  border-spacing: 0;
+  border: none;
+}
+
+.rbc-agenda-view .rbc-agenda-date-cell,
+.rbc-agenda-view .rbc-agenda-time-cell {
+  padding: 12px 16px;
+  font-weight: 500;
+  color: #64748b;
+}
+
+.rbc-agenda-view .rbc-agenda-event-cell {
+  padding: 12px 16px;
+}
+
+.rbc-agenda-empty {
+  padding: 32px;
+  text-align: center;
+  color: #94a3b8;
+}
+
+/* 반응형 */
+@media (max-width: 768px) {
+  .calendar-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .legend {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .rbc-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .rbc-toolbar-label {
+    text-align: center;
+    margin: 8px 0;
+  }
+}

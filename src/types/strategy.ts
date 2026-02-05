@@ -660,7 +660,11 @@ export interface OperationPerformanceData {
   calculatedAt: string
   comparisonType: ComparisonType
 
-  // 적용 전후 비교 (3개월 단위)
+  // 적용 전후 비교
+  revenueBefore1m?: number
+  revenueAfter1m?: number
+  revenueGrowth1m?: number
+
   revenueBefore3m: number
   revenueAfter3m: number
   revenueGrowth3m: number
@@ -674,13 +678,29 @@ export interface OperationPerformanceData {
   avgCustomersAfter: number
   customerGrowth: number
 
-  // 세그먼트 변화
-  segmentChanges?: SegmentChangeData[]
-  segmentMigrations?: SegmentMigration[]
+  // 세그먼트 변화 (비교 데이터 포함)
+  segmentChanges?: SegmentChangeData[] | SegmentChangeComparison[]
+  segmentMigrations?: SegmentMigration[] | SegmentMigrationComparison[]
+  hasSegmentComparisonData?: boolean
+  segmentPeriodInfo?: {
+    actualPeriod: { start: string; end: string }
+    comparisonPeriod: { start: string; end: string } | null
+    comparisonSource: 'YOY' | 'MOM' | 'SEASONAL' | null
+    coefficients?: {
+      seasonIndex: Record<string, number>
+      trendCoeff: Record<string, number>
+      dataMonths: number
+    }
+  }
 
   // 이용권 변화
   ticketTypeChanges?: TicketTypeChangeData[]
   ticketUpgrades?: TicketUpgradeData[]
+
+  // 방문
+  visitsBefore?: number
+  visitsAfter?: number
+  visitsGrowth?: number
 
   // 방문 패턴 변화
   visitPattern?: VisitPatternData
@@ -689,10 +709,42 @@ export interface OperationPerformanceData {
   newCustomers?: number
   returnedCustomers?: number // 휴면→활성화
 
+  // 이용권별 매출 (전후 비교)
+  dayTicketRevenue?: number
+  dayTicketRevenueBefore?: number
+  timeTicketRevenue?: number
+  timeTicketRevenueBefore?: number
+  termTicketRevenue?: number
+  termTicketRevenueBefore?: number
+  fixedTicketRevenue?: number
+  fixedTicketRevenueBefore?: number
+
+  // 기대 매출 예측 (비교 데이터 없을 때 사용)
+  forecast?: {
+    expectedRevenue: number
+    baseRevenue: number
+    seasonIndex: number
+    externalFactorIndex: number
+    trendCoefficient: number
+    confidence: 'HIGH' | 'MEDIUM' | 'LOW'
+    breakdown: {
+      baseRevenueReason: string
+      seasonReason: string
+      externalReason: string
+      trendReason: string
+    }
+  }
+  useForecast?: boolean
+  isNewBranch?: boolean
+  noYoyDataReason?: string
+
   // 통계
   isSignificant?: boolean
   pValue?: number
   effectSize?: number
+
+  // 점수 계산 상세
+  scoreBreakdown?: ScoreBreakdown
 
   // 종합
   performanceScore?: number

@@ -36,4 +36,6 @@ export interface AnalysisResponse {
     oldestDataDate: string
   }[]
   summary: AnalysisSummary
+  fromCache?: boolean
+  calculatedAt?: string
 }

@@ -479,6 +479,17 @@ export async function forecastRevenue(
 
   const dataMonths = Math.ceil(allMetrics.length / 30)
 
+  console.log('[forecast] 예측 계산:', {
+    branchId,
+    eventStart: eventStart.toISOString().split('T')[0],
+    eventEnd: eventEnd.toISOString().split('T')[0],
+    eventDays,
+    totalDataPoints: allMetrics.length,
+    dataMonths,
+    overallAvg: Math.round(overallAvg),
+    recentAvgRevenue: Math.round(recentAvgRevenue),
+  })
+
   // 2. 시즌 지수 (월별 평균 데이터 재활용)
   const monthlyAverages = await getMonthlyAverages(branchId)
   const { index: seasonIndex, reason: seasonReason } = calculateSeasonIndex(monthlyAverages, targetMonth)
@@ -499,10 +510,19 @@ export async function forecastRevenue(
   )
 
   // 기대 매출 계산
-  // 공식: 전체 평균 × 시즌 지수 × 외부 요인 × 추세 계수 × 일수
-  // (최근 평균이 아닌 전체 평균 사용 → 시즌 지수와의 이중 계산 방지)
-  const expectedDailyRevenue = overallAvg * seasonIndex * externalFactorIndex * trendCoefficient
+  // 공식: 전체 평균 × 시즌 지수 × 일수
+  // 추세 계수와 외부 요인 지수는 참고용으로만 반환 (계산에 미포함)
+  const expectedDailyRevenue = overallAvg * seasonIndex
   const expectedRevenue = expectedDailyRevenue * eventDays
+
+  console.log('[forecast] 예측 결과:', {
+    seasonIndex: seasonIndex.toFixed(3),
+    externalFactorIndex: externalFactorIndex.toFixed(3),
+    trendCoefficient: trendCoefficient.toFixed(3),
+    expectedDailyRevenue: Math.round(expectedDailyRevenue),
+    expectedRevenue: Math.round(expectedRevenue),
+    calculation: `${Math.round(overallAvg)} × ${seasonIndex.toFixed(3)} × ${eventDays} = ${Math.round(expectedRevenue)}`,
+  })
 
   // 신뢰도 결정
   let confidence: 'HIGH' | 'MEDIUM' | 'LOW'

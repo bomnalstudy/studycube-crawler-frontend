@@ -1,65 +1,103 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'
+import { requireAdmin } from '@/lib/auth-helpers'
+import { tTest, cohensD, calculateGrowthRate } from '@/lib/strategy/statistics'
+import { forecastRevenue, calculatePerformanceVsForecast } from '@/lib/strategy/forecast'
+import { trackSegmentChangesWithComparison, trackTicketUpgrades } from '@/lib/strategy/segment-tracker'
+import { db, type DateRange } from '@/lib/db'
+import {
+  calculateVisitPattern,
+  calculateScoreWithBreakdown,
+  determineVerdict,
+  inferTicketCategory,
+} from '@/lib/strategy/analysis-utils'
+import {
+  computeSummary,
+  savePerformanceToDB,
+  loadSavedPerformances,
+  getSavedAnalysisDate,
+} from '@/lib/strategy/operation-performance-db'
 import type {
   OperationPerformanceData,
-  VerdictType,
   ComparisonType,
-  SegmentChangeData,
-  SegmentMigration,
   TicketTypeChangeData,
   TicketUpgradeData,
-  VisitPatternData,
 } from '@/types/strategy'
 
-// 세그먼트 변화 더미 데이터 생성
-const NEGATIVE_SEGMENTS = ['이탈위험', '이탈', '휴면']
+/** 기간별 분석 범위 계산 (적용일 기준) */
+function getPeriodRange(implementedAt: Date, months: number): DateRange {
+  const start = new Date(implementedAt)
+  const end = new Date(implementedAt)
+  end.setMonth(end.getMonth() + months)
+  end.setDate(end.getDate() - 1)
+  return { start, end }
+}
 
-function generateSegmentChanges(): SegmentChangeData[] {
-  const segments = ['VIP', '단골', '일반', '신규', '이탈위험', '이탈', '복귀']
-  return segments.map((segmentName) => {
-    const countBefore = Math.floor(Math.random() * 50) + 20
-    const changePercent = (Math.random() - 0.3) * 30 // -10% ~ +20%
-    const countAfter = Math.round(countBefore * (1 + changePercent / 100))
-    return {
-      segmentName,
-      countBefore,
-      countAfter,
-      change: countAfter - countBefore,
-      changePercent: Number(changePercent.toFixed(1)),
-      isNegativeSegment: NEGATIVE_SEGMENTS.includes(segmentName),
-    }
+/** YoY 비교 범위 계산 */
+function getYoyRange(range: DateRange): DateRange {
+  return {
+    start: new Date(range.start.getFullYear() - 1, range.start.getMonth(), range.start.getDate()),
+    end: new Date(range.end.getFullYear() - 1, range.end.getMonth(), range.end.getDate()),
+  }
+}
+
+/** 이용권 유형별 매출 변화 계산 */
+async function calculateTicketTypeChanges(
+  branchId: string,
+  afterRange: DateRange,
+  beforeRange: DateRange,
+): Promise<TicketTypeChangeData[]> {
+  // 구매자 수 조회 (이용권 이름별 → 카테고리별 집계)
+  const [afterBuyers, beforeBuyers] = await Promise.all([
+    prisma.ticketBuyer.findMany({
+      where: { branchId, date: { gte: afterRange.start, lte: afterRange.end } },
+      select: { ticketName: true, amount: true },
+    }),
+    prisma.ticketBuyer.findMany({
+      where: { branchId, date: { gte: beforeRange.start, lte: beforeRange.end } },
+      select: { ticketName: true, amount: true },
+    }),
+  ])
+
+  const categories = ['당일권', '시간권', '기간권', '고정석']
+  const afterByCategory = new Map<string, { revenue: number; buyers: Set<number> }>()
+  const beforeByCategory = new Map<string, { revenue: number; buyers: Set<number> }>()
+
+  for (const cat of categories) {
+    afterByCategory.set(cat, { revenue: 0, buyers: new Set() })
+    beforeByCategory.set(cat, { revenue: 0, buyers: new Set() })
+  }
+
+  afterBuyers.forEach((b, idx) => {
+    const cat = inferTicketCategory(b.ticketName)
+    const entry = afterByCategory.get(cat)!
+    entry.revenue += Number(b.amount ?? 0)
+    entry.buyers.add(idx)
   })
-}
 
-// 세그먼트 이동 더미 데이터 생성
-function generateSegmentMigrations(): SegmentMigration[] {
-  return [
-    { fromSegment: '일반', toSegment: '단골', count: Math.floor(Math.random() * 15) + 5, isPositive: true },
-    { fromSegment: '이탈위험', toSegment: '일반', count: Math.floor(Math.random() * 10) + 3, isPositive: true },
-    { fromSegment: '휴면', toSegment: '일반', count: Math.floor(Math.random() * 8) + 2, isPositive: true },
-    { fromSegment: '단골', toSegment: 'VIP', count: Math.floor(Math.random() * 5) + 1, isPositive: true },
-    { fromSegment: '일반', toSegment: '이탈위험', count: Math.floor(Math.random() * 8) + 2, isPositive: false },
-    { fromSegment: '단골', toSegment: '일반', count: Math.floor(Math.random() * 5) + 1, isPositive: false },
-  ]
-}
+  beforeBuyers.forEach((b, idx) => {
+    const cat = inferTicketCategory(b.ticketName)
+    const entry = beforeByCategory.get(cat)!
+    entry.revenue += Number(b.amount ?? 0)
+    entry.buyers.add(idx)
+  })
 
-// 이용권 변화 더미 데이터 생성
-function generateTicketTypeChanges(): TicketTypeChangeData[] {
-  const ticketTypes = ['당일권', '시간권', '기간권', '고정석']
-  return ticketTypes.map((ticketType) => {
-    const revenueBefore = Math.floor(Math.random() * 3000000) + 1000000
-    const revenueChangePercent = (Math.random() - 0.3) * 40 // -12% ~ +28%
-    const revenueAfter = Math.round(revenueBefore * (1 + revenueChangePercent / 100))
-
-    const buyersBefore = Math.floor(Math.random() * 100) + 30
-    const buyersChangePercent = (Math.random() - 0.3) * 30
-    const buyersAfter = Math.round(buyersBefore * (1 + buyersChangePercent / 100))
+  return categories.map((ticketType) => {
+    const after = afterByCategory.get(ticketType)!
+    const before = beforeByCategory.get(ticketType)!
+    const revenueBefore = before.revenue
+    const revenueAfter = after.revenue
+    const buyersBefore = before.buyers.size
+    const buyersAfter = after.buyers.size
 
     return {
       ticketType,
       revenueBefore,
       revenueAfter,
       revenueChange: revenueAfter - revenueBefore,
-      revenueChangePercent: Number(revenueChangePercent.toFixed(1)),
+      revenueChangePercent: revenueBefore > 0
+        ? Number(((revenueAfter - revenueBefore) / revenueBefore * 100).toFixed(1))
+        : (revenueAfter > 0 ? 100 : 0),
       buyersBefore,
       buyersAfter,
       buyersChange: buyersAfter - buyersBefore,
@@ -67,298 +105,377 @@ function generateTicketTypeChanges(): TicketTypeChangeData[] {
   })
 }
 
-// 이용권 업그레이드 더미 데이터 생성
-function generateTicketUpgrades(): TicketUpgradeData[] {
-  return [
-    {
-      fromTicket: '당일권',
-      toTicket: '시간권',
-      count: Math.floor(Math.random() * 20) + 5,
-      upgradeRate: Number((Math.random() * 15 + 5).toFixed(1)),
-    },
-    {
-      fromTicket: '당일권',
-      toTicket: '기간권',
-      count: Math.floor(Math.random() * 10) + 2,
-      upgradeRate: Number((Math.random() * 8 + 2).toFixed(1)),
-    },
-    {
-      fromTicket: '시간권',
-      toTicket: '기간권',
-      count: Math.floor(Math.random() * 15) + 3,
-      upgradeRate: Number((Math.random() * 12 + 3).toFixed(1)),
-    },
-    {
-      fromTicket: '기간권',
-      toTicket: '고정석',
-      count: Math.floor(Math.random() * 8) + 1,
-      upgradeRate: Number((Math.random() * 10 + 2).toFixed(1)),
-    },
-  ]
-}
-
-// 방문 패턴 더미 데이터 생성
-function generateVisitPattern(): VisitPatternData {
-  const avgVisitsPerCustomerBefore = Number((Math.random() * 3 + 2).toFixed(1))
-  const visitChange = (Math.random() - 0.3) * 30
-  const avgVisitsPerCustomerAfter = Number((avgVisitsPerCustomerBefore * (1 + visitChange / 100)).toFixed(1))
-
-  const avgUsageTimeBefore = Math.floor(Math.random() * 60) + 120 // 120-180분
-  const usageChange = (Math.random() - 0.2) * 20
-  const avgUsageTimeAfter = Math.floor(avgUsageTimeBefore * (1 + usageChange / 100))
-
-  return {
-    avgVisitsPerCustomerBefore,
-    avgVisitsPerCustomerAfter,
-    visitFrequencyChange: Number(visitChange.toFixed(1)),
-    avgUsageTimeBefore,
-    avgUsageTimeAfter,
-    usageTimeChange: Number(usageChange.toFixed(1)),
-    peakHourBefore: Math.floor(Math.random() * 6) + 14, // 14-20시
-    peakHourAfter: Math.floor(Math.random() * 6) + 14,
-  }
-}
-
-// 더미 성과 데이터 생성 (실제로는 daily_metrics 테이블에서 계산)
-function generatePerformanceData(
-  operationId: string,
-  branchId: string,
-  branchName: string,
-  implementedAt: string
-): OperationPerformanceData {
-  // 적용일 기준으로 전후 데이터 비교 (실제로는 DB 쿼리)
-  const revenueBefore3m = Math.floor(Math.random() * 5000000) + 10000000
-  const revenueAfter3m = Math.floor(Math.random() * 5000000) + 12000000
-  const revenueGrowth3m = ((revenueAfter3m - revenueBefore3m) / revenueBefore3m) * 100
-
-  const revenueBefore6m = Math.floor(Math.random() * 10000000) + 20000000
-  const revenueAfter6m = Math.floor(Math.random() * 10000000) + 25000000
-  const revenueGrowth6m = ((revenueAfter6m - revenueBefore6m) / revenueBefore6m) * 100
-
-  const avgCustomersBefore = Math.floor(Math.random() * 50) + 100
-  const avgCustomersAfter = Math.floor(Math.random() * 50) + 110
-  const customerGrowth = ((avgCustomersAfter - avgCustomersBefore) / avgCustomersBefore) * 100
-
-  // 세그먼트, 이용권, 방문 패턴 데이터
-  const segmentChanges = generateSegmentChanges()
-  const segmentMigrations = generateSegmentMigrations()
-  const ticketTypeChanges = generateTicketTypeChanges()
-  const ticketUpgrades = generateTicketUpgrades()
-  const visitPattern = generateVisitPattern()
-
-  // 신규/복귀 고객
-  const newCustomers = Math.floor(Math.random() * 30) + 10
-  const returnedCustomers = Math.floor(Math.random() * 15) + 5
-
-  // 통계적 유의성 (실제로는 t-검정 수행)
-  const pValue = Math.random() * 0.1
-  const isSignificant = pValue < 0.05
-  const effectSize = Math.random() * 1.2
-
-  // 성과 점수 계산 (0-100)
-  let performanceScore = 50
-  performanceScore += Math.min(revenueGrowth3m * 2, 25) // 매출 성장률 기여
-  performanceScore += Math.min(customerGrowth * 1.5, 15) // 고객 성장률 기여
-  performanceScore += isSignificant ? 10 : 0 // 통계적 유의성 보너스
-
-  // 긍정적 세그먼트 이동 보너스
-  const positiveTransitions = segmentMigrations.filter((m) => m.isPositive).reduce((sum, m) => sum + m.count, 0)
-  performanceScore += Math.min(positiveTransitions * 0.5, 10)
-
-  // 이용권 업그레이드 보너스
-  const totalUpgrades = ticketUpgrades.reduce((sum, u) => sum + u.count, 0)
-  performanceScore += Math.min(totalUpgrades * 0.3, 10)
-
-  performanceScore = Math.max(0, Math.min(100, performanceScore))
-
-  // 평가
-  let verdict: VerdictType = 'NEUTRAL'
-  if (performanceScore >= 80) verdict = 'EXCELLENT'
-  else if (performanceScore >= 65) verdict = 'GOOD'
-  else if (performanceScore >= 45) verdict = 'NEUTRAL'
-  else if (performanceScore >= 30) verdict = 'POOR'
-  else verdict = 'FAILED'
-
-  // 인사이트 생성
-  const insights: string[] = []
-
-  if (revenueGrowth3m > 10) {
-    insights.push('매출이 전년 대비 유의미하게 증가했습니다.')
-  } else if (revenueGrowth3m < -5) {
-    insights.push('매출이 감소했습니다. 원인 분석이 필요합니다.')
-  }
-
-  if (customerGrowth > 5) {
-    insights.push('고객 수가 증가하여 운영 변경의 긍정적 효과가 확인됩니다.')
-  }
-
-  // 세그먼트 이동 인사이트
-  const toVipCount = segmentMigrations.find((m) => m.toSegment === 'VIP')?.count || 0
-  const toRegularFromRisk = segmentMigrations.find((m) => m.fromSegment === '이탈위험' && m.toSegment === '일반')?.count || 0
-
-  if (toVipCount > 3) {
-    insights.push(`${toVipCount}명의 고객이 VIP로 승급했습니다.`)
-  }
-  if (toRegularFromRisk > 5) {
-    insights.push(`${toRegularFromRisk}명의 이탈위험 고객이 일반 고객으로 복귀했습니다.`)
-  }
-
-  // 이용권 업그레이드 인사이트
-  const periodUpgrades = ticketUpgrades.find((u) => u.toTicket === '기간권')
-  if (periodUpgrades && periodUpgrades.count > 5) {
-    insights.push(`${periodUpgrades.count}명이 기간권으로 업그레이드했습니다. (업그레이드율 ${periodUpgrades.upgradeRate}%)`)
-  }
-
-  // 방문 패턴 인사이트
-  if (visitPattern.visitFrequencyChange > 10) {
-    insights.push(`고객당 평균 방문 횟수가 ${visitPattern.visitFrequencyChange.toFixed(1)}% 증가했습니다.`)
-  }
-  if (visitPattern.usageTimeChange > 10) {
-    insights.push(`평균 이용 시간이 ${visitPattern.usageTimeChange.toFixed(1)}% 증가했습니다.`)
-  }
-
-  if (returnedCustomers > 10) {
-    insights.push(`${returnedCustomers}명의 휴면 고객이 복귀했습니다.`)
-  }
-
-  if (isSignificant) {
-    insights.push('변화가 통계적으로 유의미합니다 (p < 0.05).')
-  }
-
-  return {
-    id: `perf-${operationId}-${branchId}`,
-    operationId,
-    branchId,
-    branchName,
-    calculatedAt: new Date().toISOString(),
-    comparisonType: 'YOY' as ComparisonType,
-
-    revenueBefore3m,
-    revenueAfter3m,
-    revenueGrowth3m,
-
-    revenueBefore6m,
-    revenueAfter6m,
-    revenueGrowth6m,
-
-    avgCustomersBefore,
-    avgCustomersAfter,
-    customerGrowth,
-
-    segmentChanges,
-    segmentMigrations,
-    ticketTypeChanges,
-    ticketUpgrades,
-    visitPattern,
-
-    newCustomers,
-    returnedCustomers,
-
-    isSignificant,
-    pValue,
-    effectSize,
-
-    performanceScore: Math.round(performanceScore),
-    verdict,
-    insights,
-  }
-}
-
-// 더미 운영 변경 데이터
-const DUMMY_OPERATIONS: Record<
-  string,
-  { id: string; name: string; implementedAt: string; cost?: number; branches: { id: string; name: string }[] }
-> = {
-  '1': {
-    id: '1',
-    name: '프리미엄 좌석 도입',
-    implementedAt: '2025-01-15',
-    cost: 5000000,
-    branches: [{ id: '1', name: '강남점' }],
-  },
-  '2': {
-    id: '2',
-    name: '조명 시스템 개선',
-    implementedAt: '2025-02-01',
-    cost: 3000000,
-    branches: [
-      { id: '1', name: '강남점' },
-      { id: '2', name: '홍대점' },
-    ],
-  },
-}
-
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { id } = await params
-    const operation = DUMMY_OPERATIONS[id]
+    const session = await requireAdmin()
+    if (!session) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
 
-    if (!operation) {
+    const { id } = await params
+    const { searchParams } = new URL(request.url)
+    const forceCompute = searchParams.get('compute') === 'true'
+
+    const dbOperation = await prisma.operation.findUnique({
+      where: { id },
+      include: {
+        branches: {
+          include: {
+            branch: { select: { id: true, name: true, openedAt: true } },
+          },
+        },
+      },
+    })
+
+    if (!dbOperation) {
       return NextResponse.json({ error: '운영 변경을 찾을 수 없습니다' }, { status: 404 })
     }
 
-    // 지점별 성과 데이터 생성
-    const performances = operation.branches.map((branch) =>
-      generatePerformanceData(operation.id, branch.id, branch.name, operation.implementedAt)
-    )
+    const operationInfo = {
+      id: dbOperation.id,
+      name: dbOperation.name,
+      implementedAt: dbOperation.implementedAt.toISOString().split('T')[0],
+      cost: dbOperation.cost ? Number(dbOperation.cost) : undefined,
+      branches: dbOperation.branches.map((b) => ({ id: b.branch.id, name: b.branch.name })),
+    }
 
-    // 전체 평균 계산
-    const avgGrowth3m = performances.reduce((sum, p) => sum + p.revenueGrowth3m, 0) / performances.length
-    const avgGrowth6m = performances.reduce((sum, p) => sum + (p.revenueGrowth6m || 0), 0) / performances.length
-    const avgCustomerGrowth = performances.reduce((sum, p) => sum + p.customerGrowth, 0) / performances.length
-    const avgScore = performances.reduce((sum, p) => sum + (p.performanceScore || 0), 0) / performances.length
-
-    // 전체 세그먼트 이동 집계
-    const totalSegmentMigrations = performances.reduce(
-      (acc, p) => {
-        p.segmentMigrations?.forEach((m) => {
-          const key = `${m.fromSegment}→${m.toSegment}`
-          if (!acc[key]) {
-            acc[key] = { ...m, count: 0 }
-          }
-          acc[key].count += m.count
+    // compute 파라미터가 없으면 DB에서 저장된 분석 결과만 확인
+    if (!forceCompute) {
+      const performances = await loadSavedPerformances(id)
+      if (performances) {
+        const summary = computeSummary(performances)
+        const calculatedAt = await getSavedAnalysisDate(id)
+        return NextResponse.json({
+          operation: operationInfo,
+          performances,
+          summary,
+          fromCache: true,
+          calculatedAt,
         })
-        return acc
-      },
-      {} as Record<string, SegmentMigration>
-    )
+      }
+      return NextResponse.json({ hasAnalysis: false })
+    }
 
-    // 전체 이용권 업그레이드 집계
-    const totalTicketUpgrades = performances.reduce(
-      (acc, p) => {
-        p.ticketUpgrades?.forEach((u) => {
-          const key = `${u.fromTicket}→${u.toTicket}`
-          if (!acc[key]) {
-            acc[key] = { ...u, count: 0 }
+    const implementedAt = dbOperation.implementedAt
+    const now = new Date()
+    now.setHours(0, 0, 0, 0)
+
+    // 분석 가능한 기간 결정 (적용일 이후 경과 월수)
+    const monthsSince = (now.getFullYear() - implementedAt.getFullYear()) * 12 + (now.getMonth() - implementedAt.getMonth())
+    const availablePeriods: (1 | 3 | 6)[] = []
+    if (monthsSince >= 1) availablePeriods.push(1)
+    if (monthsSince >= 3) availablePeriods.push(3)
+    if (monthsSince >= 6) availablePeriods.push(6)
+
+    // 분석에 사용할 주요 기간 (가장 긴 기간)
+    const primaryMonths = availablePeriods.length > 0 ? availablePeriods[availablePeriods.length - 1] : 1
+    const primaryRange = getPeriodRange(implementedAt, primaryMonths)
+
+    const targetBranchIds = dbOperation.branches.map((b) => b.branchId)
+
+    // 1m/3m/6m 각 기간의 범위
+    const ranges = {
+      '1m': getPeriodRange(implementedAt, 1),
+      '3m': getPeriodRange(implementedAt, 3),
+      '6m': getPeriodRange(implementedAt, 6),
+    }
+
+    // 데이터 가용성 확인 (YoY 데이터 여부)
+    const oldestDatesMap = await db.metrics.getOldestDataDates(targetBranchIds)
+
+    // 지점별 분석 (병렬 처리)
+    const performances: OperationPerformanceData[] = []
+
+    const analysisPromises = targetBranchIds.map(async (branchId) => {
+      const branch = dbOperation.branches.find((b) => b.branchId === branchId)?.branch
+      if (!branch) return null
+
+      const oldestDate = oldestDatesMap.get(branchId) ?? new Date()
+      const hasYoyData = oldestDate.getTime() <= new Date(implementedAt.getTime() - 365 * 24 * 60 * 60 * 1000).getTime()
+      const comparisonType: ComparisonType = hasYoyData ? 'YOY' : 'MOM'
+
+      // === 기간별 매출 계산 ===
+      interface PeriodResult {
+        before: number; after: number; growth: number
+        useForecast?: boolean
+        forecast?: Awaited<ReturnType<typeof forecastRevenue>>
+      }
+      const periodResults: Record<string, PeriodResult> = {}
+
+      for (const period of availablePeriods) {
+        const key = `${period}m`
+        const afterRange = ranges[key as keyof typeof ranges]
+        let beforeRange: DateRange
+
+        if (comparisonType === 'YOY') {
+          beforeRange = getYoyRange(afterRange)
+        } else {
+          // MoM: 같은 기간만큼 이전 기간
+          beforeRange = {
+            start: new Date(afterRange.start),
+            end: new Date(afterRange.end),
           }
-          acc[key].count += u.count
-        })
-        return acc
-      },
-      {} as Record<string, TicketUpgradeData>
-    )
+          beforeRange.start.setMonth(beforeRange.start.getMonth() - period)
+          beforeRange.end.setMonth(beforeRange.end.getMonth() - period)
+        }
+
+        const [afterMetrics, beforeMetrics] = await Promise.all([
+          db.metrics.getMetricsSummary(branchId, afterRange),
+          db.metrics.getMetricsSummary(branchId, beforeRange),
+        ])
+
+        const revenueAfter = afterMetrics.totalRevenue
+        let revenueBefore = beforeMetrics.totalRevenue
+
+        let growth = 0
+        let usedForecast = false
+        let forecastObj: Awaited<ReturnType<typeof forecastRevenue>> | undefined
+
+        if (revenueBefore > 0) {
+          growth = calculateGrowthRate(revenueBefore, revenueAfter)
+        } else {
+          // 비교 데이터 없으면 forecast 사용
+          // 해당 기간의 외부 요인 타입 조회 (이벤트와 동일한 로직)
+          const overlappingFactors = await prisma.externalFactor.findMany({
+            where: {
+              OR: [
+                { startDate: { gte: afterRange.start, lte: afterRange.end } },
+                { endDate: { gte: afterRange.start, lte: afterRange.end } },
+                { AND: [{ startDate: { lte: afterRange.start } }, { endDate: { gte: afterRange.end } }] },
+              ],
+              branches: { some: { branchId } },
+            },
+            select: { type: true },
+          })
+          const factorTypes = overlappingFactors.map((f) => f.type)
+
+          const forecast = await forecastRevenue(branchId, afterRange.start, afterRange.end, factorTypes)
+          if (forecast.expectedRevenue > 0) {
+            const vs = calculatePerformanceVsForecast(revenueAfter, forecast)
+            growth = vs.vsExpected
+            revenueBefore = forecast.expectedRevenue
+            usedForecast = true
+            forecastObj = forecast
+          }
+        }
+
+        periodResults[key] = { before: revenueBefore, after: revenueAfter, growth, useForecast: usedForecast, forecast: forecastObj }
+      }
+
+      // === 주요 기간 기반 상세 분석 ===
+      const primaryKey = `${primaryMonths}m`
+      const primaryAfterRange = ranges[primaryKey as keyof typeof ranges]
+      let primaryBeforeRange: DateRange
+
+      if (comparisonType === 'YOY') {
+        primaryBeforeRange = getYoyRange(primaryAfterRange)
+      } else {
+        primaryBeforeRange = {
+          start: new Date(primaryAfterRange.start),
+          end: new Date(primaryAfterRange.end),
+        }
+        primaryBeforeRange.start.setMonth(primaryBeforeRange.start.getMonth() - primaryMonths)
+        primaryBeforeRange.end.setMonth(primaryBeforeRange.end.getMonth() - primaryMonths)
+      }
+
+      // forecast로 대체된 값이 아닌, 실제 비교 데이터 존재 여부 확인
+      const primaryPeriod = periodResults[primaryKey]
+      const hasComparisonData = primaryPeriod ? !primaryPeriod.useForecast : false
+
+      // 병렬 데이터 조회
+      const [
+        afterDailyRevenues,
+        beforeDailyRevenues,
+        afterVisits,
+        beforeVisits,
+        eventVisitors,
+        segmentResult,
+        ticketUpgrades,
+        ticketTypeChanges,
+        visitPattern,
+      ] = await Promise.all([
+        db.metrics.getDailyRevenues(branchId, primaryAfterRange),
+        db.metrics.getDailyRevenues(branchId, primaryBeforeRange),
+        db.visitors.getVisitCount(branchId, primaryAfterRange),
+        db.visitors.getVisitCount(branchId, primaryBeforeRange),
+        db.visitors.getUniqueVisitors(branchId, primaryAfterRange),
+        trackSegmentChangesWithComparison(branchId, primaryAfterRange.start, primaryAfterRange.end, comparisonType),
+        trackTicketUpgrades(branchId, primaryAfterRange.start, primaryAfterRange.end),
+        calculateTicketTypeChanges(branchId, primaryAfterRange, primaryBeforeRange),
+        calculateVisitPattern(branchId, primaryAfterRange, primaryBeforeRange, hasComparisonData),
+      ])
+
+      // 고객 통계
+      const phones = eventVisitors.map((v) => v.phone)
+      const thirtyDaysBefore = new Date(implementedAt)
+      thirtyDaysBefore.setDate(thirtyDaysBefore.getDate() - 30)
+
+      const [newCustomers, returnedCustomerIds] = await Promise.all([
+        db.customers.countNewCustomers(phones, primaryAfterRange),
+        db.customers.getReturnedCustomers(phones, thirtyDaysBefore),
+      ])
+      const returnedCustomers = returnedCustomerIds.length
+
+      // 고객 성장률 (방문자 수 기반)
+      const visitsGrowth = beforeVisits === 0
+        ? (afterVisits > 0 ? 100 : 0)
+        : calculateGrowthRate(beforeVisits, afterVisits)
+
+      // 일 평균 고객 수
+      const afterDays = Math.ceil((primaryAfterRange.end.getTime() - primaryAfterRange.start.getTime()) / (1000 * 60 * 60 * 24)) + 1
+      const beforeDays = Math.ceil((primaryBeforeRange.end.getTime() - primaryBeforeRange.start.getTime()) / (1000 * 60 * 60 * 24)) + 1
+      const avgCustomersAfter = Math.round(afterVisits / afterDays)
+      const avgCustomersBefore = Math.round(beforeVisits / beforeDays)
+      const customerGrowth = avgCustomersBefore > 0
+        ? calculateGrowthRate(avgCustomersBefore, avgCustomersAfter)
+        : (avgCustomersAfter > 0 ? 100 : 0)
+
+      // 통계 분석
+      const stats = afterDailyRevenues.length > 1 && beforeDailyRevenues.length > 1
+        ? tTest(beforeDailyRevenues, afterDailyRevenues)
+        : { isSignificant: false, pValue: 1, tStatistic: 0 }
+      const effect = afterDailyRevenues.length > 1 && beforeDailyRevenues.length > 1
+        ? cohensD(beforeDailyRevenues, afterDailyRevenues)
+        : { d: 0, interpretation: 'NONE' as const }
+
+      // 세그먼트 데이터 (full comparison 유지 - 이벤트와 동일)
+      const { segmentChanges, segmentMigrations, hasComparisonData: hasSegmentComparisonData, periodInfo: segmentPeriodInfo } = segmentResult
+
+      // 점수 계산
+      const primaryGrowth = periodResults[primaryKey]?.growth ?? 0
+      const { score: performanceScore, breakdown: scoreBreakdown } = calculateScoreWithBreakdown(
+        primaryGrowth,
+        visitsGrowth,
+        stats.isSignificant,
+        effect.interpretation,
+        newCustomers,
+        returnedCustomers,
+        segmentMigrations,
+        ticketUpgrades,
+      )
+      const verdict = determineVerdict(performanceScore)
+
+      // 이용권별 개별 매출 추출
+      const ticketRevenueMap: Record<string, { after: number; before: number }> = {}
+      for (const tc of ticketTypeChanges) {
+        ticketRevenueMap[tc.ticketType] = { after: tc.revenueAfter, before: tc.revenueBefore }
+      }
+
+      // forecast 데이터 (primary 기간 기준)
+      const primaryPeriodResult = periodResults[primaryKey]
+      const useForecast = primaryPeriodResult?.useForecast ?? false
+      const forecastData = primaryPeriodResult?.forecast
+
+      // 신규 지점 여부
+      const isNewBranch = branch.openedAt
+        ? branch.openedAt.getTime() > implementedAt.getTime() - 365 * 24 * 60 * 60 * 1000
+        : false
+      const noYoyDataReason = isNewBranch ? '오픈 1년 미만 지점' : (!hasYoyData ? '전년 데이터 없음' : undefined)
+
+      // 인사이트 생성
+      const insights: string[] = []
+      const growth3m = periodResults['3m']?.growth
+      if (growth3m !== undefined) {
+        if (growth3m > 10) insights.push('3개월 매출이 유의미하게 증가했습니다.')
+        else if (growth3m < -5) insights.push('3개월 매출이 감소했습니다. 원인 분석이 필요합니다.')
+      }
+      if (customerGrowth > 5) insights.push('고객 수가 증가하여 운영 변경의 긍정적 효과가 확인됩니다.')
+      if (returnedCustomers > 10) insights.push(`${returnedCustomers}명의 휴면 고객이 복귀했습니다.`)
+      if (stats.isSignificant) insights.push('변화가 통계적으로 유의미합니다 (p < 0.05).')
+
+      const perfData: OperationPerformanceData = {
+        id: `perf-${id}-${branchId}`,
+        operationId: id,
+        branchId,
+        branchName: branch.name,
+        calculatedAt: new Date().toISOString(),
+        comparisonType,
+
+        revenueBefore1m: periodResults['1m']?.before,
+        revenueAfter1m: periodResults['1m']?.after,
+        revenueGrowth1m: periodResults['1m']?.growth != null ? Math.round(periodResults['1m'].growth * 100) / 100 : undefined,
+
+        revenueBefore3m: periodResults['3m']?.before ?? 0,
+        revenueAfter3m: periodResults['3m']?.after ?? 0,
+        revenueGrowth3m: periodResults['3m']?.growth != null ? Math.round(periodResults['3m'].growth * 100) / 100 : 0,
+
+        revenueBefore6m: periodResults['6m']?.before,
+        revenueAfter6m: periodResults['6m']?.after,
+        revenueGrowth6m: periodResults['6m']?.growth != null ? Math.round(periodResults['6m'].growth * 100) / 100 : undefined,
+
+        avgCustomersBefore,
+        avgCustomersAfter,
+        customerGrowth: Math.round(customerGrowth * 100) / 100,
+
+        // 방문
+        visitsBefore: beforeVisits,
+        visitsAfter: afterVisits,
+        visitsGrowth: Math.round(visitsGrowth * 100) / 100,
+
+        segmentChanges,
+        segmentMigrations,
+        hasSegmentComparisonData,
+        segmentPeriodInfo,
+        ticketTypeChanges,
+        ticketUpgrades,
+        visitPattern,
+
+        newCustomers,
+        returnedCustomers,
+
+        // 이용권별 매출
+        dayTicketRevenue: ticketRevenueMap['당일권']?.after,
+        dayTicketRevenueBefore: ticketRevenueMap['당일권']?.before,
+        timeTicketRevenue: ticketRevenueMap['시간권']?.after,
+        timeTicketRevenueBefore: ticketRevenueMap['시간권']?.before,
+        termTicketRevenue: ticketRevenueMap['기간권']?.after,
+        termTicketRevenueBefore: ticketRevenueMap['기간권']?.before,
+        fixedTicketRevenue: ticketRevenueMap['고정석']?.after,
+        fixedTicketRevenueBefore: ticketRevenueMap['고정석']?.before,
+
+        // 기대 매출 예측
+        forecast: useForecast && forecastData ? {
+          expectedRevenue: forecastData.expectedRevenue,
+          baseRevenue: forecastData.baseRevenue,
+          seasonIndex: forecastData.seasonIndex,
+          externalFactorIndex: forecastData.externalFactorIndex,
+          trendCoefficient: forecastData.trendCoefficient,
+          confidence: forecastData.confidence,
+          breakdown: forecastData.breakdown,
+        } : undefined,
+        useForecast: useForecast || undefined,
+        isNewBranch: isNewBranch || undefined,
+        noYoyDataReason,
+
+        isSignificant: stats.isSignificant,
+        pValue: stats.pValue,
+        effectSize: effect.d,
+
+        scoreBreakdown,
+        performanceScore: Math.round(performanceScore),
+        verdict,
+        insights,
+      }
+
+      // DB에 분석 결과 저장 (upsert)
+      await savePerformanceToDB(id, branchId, perfData)
+
+      return perfData
+    })
+
+    const results = await Promise.all(analysisPromises)
+    for (const result of results) {
+      if (result) performances.push(result)
+    }
+
+    const summary = computeSummary(performances)
 
     return NextResponse.json({
-      operation: {
-        id: operation.id,
-        name: operation.name,
-        implementedAt: operation.implementedAt,
-        cost: operation.cost,
-        branches: operation.branches,
-      },
+      operation: operationInfo,
       performances,
-      summary: {
-        avgRevenueGrowth3m: avgGrowth3m,
-        avgRevenueGrowth6m: avgGrowth6m,
-        avgCustomerGrowth,
-        avgPerformanceScore: avgScore,
-        totalBranches: performances.length,
-        significantCount: performances.filter((p) => p.isSignificant).length,
-        totalNewCustomers: performances.reduce((sum, p) => sum + (p.newCustomers || 0), 0),
-        totalReturnedCustomers: performances.reduce((sum, p) => sum + (p.returnedCustomers || 0), 0),
-        segmentMigrations: Object.values(totalSegmentMigrations),
-        ticketUpgrades: Object.values(totalTicketUpgrades),
-      },
+      summary,
+      fromCache: false,
+      calculatedAt: new Date().toISOString(),
     })
   } catch (error) {
     console.error('Error fetching operation analysis:', error)
