@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getAuthSession, getBranchFilter } from '@/lib/auth-helpers'
-import { kstStartOfDay, kstEndOfDay } from '@/lib/utils/kst-date'
+// @db.Date 필드는 new Date("YYYY-MM-DD")로 UTC midnight 사용
 import { TimelineData, TimelineHourData, TimelineVisitor } from '@/types/crm'
 
 export const dynamic = 'force-dynamic'
@@ -22,15 +22,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'date parameter is required' }, { status: 400 })
     }
 
-    const dayStart = kstStartOfDay(dateParam)
-    const dayEnd = kstEndOfDay(dateParam)
+    const dayDate = new Date(dateParam)
 
     // 병렬 조회: 시간대별 이용자 수 + 방문자 상세
     const [hourlyUsages, visitors, branch] = await Promise.all([
       prisma.hourlyUsage.findMany({
         where: {
           ...branchFilter,
-          date: dayStart,
+          date: dayDate,
         },
         select: {
           hour: true,
@@ -41,7 +40,7 @@ export async function GET(request: NextRequest) {
       prisma.dailyVisitor.findMany({
         where: {
           ...branchFilter,
-          visitDate: { gte: dayStart, lte: dayEnd },
+          visitDate: dayDate,
         },
         select: {
           phone: true,

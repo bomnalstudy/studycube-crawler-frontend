@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getAuthSession, getBranchFilter } from '@/lib/auth-helpers'
 import { decimalToNumber } from '@/lib/utils/formatters'
-import { kstStartOfDay, kstEndOfDay, getKSTYesterdayStr, getKSTDaysAgoStr } from '@/lib/utils/kst-date'
+import { getKSTYesterdayStr, getKSTDaysAgoStr } from '@/lib/utils/kst-date'
 import { calculateVisitSegment, calculateTicketSegment, calculateFavoriteTicketType, inferTicketType } from '@/lib/crm/segment-calculator'
 import {
   CrmDashboardData, VisitSegment, TicketSegment,
@@ -23,13 +23,15 @@ export async function GET(request: NextRequest) {
     const requestedBranchId = searchParams.get('branchId') || 'all'
     const branchFilter = getBranchFilter(session, requestedBranchId)
 
-    // 기간 파라미터 (없으면 최근 30일) — KST 기준
+    // 기간 파라미터 (없으면 최근 30일)
+    // @db.Date 필드용 UTC midnight 사용 — new Date("YYYY-MM-DD")는 UTC midnight 반환
+    // Prisma는 @db.Date 필드에서 UTC 날짜 부분을 추출하므로 UTC midnight이 정확히 매칭됨
     const startDateParam = searchParams.get('startDate')
     const endDateParam = searchParams.get('endDate')
     const yesterdayStr = getKSTYesterdayStr()
-    const yesterday = kstEndOfDay(yesterdayStr)
-    const rangeStart = startDateParam ? kstStartOfDay(startDateParam) : kstStartOfDay(getKSTDaysAgoStr(30))
-    const rangeEndRaw = endDateParam ? kstEndOfDay(endDateParam) : yesterday
+    const yesterday = new Date(yesterdayStr)
+    const rangeStart = new Date(startDateParam || getKSTDaysAgoStr(30))
+    const rangeEndRaw = new Date(endDateParam || yesterdayStr)
     const rangeEnd = rangeEndRaw > yesterday ? yesterday : rangeEndRaw
 
     // 병렬 쿼리 (필요한 필드만 select하여 데이터 전송 최소화)

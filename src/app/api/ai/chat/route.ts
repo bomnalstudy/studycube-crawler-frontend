@@ -4,7 +4,7 @@ import { getAuthSession, getBranchFilter } from '@/lib/auth-helpers'
 import { ChatRequest, ChatResponse } from '@/types/ai-chat'
 import { prisma } from '@/lib/prisma'
 import { decimalToNumber } from '@/lib/utils/formatters'
-import { kstStartOfDay, kstEndOfDay, getKSTYesterdayStr, getKSTDaysAgoStr } from '@/lib/utils/kst-date'
+import { getKSTYesterdayStr, getKSTDaysAgoStr } from '@/lib/utils/kst-date'
 import { calculateVisitSegment, calculateTicketSegment } from '@/lib/crm/segment-calculator'
 import { VisitSegment, TicketSegment, VISIT_SEGMENT_LABELS, TICKET_SEGMENT_LABELS } from '@/types/crm'
 
@@ -91,18 +91,19 @@ async function fetchAnalyticsData(session: Session, branchId?: string) {
   const today = new Date()
   const currentYear = today.getFullYear()
   const currentMonth = today.getMonth()
-  const thisMonthStart = kstStartOfDay(`${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-01`)
+  // @db.Date 필드용 UTC midnight — Prisma가 UTC 날짜 부분을 추출하므로 정확히 매칭
+  const thisMonthStart = new Date(`${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-01`)
   const yesterdayStr = getKSTYesterdayStr()
-  const thisMonthEnd = kstEndOfDay(yesterdayStr)
+  const thisMonthEnd = new Date(yesterdayStr)
 
   // 지난 달
   const lastMonthYear = currentMonth === 0 ? currentYear - 1 : currentYear
   const lastMonth = currentMonth === 0 ? 12 : currentMonth
-  const lastMonthStart = kstStartOfDay(`${lastMonthYear}-${String(lastMonth).padStart(2, '0')}-01`)
-  const lastMonthEnd = kstEndOfDay(`${lastMonthYear}-${String(lastMonth).padStart(2, '0')}-${new Date(lastMonthYear, lastMonth, 0).getDate()}`)
+  const lastMonthStart = new Date(`${lastMonthYear}-${String(lastMonth).padStart(2, '0')}-01`)
+  const lastMonthEnd = new Date(`${lastMonthYear}-${String(lastMonth).padStart(2, '0')}-${new Date(lastMonthYear, lastMonth, 0).getDate()}`)
 
   // 30일 전 기준
-  const thirtyDaysAgo = kstStartOfDay(getKSTDaysAgoStr(30))
+  const thirtyDaysAgo = new Date(getKSTDaysAgoStr(30))
 
   const [
     branches,

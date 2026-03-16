@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { decimalToNumber } from '@/lib/utils/formatters'
 import { DashboardMetrics } from '@/types/dashboard'
 import { getAuthSession, getBranchFilter } from '@/lib/auth-helpers'
+import { getKSTTodayStr } from '@/lib/utils/kst-date'
 
 export async function GET(request: NextRequest) {
   try {
@@ -20,9 +21,11 @@ export async function GET(request: NextRequest) {
     const startDateParam = searchParams.get('startDate')
     const endDateParam = searchParams.get('endDate')
 
-    // 날짜 파싱
-    const startDate = startDateParam ? new Date(startDateParam) : new Date()
-    const endDate = endDateParam ? new Date(endDateParam) : new Date()
+    // 날짜 파싱 — @db.Date 필드용 UTC midnight 사용
+    // new Date("YYYY-MM-DD")는 UTC midnight을 반환하므로 Prisma @db.Date와 정확히 매칭됨
+    const todayStr = getKSTTodayStr()
+    const startDate = new Date(startDateParam || todayStr)
+    const endDate = new Date(endDateParam || todayStr)
 
     // 이전 기간 계산 (같은 기간만큼 이전)
     const daysDiff = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))

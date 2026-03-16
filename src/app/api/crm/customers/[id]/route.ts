@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getAuthSession, getBranchFilter } from '@/lib/auth-helpers'
 import { decimalToNumber } from '@/lib/utils/formatters'
-import { kstStartOfDay, getKSTDaysAgoStr } from '@/lib/utils/kst-date'
+import { getKSTDaysAgoStr } from '@/lib/utils/kst-date'
 import { calculateVisitSegment, calculateTicketSegment, calculateFavoriteTicketType } from '@/lib/crm/segment-calculator'
 import { calculateCustomerStats } from '@/lib/crm/customer-stats-calculator'
 import { CustomerDetail } from '@/types/crm'
@@ -33,7 +33,7 @@ export async function GET(
       return NextResponse.json({ success: false, error: '고객을 찾을 수 없습니다' }, { status: 404 })
     }
 
-    const thirtyDaysAgo = kstStartOfDay(getKSTDaysAgoStr(30))
+    const thirtyDaysAgo = new Date(getKSTDaysAgoStr(30))
 
     // 병렬 쿼리
     const [purchases, visits, memos, claims, recentVisitorRecords, claimCount] = await Promise.all([

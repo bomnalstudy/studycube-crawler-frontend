@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getAuthSession, getBranchFilter } from '@/lib/auth-helpers'
 import { decimalToNumber } from '@/lib/utils/formatters'
-import { kstStartOfDay, kstEndOfDay, getKSTYesterdayStr, getKSTDaysAgoStr } from '@/lib/utils/kst-date'
+import { getKSTYesterdayStr, getKSTDaysAgoStr } from '@/lib/utils/kst-date'
 import { calculateVisitSegment, calculateTicketSegment, calculateFavoriteTicketType } from '@/lib/crm/segment-calculator'
 import { CustomerListItem, VisitSegment, TicketSegment, PaginatedResponse } from '@/types/crm'
 import { Prisma } from '@prisma/client'
@@ -45,12 +45,12 @@ export async function GET(request: NextRequest) {
     const visitStartDate = searchParams.get('visitStartDate')
     const visitEndDate = searchParams.get('visitEndDate')
 
-    // KST 기준 날짜 계산
+    // @db.Date 필드용 UTC midnight — Prisma가 UTC 날짜 부분을 추출하므로 정확히 매칭
     const yesterdayStr = getKSTYesterdayStr()
-    const yesterday = kstEndOfDay(yesterdayStr)
+    const yesterday = new Date(yesterdayStr)
     const today = new Date() // 이탈/이탈위험 판정용 (오늘 기준)
-    const visitRangeStart = visitStartDate ? kstStartOfDay(visitStartDate) : kstStartOfDay(getKSTDaysAgoStr(30))
-    const visitRangeEndRaw = visitEndDate ? kstEndOfDay(visitEndDate) : yesterday
+    const visitRangeStart = new Date(visitStartDate || getKSTDaysAgoStr(30))
+    const visitRangeEndRaw = new Date(visitEndDate || yesterdayStr)
     const visitRangeEnd = visitRangeEndRaw > yesterday ? yesterday : visitRangeEndRaw
 
     // 세그먼트 필터 없고 DB 정렬 가능한 필드일 때 빠른 경로
@@ -142,7 +142,7 @@ export async function GET(request: NextRequest) {
         prisma.customerPurchase.findMany({
           where: {
             customerId: { in: customerIds },
-            purchaseDate: { gte: kstStartOfDay(getKSTDaysAgoStr(30)) },
+            purchaseDate: { gte: new Date(getKSTDaysAgoStr(30)) },
           },
           select: { customerId: true, ticketName: true, amount: true },
         }),
@@ -290,7 +290,7 @@ export async function GET(request: NextRequest) {
       prisma.customerPurchase.findMany({
         where: {
           ...branchFilter,
-          purchaseDate: { gte: kstStartOfDay(getKSTDaysAgoStr(30)) },
+          purchaseDate: { gte: new Date(getKSTDaysAgoStr(30)) },
           customerId: { in: customerIds },
         },
         select: { customerId: true, ticketName: true, amount: true }
